@@ -1,17 +1,17 @@
-# Graph Report - music  (2026-11-14)
+# Graph Report - music  (2026-11-15)
 
 ## Corpus Check
-- 253 files · ~386,512 words
+- 254 files · ~387,107 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 62 file(s) not represented in the graph (top: (none) 10, .xml 8, .xcconfig 8)
 
 ## Summary
-- 3176 nodes · 3833 edges · 167 communities (124 shown, 43 thin omitted)
+- 3188 nodes · 3849 edges · 166 communities (124 shown, 42 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 18 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `72baf1ec`
+- Built from commit: `4487fcba`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -46,7 +46,7 @@
 - FlutterWindow
 - sidebar_nav.dart
 - component-cookbook.md
-- radio_playlist_offline_download_test.dart
+- ../models/song_model.dart
 - main.dart
 - Win32Window
 - manifest.json
@@ -102,7 +102,7 @@
 - Motion
 - design.md — opt-in portable design system
 - Export formats
-- Macrostructures
+- auth_gate.dart
 - Colour
 - audio_equalizer_service.dart
 - MCP Tools: code-review-graph
@@ -129,24 +129,24 @@
 - MCP Tools: code-review-graph
 - MCP Tools: code-review-graph
 - MCP Tools: code-review-graph
-- CustomPainter
+- _openCategory
 - 🎵 Pulse Studio
 - Size
 - listening_stats_view.dart
-- c4-sticky-bottom-bar.md
-- dashboard_overflow_test.dart
-- f3-tabular-spec-sheet.md
+- imported_playlist_database_test.dart
+- package:flutter/material.dart
+- package:flutter_test/flutter_test.dart
 - spotify_export_service.dart
 - accounts_view.dart
-- f4-step-sequence.md
+- Macrostructures
 - h7-demo-video-clipped-by-viewport-edge.md
 - h9-custom-illustration-centerpiece.md
 - recents_view.dart
 - profile_view.dart
-- f5-annotated-screenshot.md
+- auth_view_test.dart
 - spotify_export_import_dialog.dart
-- package:music/controllers/music_player_controller.dart
-- package:flutter/material.dart
+- package:flutter_test/flutter_test.dart
+- c4-sticky-bottom-bar.md
 - AppDelegate
 - DiscoveryTrack
 - .claude/CLAUDE.md
@@ -166,15 +166,14 @@
 - _PlaybackEventMessageExtension
 - _ValueStreamExtension
 - RunnerTests
-- package:flutter_test/flutter_test.dart
-- n11-mega-menu.md
-- discovery_service_test.dart
+- f3-tabular-spec-sheet.md
+- f4-step-sequence.md
+- f5-annotated-screenshot.md
 - PlaylistScreen
-- s1-left-margin-numbered.md
+- n11-mega-menu.md
 - Output contract & scope
-- now_playing_artwork_and_actions_test.dart
 - n12-banner-retract.md
-- n3-side-rail.md
+- s1-left-margin-numbered.md
 
 ## God Nodes (most connected - your core abstractions)
 1. `Win32Window` - 21 edges
@@ -203,11 +202,11 @@
 ## Import Cycles
 - None detected.
 
-## Communities (167 total, 43 thin omitted)
+## Communities (166 total, 42 thin omitted)
 
 ### Community 0 - "music_player_controller.dart"
 Cohesion: 0.01
-Nodes (349): _activateAudioSession, _activeDownloadWorkers, _activeHistoryEntryId, _activeHistorySongDurationSeconds, _activeHistorySongId, _activeHistoryStartSeconds, addedCount, addSong (+341 more)
+Nodes (352): _activateAudioSession, _activeDownloadWorkers, _activeHistoryEntryId, _activeHistorySongDurationSeconds, _activeHistorySongId, _activeHistoryStartSeconds, addedCount, addSong (+344 more)
 
 ### Community 1 - "track_enrichment_service.dart"
 Cohesion: 0.02
@@ -222,8 +221,8 @@ Cohesion: 0.03
 Nodes (64): album, artist, artworkUrl, _boolFlag, _browserUserAgent, _cleanArtistQuery, _client, _decodeJsonObject (+56 more)
 
 ### Community 4 - "music_dashboard_view.dart"
-Cohesion: 0.02
-Nodes (72): PlaybackRepeatMode, _albumGridDelegate, _authSub, _autoLyricsSheetOpen, build, _buildAvatarCircle, _buildBottomNavItem, _buildBottomNavLayer (+64 more)
+Cohesion: 0.03
+Nodes (68): PlaybackRepeatMode, _albumGridDelegate, _authSub, _autoLyricsSheetOpen, build, _buildAvatarCircle, _buildBottomNavItem, _buildBottomNavLayer (+60 more)
 
 ### Community 5 - "discovery_service.dart"
 Cohesion: 0.04
@@ -234,8 +233,8 @@ Cohesion: 0.15
 Nodes (12): audio_service, audio_session, cloud_firestore, connectivity_plus, file_picker_darwin, firebase_auth, firebase_core, flutter_secure_storage_darwin (+4 more)
 
 ### Community 7 - "spotify_import_dialog.dart"
-Cohesion: 0.04
-Nodes (40): SpotifyImportResult, AuthGate, build, _confirmPasswordController, createState, dispose, _emailController, _formKey (+32 more)
+Cohesion: 0.09
+Nodes (20): SpotifyImportResult, build, _confirmImport, controller, createState, dispose, _error, _formKey (+12 more)
 
 ### Community 8 - "auth_service.dart"
 Cohesion: 0.04
@@ -247,15 +246,15 @@ Nodes (38): album, artist, audioUrl, bundledTracks, duration, formatTime, genre,
 
 ### Community 10 - "animated_visualizer.dart"
 Cohesion: 0.11
-Nodes (16): AnimatedVisualizer, _AnimatedVisualizerState, barCount, barWidth, build, _controller, createState, didUpdateWidget (+8 more)
+Nodes (15): barCount, barWidth, build, _controller, createState, didUpdateWidget, dispose, equalizerBands (+7 more)
 
 ### Community 11 - "settings_view.dart"
-Cohesion: 0.04
-Nodes (45): _allowExplicit, _autoCachePlayedSongs, _autoLyrics, _automix, _autoplay, build, _buildCard, _buildProfileCard (+37 more)
+Cohesion: 0.03
+Nodes (56): _allowExplicit, _autoCachePlayedSongs, _autoLyrics, _automix, _autoplay, build, _buildAccountCategory, _buildCard (+48 more)
 
 ### Community 12 - "song_artwork_widget.dart"
 Cohesion: 0.06
-Nodes (27): artist, border, borderRadius, build, _buildImageWithFallback, _buildSpotifyProceduralArt, color, _effectiveArtist (+19 more)
+Nodes (29): _ListeningStatsPainter, artist, border, borderRadius, build, _buildImageWithFallback, _buildSpotifyProceduralArt, color (+21 more)
 
 ### Community 13 - "discovery_sections.dart"
 Cohesion: 0.06
@@ -283,27 +282,27 @@ Nodes (44): accentColor, artistName, ArtistProfile, avatarUrls, backgroundColor,
 
 ### Community 19 - "right_panel.dart"
 Cohesion: 0.07
-Nodes (23): MusicPlayerController, Song, BottomPlayerBar, build, _buildCompactPlayer, _buildDesktopPlayer, controller, onOpenLyrics (+15 more)
+Nodes (24): MusicPlayerController, Song, BottomPlayerBar, build, _buildCompactPlayer, _buildDesktopPlayer, controller, onOpenLyrics (+16 more)
 
 ### Community 20 - "app_theme.dart"
 Cohesion: 0.10
 Nodes (18): accentAmber, accentGreen, accentPink, AppTheme, background, border, borderActive, cardGlowGradient (+10 more)
 
 ### Community 21 - "track_list_view.dart"
-Cohesion: 0.05
-Nodes (36): _attachToPageScroll, build, _buildInlineBadge, controller, createState, didChangeDependencies, didUpdateWidget, dispose (+28 more)
+Cohesion: 0.06
+Nodes (32): _attachToPageScroll, build, _buildInlineBadge, controller, createState, didChangeDependencies, didUpdateWidget, dispose (+24 more)
 
 ### Community 22 - "listening_history.dart"
 Cohesion: 0.07
-Nodes (25): album, artist, averageListenedSeconds, completed, completedPlays, empty, fromMap, id (+17 more)
+Nodes (24): album, artist, averageListenedSeconds, completed, completedPlays, empty, fromMap, id (+16 more)
 
 ### Community 23 - "discovery_auto_refresh.dart"
 Cohesion: 0.11
 Nodes (13): didChangeAppLifecycleState, DiscoveryAutoRefresher, dispose, _disposed, interval, _lastRefresh, markRefreshed, minGap (+5 more)
 
 ### Community 24 - "State"
-Cohesion: 0.11
-Nodes (22): AuthView, _AuthViewState, DiscoverySections, DiscoverySectionsState, ListeningStatsView, _ListeningStatsViewState, _CreatePlaylistDialog, _CreatePlaylistDialogState (+14 more)
+Cohesion: 0.09
+Nodes (28): AuthView, _AuthViewState, DiscoverySections, DiscoverySectionsState, ListeningStatsView, _ListeningStatsViewState, _CreatePlaylistDialog, _CreatePlaylistDialogState (+20 more)
 
 ### Community 26 - "win32_window.cpp"
 Cohesion: 0.19
@@ -314,20 +313,20 @@ Cohesion: 0.12
 Nodes (4): FlutterWindow, flutter_controller_, FlutterWindow::FlutterWindow(), project_
 
 ### Community 28 - "sidebar_nav.dart"
-Cohesion: 0.07
-Nodes (20): build, _buildDesktopNavItem, _buildMenuItem, _buildUpdateTile, color, controller, _getUserDisplayName, _getUserInitial (+12 more)
+Cohesion: 0.08
+Nodes (19): build, _buildDesktopNavItem, _buildMenuItem, _buildUpdateTile, color, controller, _getUserDisplayName, _getUserInitial (+11 more)
 
 ### Community 29 - "component-cookbook.md"
 Cohesion: 0.02
 Nodes (40): C1 · Outlined chip, C2 · Inline form-as-CTA, C3 · Typographic link, F1 · Bento grid, F2 · Sticky-scroll stack, F6 · Product card grid, Ft1 · Mast-headed, Ft2 · Inline-rule single line (+32 more)
 
-### Community 30 - "radio_playlist_offline_download_test.dart"
-Cohesion: 0.13
-Nodes (10): SpotifyImportService, main, main, cacheDir, createdFiles, db, main, radioSong (+2 more)
+### Community 30 - "../models/song_model.dart"
+Cohesion: 0.25
+Nodes (4): instance, loadImportedPlaylists, persistPlaylist, PlaylistPersistenceService
 
 ### Community 32 - "main.dart"
-Cohesion: 0.10
-Nodes (8): build, firebaseEnabled, main, MusicApp, instance, loadImportedPlaylists, persistPlaylist, PlaylistPersistenceService
+Cohesion: 0.15
+Nodes (4): build, firebaseEnabled, main, MusicApp
 
 ### Community 33 - "Win32Window"
 Cohesion: 0.18
@@ -338,16 +337,16 @@ Cohesion: 0.18
 Nodes (10): background_color, description, display, icons, name, orientation, prefer_related_applications, short_name (+2 more)
 
 ### Community 35 - "artist_import_test.dart"
-Cohesion: 0.14
-Nodes (11): artistLookupJson, artistSearchJson, artistService, brunoMarsId, jsonOk, main, main, main (+3 more)
+Cohesion: 0.09
+Nodes (16): artistLookupJson, artistSearchJson, artistService, brunoMarsId, jsonOk, main, album, artist (+8 more)
 
 ### Community 36 - "db_sync_daemon.py"
 Cohesion: 0.31
 Nodes (3): run_sync(), save_db_bytes(), main()
 
 ### Community 38 - "imported_playlist_database_test.dart"
-Cohesion: 0.14
-Nodes (6): db, main, db, main, db, main
+Cohesion: 0.13
+Nodes (10): SpotifyImportService, main, main, cacheDir, createdFiles, db, main, radioSong (+2 more)
 
 ### Community 39 - "playlist_screen.dart"
 Cohesion: 0.05
@@ -494,7 +493,7 @@ Cohesion: 0.20
 Nodes (10): 1. Read the project, then pause, 2. Produce `design.md` at the project root, 3. Redesign each page reading from `design.md`, 4. Diversification rule — INVERTED for multi-page, 5. When to amend `design.md` instead of overriding, `hallmark redesign`, § Multi-page flow — design.md first, then redesign, Non-destructive implementation rule (+2 more)
 
 ### Community 88 - "Genre — editorial (default)"
-Cohesion: 0.20
+Cohesion: 0.22
 Nodes (9): Genre — editorial (default), Nav and footer voice, Stamp signature, Themes that belong, Voice, Voice fixtures, What this genre allows, What this genre disallows (+1 more)
 
 ### Community 89 - "Layout and space"
@@ -513,9 +512,9 @@ Nodes (8): After the file is written, CTA — surface the offer in the Step 5 pr
 Cohesion: 0.25
 Nodes (7): Export formats, Format 1 — `tokens.css`, Format 2 — Tailwind v4 `@theme`, Format 3 — DTCG `tokens.json`, Format 4 — shadcn/ui CSS variables, Output rule, Token taxonomy — Hallmark's source of truth
 
-### Community 93 - "Macrostructures"
-Cohesion: 0.29
-Nodes (7): Diversification rule (mandatory), Hero polish patterns, How to pick, Macrostructures, Nav and footer voice, SaaS page sequence, The 21 macrostructures — index
+### Community 93 - "auth_gate.dart"
+Cohesion: 0.09
+Nodes (20): AuthGate, build, _confirmPasswordController, createState, dispose, _emailController, _formKey, _friendlyError (+12 more)
 
 ### Community 94 - "Colour"
 Cohesion: 0.29
@@ -530,8 +529,8 @@ Cohesion: 0.33
 Nodes (5): graphify, Key Tools, MCP Tools: code-review-graph, When to use graph tools FIRST, Workflow
 
 ### Community 97 - "Floating nav on scroll — the cross-fade morph"
-Cohesion: 0.33
-Nodes (6): Anti-patterns Hallmark refuses, Floating nav on scroll — the cross-fade morph, The four laws — non-negotiable, The property morph (10 properties, one curve), The scroll handler, The structure
+Cohesion: 0.22
+Nodes (7): N10 · Floating-on-scroll morph, Anti-patterns Hallmark refuses, Floating nav on scroll — the cross-fade morph, The four laws — non-negotiable, The property morph (10 properties, one curve), The scroll handler, The structure
 
 ### Community 98 - "MCP Tools: code-review-graph"
 Cohesion: 0.33
@@ -622,8 +621,8 @@ Cohesion: 0.40
 Nodes (4): Key Tools, MCP Tools: code-review-graph, When to use graph tools FIRST, Workflow
 
 ### Community 121 - "🎵 Pulse Studio"
-Cohesion: 0.12
-Nodes (16): 👤 Account Management & Spotify Drawer Navigation, 🏛️ Architecture & Project Structure, 🎛️ Audio Engine & Acoustic Tuning, 🚀 Getting Started, Installation, ✨ Key Features, 📄 License, 🎧 Now Playing & Immersive Lyrics Experience (+8 more)
+Cohesion: 0.14
+Nodes (13): 🎛️ Audio Engine & Acoustic Tuning, 🚀 Getting Started, Installation, ✨ Key Features, 📄 License, 🎧 Now Playing & Immersive Lyrics Experience, 🌟 Overview, Prerequisites (+5 more)
 
 ### Community 122 - "Size"
 Cohesion: 0.50
@@ -631,11 +630,19 @@ Nodes (3): Size, height, width
 
 ### Community 123 - "listening_stats_view.dart"
 Cohesion: 0.08
-Nodes (24): ListeningStats, build, _buildSummary, _buildTopArtists, _buildTopSongs, _clearHistory, controller, createState (+16 more)
+Nodes (25): ListeningRankedItem, ListeningStats, build, _buildSummary, _buildTopArtists, _buildTopSongs, _clearHistory, controller (+17 more)
 
-### Community 125 - "dashboard_overflow_test.dart"
-Cohesion: 0.17
-Nodes (8): errors, main, pumpDashboardWithoutPluginNoise, runZonedGuarded, errors, main, pumpDashboard, runZonedGuarded
+### Community 124 - "imported_playlist_database_test.dart"
+Cohesion: 0.14
+Nodes (6): db, main, db, main, db, main
+
+### Community 125 - "package:flutter/material.dart"
+Cohesion: 0.11
+Nodes (12): errors, main, pumpDashboardWithoutPluginNoise, runZonedGuarded, main, main, errors, main (+4 more)
+
+### Community 126 - "package:flutter_test/flutter_test.dart"
+Cohesion: 0.22
+Nodes (3): main, main, main
 
 ### Community 127 - "spotify_export_service.dart"
 Cohesion: 0.04
@@ -643,7 +650,11 @@ Nodes (43): _albumOf, _artistOf, _asList, _asMap, _asString, bytes, _decodeObjec
 
 ### Community 128 - "accounts_view.dart"
 Cohesion: 0.08
-Nodes (24): _AccountCard, AccountsView, _AccountsViewState, _addAccount, build, createState, email, _forget (+16 more)
+Nodes (23): _AccountCard, AccountsView, _AccountsViewState, _addAccount, build, createState, email, _forget (+15 more)
+
+### Community 129 - "Macrostructures"
+Cohesion: 0.29
+Nodes (7): Diversification rule (mandatory), Hero polish patterns, How to pick, Macrostructures, Nav and footer voice, SaaS page sequence, The 21 macrostructures — index
 
 ### Community 132 - "recents_view.dart"
 Cohesion: 0.11
@@ -657,13 +668,9 @@ Nodes (7): build, icon, label, _ProfileInfoRow, ProfileView, route, value
 Cohesion: 0.05
 Nodes (34): SpotifyExportBundle, _applyBundle, build, _buildActions, _buildIntro, _buildPreview, _buildProgress, _bundle (+26 more)
 
-### Community 136 - "package:music/controllers/music_player_controller.dart"
-Cohesion: 0.18
-Nodes (6): main, main, main, main, main, main
-
-### Community 137 - "package:flutter/material.dart"
-Cohesion: 0.20
-Nodes (4): main, main, main, main
+### Community 136 - "package:flutter_test/flutter_test.dart"
+Cohesion: 0.13
+Nodes (7): main, testSong, main, main, main, main, main
 
 ### Community 142 - "spotify_export_service_test.dart"
 Cohesion: 0.11
@@ -675,7 +682,7 @@ Nodes (3): Flutter, SceneDelegate, UIKit
 
 ### Community 145 - "StatelessWidget"
 Cohesion: 0.12
-Nodes (15): DiscoveryPlaylistPage, _Header, _SongRow, _DiscoveryRail, _SectionHeader, _StatTile, _TopSongRow, _LibraryPlaylistTile (+7 more)
+Nodes (16): _SectionLabel, DiscoveryPlaylistPage, _Header, _SongRow, _DiscoveryRail, _SectionHeader, _StatTile, _TopSongRow (+8 more)
 
 ### Community 146 - "just_audio_background"
 Cohesion: 0.40
@@ -684,14 +691,6 @@ Nodes (4): Android setup, iOS setup, just_audio_background, Setup
 ### Community 148 - "FlutterMacOS"
 Cohesion: 0.47
 Nodes (3): Cocoa, FlutterMacOS, XCTest
-
-### Community 158 - "package:flutter_test/flutter_test.dart"
-Cohesion: 0.20
-Nodes (3): buildTestWidget, main, main
-
-### Community 160 - "discovery_service_test.dart"
-Cohesion: 0.25
-Nodes (5): album, artist, main, millis, _track
 
 ### Community 161 - "PlaylistScreen"
 Cohesion: 0.47
@@ -702,9 +701,9 @@ Cohesion: 0.50
 Nodes (3): Output contract, Output contract & scope, Scope and limits
 
 ## Knowledge Gaps
-- **1634 isolated node(s):** `C:\Python314\python.exe`, `C:\Python314\python.exe`, `C:\Python314\python.exe`, `LocalUser`, `AuthService` (+1629 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2528 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **43 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **1647 isolated node(s):** `C:\Python314\python.exe`, `C:\Python314\python.exe`, `C:\Python314\python.exe`, `LocalUser`, `AuthService` (+1642 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2537 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **42 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
@@ -712,9 +711,9 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `Win32Window` connect `Win32Window` to `.MessageHandler`, `Size`, `Point`, `string`, `win32_window.cpp`, `FlutterWindow`?**
   _High betweenness centrality (0.016) - this node is a cross-community bridge._
 - **What connects `C:\Python314\python.exe`, `C:\Python314\python.exe`, `C:\Python314\python.exe` to the rest of the system?**
-  _1634 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1647 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `music_player_controller.dart` be split into smaller, more focused modules?**
-  _Cohesion score 0.005434782608695652 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.005390835579514825 - nodes in this community are weakly interconnected._
 - **Why does `MusicPlayerController` connect `right_panel.dart` to `music_player_controller.dart`, `music_dashboard_view.dart`, `recents_view.dart`, `playlist_screen.dart`, `spotify_export_import_dialog.dart`, `spotify_import_dialog.dart`, `settings_view.dart`, `discovery_sections.dart`, `spotify_lyrics_sheet.dart`, `discovery_playlist_page.dart`, `track_list_view.dart`, `listening_stats_view.dart`, `sidebar_nav.dart`?**
   _High betweenness centrality (0.009) - this node is a cross-community bridge._
 - **Should `track_enrichment_service.dart` be split into smaller, more focused modules?**

@@ -52,12 +52,10 @@ void main() {
       expect(find.text('Sugarfree'), findsWidgets); // "More like Sugarfree"
       expect(find.text('Maroon 5'), findsWidgets);  // "More like Maroon 5"
 
-      // Verify Category pills
-      expect(find.text('All'), findsWidgets);
-      expect(find.text('Music'), findsWidgets);
-
-      // Verify dynamic radio search bar
-      expect(find.textContaining('Search any Spotify radio or artist'), findsOneWidget);
+      // Verify Category pills & search bar are removed from Explore
+      expect(find.text('Podcasts'), findsNothing);
+      expect(find.text('Audiobooks'), findsNothing);
+      expect(find.textContaining('Search any Spotify radio or artist'), findsNothing);
     });
 
     test('fastImportRadioStation imports radio playlist and songs into Library', () {

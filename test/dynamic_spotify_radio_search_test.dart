@@ -167,7 +167,7 @@ void main() {
   });
 
   group('Dynamic Spotify Radio UI & Search Widget Tests', () {
-    testWidgets('Explore tab displays dynamic Spotify radio search bar', (tester) async {
+    testWidgets('Explore tab renders clean Popular radio without radio search bar', (tester) async {
       await tester.binding.setSurfaceSize(const Size(1280, 800));
 
       await tester.pumpWidget(
@@ -186,13 +186,10 @@ void main() {
       await tester.tap(exploreNav.first);
       await tester.pumpAndSettle();
 
-      // Verify dynamic radio search bar exists
-      final searchField = find.byType(TextField);
-      expect(searchField, findsWidgets);
-
+      // Verify dynamic radio search bar is removed
       expect(
         find.textContaining('Search any Spotify radio or artist'),
-        findsOneWidget,
+        findsNothing,
       );
 
       // Verify Popular radio section header

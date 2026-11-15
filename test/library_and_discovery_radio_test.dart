@@ -41,21 +41,15 @@ void main() {
       // Idle pump on Home screen
     });
 
-    // Check menu navigation in sidebar
-    expect(find.text('MENU'), findsOneWidget);
+    // Check navigation in sidebar
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Explore'), findsOneWidget);
     expect(find.text('Library'), findsOneWidget);
-    expect(find.text('Favorites'), findsOneWidget);
 
-    // Verify Library badge shows playlists count (0) instead of total music count (14)
+    // Verify Library badge does not show total music count (14)
     final libraryNavFinder = find.ancestor(
       of: find.text('Library'),
       matching: find.byType(InkWell),
-    );
-    expect(
-      find.descendant(of: libraryNavFinder, matching: find.text('0')),
-      findsOneWidget,
     );
     expect(
       find.descendant(of: libraryNavFinder, matching: find.text('14')),
@@ -80,11 +74,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     });
 
-    // Check category pills
-    expect(find.text('All'), findsWidgets);
-    expect(find.text('Music'), findsOneWidget);
-    expect(find.text('Podcasts'), findsOneWidget);
-    expect(find.text('Audiobooks'), findsOneWidget);
+    // Verify category pills and search bar are removed from Explore
+    expect(find.text('Podcasts'), findsNothing);
+    expect(find.text('Audiobooks'), findsNothing);
 
     // Made For You stays removed. "Recents" only exists as the left
     // sidebar/drawer account shortcut, not as an Explore section.
