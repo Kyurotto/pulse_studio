@@ -1,4 +1,4 @@
-# 🎵 Pulse Studio
+  # 🎵 Pulse Studio
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Kyurotto/music/main/assets/icon/icon.png" alt="Pulse Studio Logo" width="100" height="100" onerror="this.style.display='none'"/>
@@ -20,7 +20,7 @@
 
 ## 🌟 Overview
 
-**Pulse Studio** is a modern music player and streaming application designed with Spotify-grade dark aesthetics, tactile interactive controls, and a robust offline-first architecture. It features synchronized scrolling lyrics, a 10-band graphic equalizer, multi-platform Spotify and YouTube link importing with automated full-track resolution, SQLite offline persistence, and seamless responsive support across mobile and desktop devices.
+**Pulse Studio** is a modern music player and streaming application designed with Spotify-grade dark aesthetics, tactile interactive controls, and a robust offline-first architecture. It features synchronized scrolling lyrics, a 10-band graphic equalizer, multi-platform Spotify and YouTube link importing with automated full-track resolution, offline persistence, and seamless responsive support across mobile and desktop devices.
 
 ---
 
