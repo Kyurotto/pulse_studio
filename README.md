@@ -102,21 +102,6 @@ To run static code analysis:
 ```bash
 flutter analyze
 ```
-
----
-
-## 🛠️ Technology Stack
-
-| Component | Library / Tool |
-| :--- | :--- |
-| **Framework** | [Flutter](https://flutter.dev) (Dart 3.x) |
-| **Audio Core** | `just_audio`, `audio_session`, `just_audio_background` |
-| **Local Database** | `sqflite`, `sqlite3_flutter_libs` |
-| **State Management** | `ChangeNotifier` / `ValueNotifier` Controller Pattern |
-| **Cloud Services** | `firebase_core`, `firebase_auth`, `cloud_firestore` *(optional)* |
-| **Network & Media** | `http`, `connectivity_plus`, `cached_network_image` |
-| **Security** | `crypto` (Salted SHA-256), `flutter_secure_storage` |
-
 ---
 
 ## 📄 License
