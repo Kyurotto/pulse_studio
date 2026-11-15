@@ -218,15 +218,18 @@ class TrackEnrichmentService {
       final sw = Stopwatch()..start();
 
       // YouTube Fast-Path: when prioritizeYouTube is enabled (Spotify imports),
-      // resolve YouTube immediately to avoid slow/failing proxy delays.
+      // resolve YouTube immediately to avoid slow/failing proxy delays. Use the
+      // compact search and a hard cap: a hanging/blocked YouTube must not delay
+      // the full-track fallbacks below for tens of seconds.
       if (prioritizeYouTube) {
         try {
           final yt = await _fetchYouTubeFullAudio(
             title: title,
             artist: artist,
             duration: duration,
+            fastSearch: true,
             preferredBitrateKbps: preferredBitrateKbps,
-          );
+          ).timeout(const Duration(seconds: 8), onTimeout: () => null);
           _stageLog('yt-fastpath', sw, yt != null ? 'HIT' : 'miss');
           if (yt != null) return yt;
         } catch (e) {
