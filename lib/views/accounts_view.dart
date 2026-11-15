@@ -102,27 +102,33 @@ class _AccountsViewState extends State<AccountsView> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: AppTheme.backgroundOf(context),
       appBar: AppBar(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: AppTheme.surfaceOf(context),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back_rounded,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryOf(context),
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('Accounts'),
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: AppTheme.border),
+        title: Text(
+          'Accounts',
+          style: TextStyle(
+            color: AppTheme.textPrimaryOf(context),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, color: AppTheme.borderOf(context)),
         ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          _SectionLabel('CURRENT ACCOUNT'),
+          const _SectionLabel('CURRENT ACCOUNT'),
           const SizedBox(height: 10),
           _AccountCard(
             name: currentName,
@@ -131,7 +137,7 @@ class _AccountsViewState extends State<AccountsView> {
             isCurrent: true,
           ),
           const SizedBox(height: 26),
-          _SectionLabel('SAVED ON THIS DEVICE'),
+          const _SectionLabel('SAVED ON THIS DEVICE'),
           const SizedBox(height: 10),
           if (_loading)
             const Padding(
@@ -142,17 +148,17 @@ class _AccountsViewState extends State<AccountsView> {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: AppTheme.surface,
+                color: AppTheme.surfaceOf(context),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.border),
+                border: Border.all(color: AppTheme.borderOf(context)),
               ),
-              child: const Text(
+              child: Text(
                 'No other accounts saved yet. Add an account to sign in with a '
                 'different email — only the email and display name are stored.',
                 style: TextStyle(
                   fontSize: 13,
                   height: 1.45,
-                  color: AppTheme.textSecondary,
+                  color: AppTheme.textSecondaryOf(context),
                 ),
               ),
             )
@@ -168,10 +174,10 @@ class _AccountsViewState extends State<AccountsView> {
                   initials: _initialsFor(name, email),
                   trailing: IconButton(
                     tooltip: 'Forget account',
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.close_rounded,
                       size: 18,
-                      color: AppTheme.textMuted,
+                      color: AppTheme.textMutedOf(context),
                     ),
                     onPressed: _switching ? null : () => _forget(email),
                   ),
@@ -185,8 +191,8 @@ class _AccountsViewState extends State<AccountsView> {
             icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
             label: const Text('+ Add another account'),
             style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              foregroundColor: Colors.black,
+              backgroundColor: AppTheme.primaryOf(context),
+              foregroundColor: AppTheme.isDark(context) ? Colors.black87 : Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
           ),
@@ -196,8 +202,8 @@ class _AccountsViewState extends State<AccountsView> {
             icon: const Icon(Icons.logout_rounded, size: 18),
             label: const Text('Sign out'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.textSecondary,
-              side: const BorderSide(color: AppTheme.border),
+              foregroundColor: AppTheme.textSecondaryOf(context),
+              side: BorderSide(color: AppTheme.borderOf(context)),
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
           ),
@@ -212,7 +218,7 @@ class _AccountsViewState extends State<AccountsView> {
             ),
           ],
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'Switching accounts signs you out and opens the sign-in screen '
             'with the selected email filled in. Your password and library '
             'stay on this device.',
@@ -220,7 +226,7 @@ class _AccountsViewState extends State<AccountsView> {
             style: TextStyle(
               fontSize: 12,
               height: 1.5,
-              color: AppTheme.textMuted,
+              color: AppTheme.textMutedOf(context),
             ),
           ),
         ],
@@ -254,11 +260,11 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.bold,
         letterSpacing: 1.2,
-        color: AppTheme.textMuted,
+        color: AppTheme.textMutedOf(context),
       ),
     );
   }
@@ -286,12 +292,12 @@ class _AccountCard extends StatelessWidget {
     final content = Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: AppTheme.surfaceOf(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isCurrent
               ? AppTheme.accentGreen.withValues(alpha: 0.45)
-              : AppTheme.border,
+              : AppTheme.borderOf(context),
         ),
       ),
       child: Row(
@@ -299,9 +305,9 @@ class _AccountCard extends StatelessWidget {
           Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
               ),
             ),
@@ -323,19 +329,19 @@ class _AccountCard extends StatelessWidget {
               children: [
                 Text(
                   name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryOf(context),
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   email,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: AppTheme.textSecondary,
+                    color: AppTheme.textSecondaryOf(context),
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),

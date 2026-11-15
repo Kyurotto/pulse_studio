@@ -57,6 +57,7 @@ class _SettingsViewState extends State<SettingsView> {
   bool _autoCachePlayedSongs = true;
   bool _dataSaverMode = false;
   bool _reduceAnimations = false;
+  String _themeModeSetting = 'dark';
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
 
@@ -80,6 +81,13 @@ class _SettingsViewState extends State<SettingsView> {
     if (widget.controller != null) {
       _equalizerPreset = widget.controller!.equalizerPreset;
       _reduceAnimations = widget.controller!.reduceAnimations;
+    }
+    if (AppTheme.themeMode == ThemeMode.light) {
+      _themeModeSetting = 'light';
+    } else if (AppTheme.themeMode == ThemeMode.system) {
+      _themeModeSetting = 'system';
+    } else {
+      _themeModeSetting = 'dark';
     }
     _loadSettings();
     _refreshCacheSize();
@@ -145,6 +153,9 @@ class _SettingsViewState extends State<SettingsView> {
         if (settings.containsKey('reduce_animations')) {
           _reduceAnimations = settings['reduce_animations'] == 'true';
         }
+        if (settings.containsKey('theme_mode')) {
+          _themeModeSetting = settings['theme_mode']!;
+        }
       });
     } catch (e) {
       debugPrint('Error loading settings: $e');
@@ -209,7 +220,7 @@ class _SettingsViewState extends State<SettingsView> {
     final current = isStreaming ? _streamingQuality : _downloadQuality;
     final selected = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: AppTheme.surface,
+      backgroundColor: AppTheme.surfaceOf(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -229,29 +240,32 @@ class _SettingsViewState extends State<SettingsView> {
                   isStreaming
                       ? 'Streaming Audio Quality'
                       : 'Download Audio Quality',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryOf(sheetContext),
                   ),
                 ),
               ),
-              const Divider(color: AppTheme.border),
+              Divider(color: AppTheme.borderOf(sheetContext)),
               ..._qualityOptions.map(
                 (opt) => ListTile(
                   title: Text(
                     opt,
                     style: TextStyle(
                       color: opt == current
-                          ? AppTheme.primary
-                          : AppTheme.textPrimary,
+                          ? AppTheme.primaryOf(sheetContext)
+                          : AppTheme.textPrimaryOf(sheetContext),
                       fontWeight: opt == current
                           ? FontWeight.w600
                           : FontWeight.normal,
                     ),
                   ),
                   trailing: opt == current
-                      ? const Icon(Icons.check_rounded, color: AppTheme.primary)
+                      ? Icon(
+                          Icons.check_rounded,
+                          color: AppTheme.primaryOf(sheetContext),
+                        )
                       : null,
                   onTap: () => Navigator.of(sheetContext).pop(opt),
                 ),
@@ -302,11 +316,11 @@ class _SettingsViewState extends State<SettingsView> {
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.88,
               ),
-              decoration: const BoxDecoration(
-                color: AppTheme.surface,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceOf(sheetContext),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                 border: Border(
-                  top: BorderSide(color: AppTheme.border, width: 1),
+                  top: BorderSide(color: AppTheme.borderOf(sheetContext), width: 1),
                 ),
               ),
               child: SafeArea(
@@ -321,7 +335,7 @@ class _SettingsViewState extends State<SettingsView> {
                         width: 44,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: AppTheme.textMuted.withValues(alpha: 0.3),
+                          color: AppTheme.textMutedOf(sheetContext).withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -339,14 +353,14 @@ class _SettingsViewState extends State<SettingsView> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.primary.withValues(
+                                  color: AppTheme.primaryOf(sheetContext).withValues(
                                     alpha: 0.15,
                                   ),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.graphic_eq_rounded,
-                                  color: AppTheme.primary,
+                                  color: AppTheme.primaryOf(sheetContext),
                                   size: 20,
                                 ),
                               ),
@@ -354,19 +368,19 @@ class _SettingsViewState extends State<SettingsView> {
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
+                                  Text(
                                     'Audio Equalizer',
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
-                                      color: AppTheme.textPrimary,
+                                      color: AppTheme.textPrimaryOf(sheetContext),
                                     ),
                                   ),
                                   Text(
                                     activePreset.name,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 12,
-                                      color: AppTheme.primary,
+                                      color: AppTheme.primaryOf(sheetContext),
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -375,9 +389,9 @@ class _SettingsViewState extends State<SettingsView> {
                             ],
                           ),
                           IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.close_rounded,
-                              color: AppTheme.textMuted,
+                              color: AppTheme.textMutedOf(sheetContext),
                             ),
                             onPressed: () => Navigator.of(
                               sheetContext,
@@ -397,22 +411,22 @@ class _SettingsViewState extends State<SettingsView> {
                           vertical: 14,
                         ),
                         decoration: BoxDecoration(
-                          color: AppTheme.cardSurface,
+                          color: AppTheme.cardSurfaceOf(sheetContext),
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: AppTheme.border),
+                          border: Border.all(color: AppTheme.borderOf(sheetContext)),
                         ),
                         child: Column(
                           children: [
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text(
+                                Text(
                                   'FREQUENCY RESPONSE (dB)',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 1.0,
-                                    color: AppTheme.textMuted,
+                                    color: AppTheme.textMutedOf(sheetContext),
                                   ),
                                 ),
                                 Flexible(
@@ -422,16 +436,16 @@ class _SettingsViewState extends State<SettingsView> {
                                       vertical: 3,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.primary.withValues(
+                                      color: AppTheme.primaryOf(sheetContext).withValues(
                                         alpha: 0.12,
                                       ),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
                                       activePreset.description,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 10,
-                                        color: AppTheme.textSecondary,
+                                        color: AppTheme.textSecondaryOf(sheetContext),
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -462,8 +476,8 @@ class _SettingsViewState extends State<SettingsView> {
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           color: db != 0
-                                              ? AppTheme.primary
-                                              : AppTheme.textMuted,
+                                              ? AppTheme.primaryOf(sheetContext)
+                                              : AppTheme.textMutedOf(sheetContext),
                                         ),
                                       ),
                                       Expanded(
@@ -481,10 +495,10 @@ class _SettingsViewState extends State<SettingsView> {
                                                     overlayRadius: 10,
                                                   ),
                                               activeTrackColor:
-                                                  AppTheme.primary,
+                                                  AppTheme.primaryOf(sheetContext),
                                               inactiveTrackColor:
-                                                  AppTheme.border,
-                                              thumbColor: AppTheme.primary,
+                                                  AppTheme.borderOf(sheetContext),
+                                              thumbColor: AppTheme.primaryOf(sheetContext),
                                             ),
                                             child: Slider(
                                               value: db,
@@ -520,9 +534,9 @@ class _SettingsViewState extends State<SettingsView> {
                                       const SizedBox(height: 4),
                                       Text(
                                         label,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 9.5,
-                                          color: AppTheme.textSecondary,
+                                          color: AppTheme.textSecondaryOf(sheetContext),
                                           fontWeight: FontWeight.w500,
                                         ),
                                       ),
@@ -536,7 +550,7 @@ class _SettingsViewState extends State<SettingsView> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Divider(height: 1, color: AppTheme.border),
+                    Divider(height: 1, color: AppTheme.borderOf(sheetContext)),
 
                     // Scrollable Presets List (Fixes the 28px bottom overflow!)
                     Flexible(
@@ -582,15 +596,15 @@ class _SettingsViewState extends State<SettingsView> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: isSelected
-                                      ? AppTheme.primary.withValues(alpha: 0.12)
-                                      : AppTheme.cardSurface.withValues(
+                                      ? AppTheme.primaryOf(sheetContext).withValues(alpha: 0.12)
+                                      : AppTheme.cardSurfaceOf(sheetContext).withValues(
                                           alpha: 0.5,
                                         ),
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
                                     color: isSelected
-                                        ? AppTheme.primary
-                                        : AppTheme.border,
+                                        ? AppTheme.primaryOf(sheetContext)
+                                        : AppTheme.borderOf(sheetContext),
                                     width: isSelected ? 1.5 : 1,
                                   ),
                                 ),
@@ -600,15 +614,15 @@ class _SettingsViewState extends State<SettingsView> {
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
                                         color: isSelected
-                                            ? AppTheme.primary
-                                            : AppTheme.surface,
+                                            ? AppTheme.primaryOf(sheetContext)
+                                            : AppTheme.surfaceOf(sheetContext),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Icon(
                                         preset.icon,
                                         color: isSelected
-                                            ? Colors.black87
-                                            : AppTheme.textMuted,
+                                            ? (AppTheme.isDark(sheetContext) ? Colors.black87 : Colors.white)
+                                            : AppTheme.textMutedOf(sheetContext),
                                         size: 18,
                                       ),
                                     ),
@@ -626,16 +640,16 @@ class _SettingsViewState extends State<SettingsView> {
                                                   ? FontWeight.bold
                                                   : FontWeight.w600,
                                               color: isSelected
-                                                  ? AppTheme.primary
-                                                  : AppTheme.textPrimary,
+                                                  ? AppTheme.primaryOf(sheetContext)
+                                                  : AppTheme.textPrimaryOf(sheetContext),
                                             ),
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
                                             preset.description,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 11,
-                                              color: AppTheme.textSecondary,
+                                              color: AppTheme.textSecondaryOf(sheetContext),
                                             ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
@@ -644,9 +658,9 @@ class _SettingsViewState extends State<SettingsView> {
                                       ),
                                     ),
                                     if (isSelected)
-                                      const Icon(
+                                      Icon(
                                         Icons.check_circle_rounded,
-                                        color: AppTheme.primary,
+                                        color: AppTheme.primaryOf(sheetContext),
                                         size: 20,
                                       ),
                                   ],
@@ -666,8 +680,8 @@ class _SettingsViewState extends State<SettingsView> {
                         height: 44,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primary,
-                            foregroundColor: Colors.black87,
+                            backgroundColor: AppTheme.primaryOf(sheetContext),
+                            foregroundColor: AppTheme.isDark(sheetContext) ? Colors.black87 : Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -700,8 +714,13 @@ class _SettingsViewState extends State<SettingsView> {
       _saveSetting('equalizer_preset', selected);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Equalizer set to "$selected"'),
-          backgroundColor: AppTheme.surface,
+          content: Text(
+            'Equalizer set to "$selected"',
+            style: TextStyle(
+              color: AppTheme.textPrimaryOf(context),
+            ),
+          ),
+          backgroundColor: AppTheme.surfaceOf(context),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -712,44 +731,44 @@ class _SettingsViewState extends State<SettingsView> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: AppTheme.surfaceOf(dialogContext),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppTheme.border),
+          side: BorderSide(color: AppTheme.borderOf(dialogContext)),
         ),
-        title: const Text(
+        title: Text(
           'Clear audio cache?',
           style: TextStyle(
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryOf(dialogContext),
             fontWeight: FontWeight.bold,
           ),
         ),
-        content: const Text(
+        content: Text(
           'This will free up storage space by clearing temporary streaming cache. Your permanently downloaded songs, playlists, library tracks, and account data will NOT be deleted.',
-          style: TextStyle(color: AppTheme.textSecondary, height: 1.4),
+          style: TextStyle(color: AppTheme.textSecondaryOf(dialogContext), height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(
+            child: Text(
               'Cancel',
-              style: TextStyle(color: AppTheme.textSecondary),
+              style: TextStyle(color: AppTheme.textSecondaryOf(dialogContext)),
             ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              foregroundColor: Colors.white,
+              backgroundColor: AppTheme.primaryOf(dialogContext),
+              foregroundColor: AppTheme.isDark(dialogContext) ? Colors.black87 : Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(
+            child: Text(
               'Clear',
               style: TextStyle(
-                color: Colors.white,
+                color: AppTheme.isDark(dialogContext) ? Colors.black87 : Colors.white,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -783,19 +802,19 @@ class _SettingsViewState extends State<SettingsView> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: AppTheme.surfaceOf(dialogContext),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppTheme.border),
+          side: BorderSide(color: AppTheme.borderOf(dialogContext)),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.logout_rounded, color: Colors.redAccent, size: 24),
-            SizedBox(width: 10),
+            const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 24),
+            const SizedBox(width: 10),
             Text(
               'Log out?',
               style: TextStyle(
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryOf(dialogContext),
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -803,14 +822,14 @@ class _SettingsViewState extends State<SettingsView> {
         ),
         content: Text(
           'Are you sure you want to log out of $displayName ($email)?\nYou will return to the sign-in screen.',
-          style: const TextStyle(color: AppTheme.textSecondary, height: 1.4),
+          style: TextStyle(color: AppTheme.textSecondaryOf(dialogContext), height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(
+            child: Text(
               'Cancel',
-              style: TextStyle(color: AppTheme.textSecondary),
+              style: TextStyle(color: AppTheme.textSecondaryOf(dialogContext)),
             ),
           ),
           ElevatedButton(
@@ -853,16 +872,21 @@ class _SettingsViewState extends State<SettingsView> {
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = AppTheme.backgroundOf(context);
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: AppTheme.background,
+        backgroundColor: bgColor,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back_rounded,
-            color: Colors.white,
+            color: textPrimary,
           ),
           onPressed: () {
             if (_isSearching) {
@@ -879,26 +903,26 @@ class _SettingsViewState extends State<SettingsView> {
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-                decoration: const InputDecoration(
+                style: TextStyle(color: textPrimary, fontSize: 16),
+                decoration: InputDecoration(
                   hintText: 'Search settings...',
-                  hintStyle: TextStyle(color: Colors.white54, fontSize: 15),
+                  hintStyle: TextStyle(color: textMuted, fontSize: 15),
                   border: InputBorder.none,
                 ),
                 onChanged: (_) => setState(() {}),
               )
-            : const Text(
+            : Text(
                 'Settings',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: textPrimary,
                 ),
               ),
         actions: [
           if (_isSearching)
             IconButton(
-              icon: const Icon(Icons.close_rounded, color: Colors.white70),
+              icon: Icon(Icons.close_rounded, color: textSecondary),
               onPressed: () {
                 if (_searchController.text.isNotEmpty) {
                   _searchController.clear();
@@ -910,7 +934,7 @@ class _SettingsViewState extends State<SettingsView> {
             )
           else
             IconButton(
-              icon: const Icon(Icons.search_rounded, color: Colors.white),
+              icon: Icon(Icons.search_rounded, color: textPrimary),
               onPressed: () => setState(() => _isSearching = true),
             ),
         ],
@@ -992,18 +1016,22 @@ class _SettingsViewState extends State<SettingsView> {
     required String subtitle,
     required VoidCallback onTap,
   }) {
+    final isDark = AppTheme.isDark(context);
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        splashColor: Colors.white.withValues(alpha: 0.08),
-        highlightColor: Colors.white.withValues(alpha: 0.04),
+        splashColor: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.08),
+        highlightColor: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(icon, size: 26, color: Colors.white),
+              Icon(icon, size: 26, color: textPrimary),
               const SizedBox(width: 20),
               Expanded(
                 child: Column(
@@ -1012,10 +1040,10 @@ class _SettingsViewState extends State<SettingsView> {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        color: textPrimary,
                         letterSpacing: 0.1,
                       ),
                     ),
@@ -1024,7 +1052,7 @@ class _SettingsViewState extends State<SettingsView> {
                       subtitle,
                       style: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey.shade400,
+                        color: textSecondary,
                         letterSpacing: 0.1,
                       ),
                       maxLines: 1,
@@ -1048,25 +1076,28 @@ class _SettingsViewState extends State<SettingsView> {
       MaterialPageRoute(
         builder: (subContext) => StatefulBuilder(
           builder: (ctx, setSubState) {
+            final bgColor = AppTheme.backgroundOf(ctx);
+            final textPrimary = AppTheme.textPrimaryOf(ctx);
+
             return Scaffold(
-              backgroundColor: AppTheme.background,
+              backgroundColor: bgColor,
               appBar: AppBar(
-                backgroundColor: AppTheme.background,
+                backgroundColor: bgColor,
                 elevation: 0,
                 leading: IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.arrow_back_rounded,
-                    color: Colors.white,
+                    color: textPrimary,
                   ),
                   onPressed: () => Navigator.of(subContext).pop(),
                 ),
                 centerTitle: true,
                 title: Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: textPrimary,
                   ),
                 ),
               ),
@@ -1125,10 +1156,10 @@ class _SettingsViewState extends State<SettingsView> {
           ),
         ),
         const SizedBox(height: 20),
-        const Center(
+        Center(
           child: Text(
             'Pulse Studio • Crafted for audiophiles',
-            style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+            style: TextStyle(fontSize: 11, color: AppTheme.textMutedOf(context)),
           ),
         ),
       ],
@@ -1141,6 +1172,10 @@ class _SettingsViewState extends State<SettingsView> {
       children: [
         _buildSectionHeader(Icons.palette_outlined, 'Display & Animations'),
         _buildCard([
+          // Theme Selection (Dark mode / Light mode / Auto system)
+          _buildThemeTile(setSubState),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
+
           // Reduce animations (lag reduction)
           _buildSwitchTile(
             title: 'Reduce animations',
@@ -1154,7 +1189,7 @@ class _SettingsViewState extends State<SettingsView> {
               _saveSetting('reduce_animations', val.toString());
             },
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
 
           // Canvas (Visualizer)
           _buildSwitchTile(
@@ -1168,7 +1203,7 @@ class _SettingsViewState extends State<SettingsView> {
               _saveSetting('canvas_animation', val.toString());
             },
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
 
           // Allow explicit content
           _buildSwitchTile(
@@ -1182,7 +1217,7 @@ class _SettingsViewState extends State<SettingsView> {
               _saveSetting('allow_explicit', val.toString());
             },
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
 
           // Show Lyrics Automatically
           _buildSwitchTile(
@@ -1198,6 +1233,210 @@ class _SettingsViewState extends State<SettingsView> {
           ),
         ]),
       ],
+    );
+  }
+
+  Widget _buildThemeTile(StateSetter setSubState) {
+    String themeLabel;
+    IconData themeIcon;
+    switch (_themeModeSetting) {
+      case 'light':
+        themeLabel = 'Light mode';
+        themeIcon = Icons.light_mode_outlined;
+        break;
+      case 'system':
+        themeLabel = 'Auto (System)';
+        themeIcon = Icons.brightness_auto_outlined;
+        break;
+      case 'dark':
+      default:
+        themeLabel = 'Dark mode';
+        themeIcon = Icons.dark_mode_outlined;
+        break;
+    }
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Icon(themeIcon, color: AppTheme.textPrimaryOf(context), size: 22),
+      title: Text(
+        'Theme',
+        style: TextStyle(
+          color: AppTheme.textPrimaryOf(context),
+          fontWeight: FontWeight.w600,
+          fontSize: 15,
+        ),
+      ),
+      subtitle: Text(
+        themeLabel,
+        style: TextStyle(
+          color: AppTheme.textSecondaryOf(context),
+          fontSize: 13,
+        ),
+      ),
+      trailing: Icon(
+        Icons.chevron_right_rounded,
+        color: AppTheme.textMutedOf(context),
+      ),
+      onTap: () => _showThemePickerDialog(setSubState),
+    );
+  }
+
+  Future<void> _showThemePickerDialog(StateSetter setSubState) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            Widget buildOption({
+              required String id,
+              required String title,
+              required String subtitle,
+              required IconData icon,
+            }) {
+              final isSelected = _themeModeSetting == id;
+              return InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  setState(() => _themeModeSetting = id);
+                  setSubState(() {});
+                  setDialogState(() {});
+                  ThemeMode mode;
+                  if (id == 'light') {
+                    mode = ThemeMode.light;
+                  } else if (id == 'system') {
+                    mode = ThemeMode.system;
+                  } else {
+                    mode = ThemeMode.dark;
+                  }
+                  AppTheme.setThemeMode(mode);
+                  if (Navigator.canPop(ctx)) {
+                    Navigator.pop(ctx);
+                  }
+                },
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        icon,
+                        size: 22,
+                        color: isSelected
+                            ? AppTheme.primaryOf(dialogCtx)
+                            : AppTheme.textSecondaryOf(dialogCtx),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              title,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? AppTheme.textPrimaryOf(dialogCtx)
+                                    : AppTheme.textSecondaryOf(dialogCtx),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textMutedOf(dialogCtx),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (isSelected)
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 20,
+                          color: AppTheme.primaryOf(dialogCtx),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            return AlertDialog(
+              backgroundColor: AppTheme.surfaceOf(dialogCtx),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(color: AppTheme.borderOf(dialogCtx)),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+              contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryOf(dialogCtx).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.palette_outlined,
+                      color: AppTheme.primaryOf(dialogCtx),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Choose theme',
+                    style: TextStyle(
+                      color: AppTheme.textPrimaryOf(dialogCtx),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  buildOption(
+                    id: 'dark',
+                    title: 'Dark mode',
+                    subtitle: 'Always use dark atmospheric theme',
+                    icon: Icons.dark_mode_outlined,
+                  ),
+                  Divider(height: 1, color: AppTheme.borderOf(dialogCtx)),
+                  buildOption(
+                    id: 'light',
+                    title: 'Light mode',
+                    subtitle: 'Always use crisp light theme',
+                    icon: Icons.light_mode_outlined,
+                  ),
+                  Divider(height: 1, color: AppTheme.borderOf(dialogCtx)),
+                  buildOption(
+                    id: 'system',
+                    title: 'Auto (System)',
+                    subtitle: 'Follow device system appearance',
+                    icon: Icons.brightness_auto_outlined,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(color: AppTheme.textSecondaryOf(dialogCtx)),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1219,40 +1458,40 @@ class _SettingsViewState extends State<SettingsView> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Crossfade',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textPrimaryOf(context),
                       ),
                     ),
                     Text(
                       _crossfadeSeconds == 0
                           ? 'Off'
                           : '${_crossfadeSeconds.toInt()}s',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.primary,
+                        color: AppTheme.primaryOf(context),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Allows you to crossfade smoothly between songs',
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppTheme.textMuted,
+                    color: AppTheme.textMutedOf(context),
                   ),
                 ),
                 SliderTheme(
                   data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: AppTheme.primary,
-                    inactiveTrackColor: AppTheme.border,
-                    thumbColor: AppTheme.primary,
-                    overlayColor: AppTheme.primary.withValues(alpha: 0.2),
+                    activeTrackColor: AppTheme.primaryOf(context),
+                    inactiveTrackColor: AppTheme.borderOf(context),
+                    thumbColor: AppTheme.primaryOf(context),
+                    overlayColor: AppTheme.primaryOf(context).withValues(alpha: 0.2),
                   ),
                   child: Slider(
                     value: _crossfadeSeconds,
@@ -1275,7 +1514,7 @@ class _SettingsViewState extends State<SettingsView> {
               ],
             ),
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
 
           // Gapless Playback
           _buildSwitchTile(
@@ -1289,7 +1528,7 @@ class _SettingsViewState extends State<SettingsView> {
               _saveSetting('gapless_playback', val.toString());
             },
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
 
           // Automix
           _buildSwitchTile(
@@ -1303,7 +1542,7 @@ class _SettingsViewState extends State<SettingsView> {
               _saveSetting('automix', val.toString());
             },
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
 
           // Normalize Volume
           _buildSwitchTile(
@@ -1317,7 +1556,7 @@ class _SettingsViewState extends State<SettingsView> {
               _saveSetting('normalize_volume', val.toString());
             },
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
 
           // Mono Audio
           _buildSwitchTile(
@@ -1340,7 +1579,7 @@ class _SettingsViewState extends State<SettingsView> {
               }
             },
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
 
           // Autoplay
           _buildSwitchTile(
@@ -1354,27 +1593,27 @@ class _SettingsViewState extends State<SettingsView> {
               _saveSetting('autoplay', val.toString());
             },
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
 
           // Equalizer Tile
           ListTile(
-            title: const Text(
+            title: Text(
               'Equalizer',
               style: TextStyle(
                 fontSize: 15,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryOf(context),
               ),
             ),
             subtitle: Text(
               _equalizerPreset,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: AppTheme.primary,
+                color: AppTheme.primaryOf(context),
               ),
             ),
-            trailing: const Icon(
+            trailing: Icon(
               Icons.tune_rounded,
-              color: AppTheme.primary,
+              color: AppTheme.primaryOf(context),
             ),
             onTap: () async {
               await _showEqualizerPicker();
@@ -1407,7 +1646,7 @@ class _SettingsViewState extends State<SettingsView> {
               _saveSetting('data_saver_mode', val.toString());
             },
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
           _buildSwitchTile(
             title: 'Downloads over cellular',
             subtitle:
@@ -1419,7 +1658,7 @@ class _SettingsViewState extends State<SettingsView> {
               _saveSetting('download_on_mobile_data', val.toString());
             },
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
           _buildSwitchTile(
             title: 'Cache played songs',
             subtitle:
@@ -1447,12 +1686,12 @@ class _SettingsViewState extends State<SettingsView> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Flexible(
+                    Flexible(
                       child: Text(
                         'Local Audio Cache',
                         style: TextStyle(
                           fontSize: 14,
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.textPrimaryOf(context),
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1460,10 +1699,10 @@ class _SettingsViewState extends State<SettingsView> {
                     const SizedBox(width: 8),
                     Text(
                       _formatCacheSize(_cacheSizeBytes),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textPrimaryOf(context),
                       ),
                     ),
                   ],
@@ -1477,7 +1716,7 @@ class _SettingsViewState extends State<SettingsView> {
                         flex: _cacheBarFlex,
                         child: Container(
                           height: 8,
-                          color: AppTheme.primary,
+                          color: AppTheme.primaryOf(context),
                         ),
                       ),
                       Expanded(
@@ -1491,27 +1730,27 @@ class _SettingsViewState extends State<SettingsView> {
                         flex: 65,
                         child: Container(
                           height: 8,
-                          color: AppTheme.border,
+                          color: AppTheme.borderOf(context),
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Wrap(
+                Wrap(
                   spacing: 12,
                   runSpacing: 4,
                   children: [
                     _StorageLegend(
-                      color: AppTheme.primary,
+                      color: AppTheme.primaryOf(context),
                       label: 'Audio Cache',
                     ),
-                    _StorageLegend(
+                    const _StorageLegend(
                       color: Colors.blueAccent,
                       label: 'Playlists & Tracks',
                     ),
                     _StorageLegend(
-                      color: AppTheme.border,
+                      color: AppTheme.borderOf(context),
                       label: 'Free Space',
                     ),
                   ],
@@ -1528,12 +1767,12 @@ class _SettingsViewState extends State<SettingsView> {
                         }
                       : null,
                   icon: _clearingCache
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: AppTheme.textMuted,
+                            color: AppTheme.textMutedOf(context),
                           ),
                         )
                       : const Icon(
@@ -1551,12 +1790,12 @@ class _SettingsViewState extends State<SettingsView> {
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: _cacheSizeBytes > 0
-                        ? AppTheme.textPrimary
-                        : AppTheme.textMuted,
+                        ? AppTheme.textPrimaryOf(context)
+                        : AppTheme.textMutedOf(context),
                     side: BorderSide(
                       color: _cacheSizeBytes > 0
-                          ? AppTheme.border
-                          : AppTheme.border.withValues(alpha: 0.3),
+                          ? AppTheme.borderOf(context)
+                          : AppTheme.borderOf(context).withValues(alpha: 0.3),
                     ),
                   ),
                 ),
@@ -1575,25 +1814,25 @@ class _SettingsViewState extends State<SettingsView> {
         _buildSectionHeader(Icons.equalizer_rounded, 'Media Quality'),
         _buildCard([
           ListTile(
-            title: const Text(
+            title: Text(
               'Wi-Fi streaming quality',
               style: TextStyle(
                 fontSize: 15,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryOf(context),
               ),
             ),
             subtitle: Text(
               _dataSaverMode
                   ? '$_streamingQuality · Data Saver caps at 96 kbps'
                   : _streamingQuality,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: AppTheme.primary,
+                color: AppTheme.textSecondaryOf(context),
               ),
             ),
-            trailing: const Icon(
+            trailing: Icon(
               Icons.chevron_right_rounded,
-              color: AppTheme.textSecondary,
+              color: AppTheme.textSecondaryOf(context),
             ),
             onTap: () async {
               await _showQualityPicker(isStreaming: true);
@@ -1603,27 +1842,27 @@ class _SettingsViewState extends State<SettingsView> {
               }
             },
           ),
-          const Divider(height: 1, color: AppTheme.border),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
           ListTile(
-            title: const Text(
+            title: Text(
               'Audio download quality',
               style: TextStyle(
                 fontSize: 15,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryOf(context),
               ),
             ),
             subtitle: Text(
               _dataSaverMode
                   ? '$_downloadQuality · Data Saver caps at 96 kbps'
                   : _downloadQuality,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryOf(context),
               ),
             ),
-            trailing: const Icon(
+            trailing: Icon(
               Icons.chevron_right_rounded,
-              color: AppTheme.textSecondary,
+              color: AppTheme.textSecondaryOf(context),
             ),
             onTap: () async {
               await _showQualityPicker(isStreaming: false);
@@ -1651,12 +1890,12 @@ class _SettingsViewState extends State<SettingsView> {
               const SizedBox(height: 16),
               Text(
                 'Type to search settings',
-                style: TextStyle(fontSize: 16, color: Colors.grey.shade400),
+                style: TextStyle(fontSize: 16, color: AppTheme.textSecondaryOf(context)),
               ),
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 'e.g. reduce animations, playback, equalizer, cache, quality',
-                style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                style: TextStyle(fontSize: 12, color: AppTheme.textMutedOf(context)),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -1667,8 +1906,16 @@ class _SettingsViewState extends State<SettingsView> {
 
     final List<Widget> results = [];
 
+    // Check Theme
+    if ('theme dark light auto system appearance mode'.contains(query)) {
+      results.add(_buildThemeTile((fn) => fn()));
+    }
+
     // Check Reduce Animations
     if ('reduce animations lag performance'.contains(query)) {
+      if (results.isNotEmpty) {
+        results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
+      }
       results.add(
         _buildSwitchTile(
           title: 'Reduce animations',
@@ -1686,7 +1933,7 @@ class _SettingsViewState extends State<SettingsView> {
     // Check Canvas
     if ('canvas visualizer wave'.contains(query)) {
       if (results.isNotEmpty) {
-        results.add(const Divider(height: 1, color: AppTheme.border));
+        results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       }
       results.add(
         _buildSwitchTile(
@@ -1705,7 +1952,7 @@ class _SettingsViewState extends State<SettingsView> {
     // Check Explicit
     if ('explicit content rating filter'.contains(query)) {
       if (results.isNotEmpty) {
-        results.add(const Divider(height: 1, color: AppTheme.border));
+        results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       }
       results.add(
         _buildSwitchTile(
@@ -1724,7 +1971,7 @@ class _SettingsViewState extends State<SettingsView> {
     // Check Lyrics
     if ('lyrics auto show'.contains(query)) {
       if (results.isNotEmpty) {
-        results.add(const Divider(height: 1, color: AppTheme.border));
+        results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       }
       results.add(
         _buildSwitchTile(
@@ -1743,7 +1990,7 @@ class _SettingsViewState extends State<SettingsView> {
     // Check Gapless & Playback
     if ('gapless playback silence'.contains(query)) {
       if (results.isNotEmpty) {
-        results.add(const Divider(height: 1, color: AppTheme.border));
+        results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       }
       results.add(
         _buildSwitchTile(
@@ -1761,14 +2008,17 @@ class _SettingsViewState extends State<SettingsView> {
 
     if ('crossfade fade'.contains(query)) {
       if (results.isNotEmpty) {
-        results.add(const Divider(height: 1, color: AppTheme.border));
+        results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       }
       results.add(
         ListTile(
-          title: const Text('Crossfade', style: TextStyle(color: Colors.white)),
+          title: Text(
+            'Crossfade',
+            style: TextStyle(color: AppTheme.textPrimaryOf(context)),
+          ),
           subtitle: Text(
             'Current: ${_crossfadeSeconds.toInt()}s',
-            style: const TextStyle(color: AppTheme.primary),
+            style: TextStyle(color: AppTheme.primaryOf(context)),
           ),
           onTap: () => _openCategory(
             'Playback',
@@ -1780,16 +2030,19 @@ class _SettingsViewState extends State<SettingsView> {
 
     if ('equalizer eq bass treble sound'.contains(query)) {
       if (results.isNotEmpty) {
-        results.add(const Divider(height: 1, color: AppTheme.border));
+        results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       }
       results.add(
         ListTile(
-          title: const Text('Equalizer', style: TextStyle(color: Colors.white)),
+          title: Text(
+            'Equalizer',
+            style: TextStyle(color: AppTheme.textPrimaryOf(context)),
+          ),
           subtitle: Text(
             _equalizerPreset,
-            style: const TextStyle(color: AppTheme.primary),
+            style: TextStyle(color: AppTheme.primaryOf(context)),
           ),
-          trailing: const Icon(Icons.tune_rounded, color: AppTheme.primary),
+          trailing: Icon(Icons.tune_rounded, color: AppTheme.primaryOf(context)),
           onTap: _showEqualizerPicker,
         ),
       );
@@ -1797,39 +2050,39 @@ class _SettingsViewState extends State<SettingsView> {
 
     if ('quality streaming bitrate audio download'.contains(query)) {
       if (results.isNotEmpty) {
-        results.add(const Divider(height: 1, color: AppTheme.border));
+        results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       }
       results.add(
         ListTile(
-          title: const Text(
+          title: Text(
             'Wi-Fi streaming quality',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: AppTheme.textPrimaryOf(context)),
           ),
           subtitle: Text(
             _streamingQuality,
-            style: const TextStyle(color: AppTheme.primary),
+            style: TextStyle(color: AppTheme.primaryOf(context)),
           ),
-          trailing: const Icon(
+          trailing: Icon(
             Icons.chevron_right_rounded,
-            color: Colors.white54,
+            color: AppTheme.textMutedOf(context),
           ),
           onTap: () => _showQualityPicker(isStreaming: true),
         ),
       );
-      results.add(const Divider(height: 1, color: AppTheme.border));
+      results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       results.add(
         ListTile(
-          title: const Text(
+          title: Text(
             'Audio download quality',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: AppTheme.textPrimaryOf(context)),
           ),
           subtitle: Text(
             _downloadQuality,
-            style: const TextStyle(color: AppTheme.primary),
+            style: TextStyle(color: AppTheme.primaryOf(context)),
           ),
-          trailing: const Icon(
+          trailing: Icon(
             Icons.chevron_right_rounded,
-            color: Colors.white54,
+            color: AppTheme.textMutedOf(context),
           ),
           onTap: () => _showQualityPicker(isStreaming: false),
         ),
@@ -1838,21 +2091,21 @@ class _SettingsViewState extends State<SettingsView> {
 
     if ('cache storage delete clear'.contains(query)) {
       if (results.isNotEmpty) {
-        results.add(const Divider(height: 1, color: AppTheme.border));
+        results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       }
       results.add(
         ListTile(
-          title: const Text(
+          title: Text(
             'Storage & Cache',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: AppTheme.textPrimaryOf(context)),
           ),
           subtitle: Text(
             'Audio cache: ${_formatCacheSize(_cacheSizeBytes)}',
-            style: const TextStyle(color: AppTheme.primary),
+            style: TextStyle(color: AppTheme.primaryOf(context)),
           ),
-          trailing: const Icon(
+          trailing: Icon(
             Icons.chevron_right_rounded,
-            color: Colors.white54,
+            color: AppTheme.textMutedOf(context),
           ),
           onTap: () => _openCategory(
             'Data-saving and offline',
@@ -1864,7 +2117,7 @@ class _SettingsViewState extends State<SettingsView> {
 
     if ('data saver cellular mobile offline'.contains(query)) {
       if (results.isNotEmpty) {
-        results.add(const Divider(height: 1, color: AppTheme.border));
+        results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       }
       results.add(
         _buildSwitchTile(
@@ -1882,21 +2135,21 @@ class _SettingsViewState extends State<SettingsView> {
 
     if ('account profile username credentials email logout'.contains(query)) {
       if (results.isNotEmpty) {
-        results.add(const Divider(height: 1, color: AppTheme.border));
+        results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       }
       results.add(
         ListTile(
-          title: const Text(
+          title: Text(
             'Account Profile',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: AppTheme.textPrimaryOf(context)),
           ),
           subtitle: Text(
             AuthService.instance.userDisplayName,
-            style: const TextStyle(color: AppTheme.primary),
+            style: TextStyle(color: AppTheme.primaryOf(context)),
           ),
-          trailing: const Icon(
+          trailing: Icon(
             Icons.chevron_right_rounded,
-            color: Colors.white54,
+            color: AppTheme.textMutedOf(context),
           ),
           onTap: () => _openCategory(
             'Account',
@@ -1951,12 +2204,14 @@ class _SettingsViewState extends State<SettingsView> {
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: AppTheme.surface,
+            color: AppTheme.surfaceOf(context),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppTheme.border),
+            border: Border.all(color: AppTheme.borderOf(context)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
+                color: AppTheme.isDark(context)
+                    ? Colors.black.withValues(alpha: 0.2)
+                    : Colors.black.withValues(alpha: 0.04),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),
@@ -1972,16 +2227,21 @@ class _SettingsViewState extends State<SettingsView> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
-                        colors: [
-                          AppTheme.primary,
-                          AppTheme.primary.withValues(alpha: 0.6),
-                        ],
+                        colors: AppTheme.isDark(context)
+                            ? [
+                                AppTheme.primary,
+                                AppTheme.primary.withValues(alpha: 0.6),
+                              ]
+                            : const [
+                                Color(0xFF6366F1),
+                                Color(0xFFA855F7),
+                              ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: AppTheme.primary.withValues(alpha: 0.3),
+                          color: AppTheme.primaryOf(context).withValues(alpha: 0.2),
                           blurRadius: 10,
                           spreadRadius: 2,
                         ),
@@ -1993,7 +2253,7 @@ class _SettingsViewState extends State<SettingsView> {
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -2003,14 +2263,15 @@ class _SettingsViewState extends State<SettingsView> {
                     bottom: 0,
                     child: Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: AppTheme.cardSurface,
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardSurfaceOf(context),
                         shape: BoxShape.circle,
+                        border: Border.all(color: AppTheme.borderOf(context)),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.edit_rounded,
                         size: 12,
-                        color: AppTheme.primary,
+                        color: AppTheme.primaryOf(context),
                       ),
                     ),
                   ),
@@ -2026,10 +2287,10 @@ class _SettingsViewState extends State<SettingsView> {
                         Flexible(
                           child: Text(
                             displayName,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: AppTheme.textPrimary,
+                              color: AppTheme.textPrimaryOf(context),
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -2043,7 +2304,7 @@ class _SettingsViewState extends State<SettingsView> {
                           decoration: BoxDecoration(
                             color: role == 'admin'
                                 ? Colors.amber.withValues(alpha: 0.2)
-                                : AppTheme.primary.withValues(alpha: 0.15),
+                                : AppTheme.primaryOf(context).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -2053,7 +2314,7 @@ class _SettingsViewState extends State<SettingsView> {
                               fontWeight: FontWeight.bold,
                               color: role == 'admin'
                                   ? Colors.amber
-                                  : AppTheme.primary,
+                                  : AppTheme.primaryOf(context),
                             ),
                           ),
                         ),
@@ -2062,18 +2323,18 @@ class _SettingsViewState extends State<SettingsView> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.email_outlined,
                           size: 13,
-                          color: AppTheme.textSecondary,
+                          color: AppTheme.textSecondaryOf(context),
                         ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             email.isNotEmpty ? email : 'No Gmail assigned',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
-                              color: AppTheme.textSecondary,
+                              color: AppTheme.textSecondaryOf(context),
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -2089,20 +2350,20 @@ class _SettingsViewState extends State<SettingsView> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: AppTheme.cardSurface,
+                  color: AppTheme.cardSurfaceOf(context),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.border),
+                  border: Border.all(color: AppTheme.borderOf(context)),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.edit_rounded, size: 14, color: AppTheme.primary),
-                    SizedBox(width: 6),
+                    Icon(Icons.edit_rounded, size: 14, color: AppTheme.primaryOf(context)),
+                    const SizedBox(width: 6),
                     Text(
                       'Edit',
                       style: TextStyle(
                         fontSize: 12,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textPrimaryOf(context),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -2143,10 +2404,10 @@ class _SettingsViewState extends State<SettingsView> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContentContext, setDialogState) {
           return AlertDialog(
-            backgroundColor: AppTheme.surface,
+            backgroundColor: AppTheme.surfaceOf(dialogContext),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
-              side: const BorderSide(color: AppTheme.border),
+              side: BorderSide(color: AppTheme.borderOf(dialogContext)),
             ),
             titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
             contentPadding: const EdgeInsets.symmetric(
@@ -2159,17 +2420,17 @@ class _SettingsViewState extends State<SettingsView> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.15),
+                    color: AppTheme.primaryOf(dialogContext).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.manage_accounts_rounded,
-                    color: AppTheme.primary,
+                    color: AppTheme.primaryOf(dialogContext),
                     size: 24,
                   ),
                 ),
                 const SizedBox(width: 14),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -2178,14 +2439,14 @@ class _SettingsViewState extends State<SettingsView> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.textPrimaryOf(dialogContext),
                         ),
                       ),
                       Text(
                         'Update credentials & recovery details',
                         style: TextStyle(
                           fontSize: 11,
-                          color: AppTheme.textSecondary,
+                          color: AppTheme.textSecondaryOf(dialogContext),
                         ),
                       ),
                     ],
@@ -2206,11 +2467,12 @@ class _SettingsViewState extends State<SettingsView> {
                       // Display Name
                       TextFormField(
                         controller: nameController,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                        style: TextStyle(
+                          color: AppTheme.textPrimaryOf(dialogContext),
                           fontSize: 14,
                         ),
                         decoration: _inputDecoration(
+                          context: dialogContext,
                           label: 'Full Name',
                           hint: 'e.g. John Laurence',
                           icon: Icons.person_outline_rounded,
@@ -2228,11 +2490,12 @@ class _SettingsViewState extends State<SettingsView> {
                       TextFormField(
                         controller: emailController,
                         keyboardType: TextInputType.emailAddress,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                        style: TextStyle(
+                          color: AppTheme.textPrimaryOf(dialogContext),
                           fontSize: 14,
                         ),
                         decoration: _inputDecoration(
+                          context: dialogContext,
                           label: 'Gmail / Primary Email',
                           hint: 'user@gmail.com',
                           icon: Icons.email_outlined,
@@ -2253,11 +2516,12 @@ class _SettingsViewState extends State<SettingsView> {
                       TextFormField(
                         controller: backupEmailController,
                         keyboardType: TextInputType.emailAddress,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                        style: TextStyle(
+                          color: AppTheme.textPrimaryOf(dialogContext),
                           fontSize: 14,
                         ),
                         decoration: _inputDecoration(
+                          context: dialogContext,
                           label: 'Back up Gmail (Recovery)',
                           hint: 'backup@gmail.com',
                           icon: Icons.mark_email_read_outlined,
@@ -2277,11 +2541,12 @@ class _SettingsViewState extends State<SettingsView> {
                       TextFormField(
                         controller: phoneController,
                         keyboardType: TextInputType.phone,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                        style: TextStyle(
+                          color: AppTheme.textPrimaryOf(dialogContext),
                           fontSize: 14,
                         ),
                         decoration: _inputDecoration(
+                          context: dialogContext,
                           label: 'Phone Number',
                           hint: '+1 555-0199 or 09123456789',
                           icon: Icons.phone_iphone_rounded,
@@ -2293,28 +2558,28 @@ class _SettingsViewState extends State<SettingsView> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppTheme.cardSurface,
+                          color: AppTheme.cardSurfaceOf(dialogContext),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppTheme.border),
+                          border: Border.all(color: AppTheme.borderOf(dialogContext)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Row(
+                            Row(
                               children: [
                                 Icon(
                                   Icons.shield_outlined,
                                   size: 16,
-                                  color: AppTheme.secondary,
+                                  color: AppTheme.secondaryOf(dialogContext),
                                 ),
-                                SizedBox(width: 8),
+                                const SizedBox(width: 8),
                                 Text(
                                   'PASSWORD',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 0.8,
-                                    color: AppTheme.secondary,
+                                    color: AppTheme.secondaryOf(dialogContext),
                                   ),
                                 ),
                               ],
@@ -2323,11 +2588,12 @@ class _SettingsViewState extends State<SettingsView> {
                             TextFormField(
                               controller: passwordController,
                               obscureText: obscurePassword,
-                              style: const TextStyle(
-                                color: AppTheme.textPrimary,
+                              style: TextStyle(
+                                color: AppTheme.textPrimaryOf(dialogContext),
                                 fontSize: 14,
                               ),
                               decoration: _inputDecoration(
+                                context: dialogContext,
                                 label: 'New Password',
                                 hint: 'Leave blank to keep existing',
                                 icon: Icons.lock_outline_rounded,
@@ -2337,7 +2603,7 @@ class _SettingsViewState extends State<SettingsView> {
                                         ? Icons.visibility_outlined
                                         : Icons.visibility_off_outlined,
                                     size: 18,
-                                    color: AppTheme.textMuted,
+                                    color: AppTheme.textMutedOf(dialogContext),
                                   ),
                                   onPressed: () => setDialogState(
                                     () => obscurePassword = !obscurePassword,
@@ -2357,11 +2623,12 @@ class _SettingsViewState extends State<SettingsView> {
                             TextFormField(
                               controller: confirmPasswordController,
                               obscureText: obscureConfirm,
-                              style: const TextStyle(
-                                color: AppTheme.textPrimary,
+                              style: TextStyle(
+                                color: AppTheme.textPrimaryOf(dialogContext),
                                 fontSize: 14,
                               ),
                               decoration: _inputDecoration(
+                                context: dialogContext,
                                 label: 'Confirm New Password',
                                 hint: 'Re-enter password',
                                 icon: Icons.lock_reset_rounded,
@@ -2371,7 +2638,7 @@ class _SettingsViewState extends State<SettingsView> {
                                         ? Icons.visibility_outlined
                                         : Icons.visibility_off_outlined,
                                     size: 18,
-                                    color: AppTheme.textMuted,
+                                    color: AppTheme.textMutedOf(dialogContext),
                                   ),
                                   onPressed: () => setDialogState(
                                     () => obscureConfirm = !obscureConfirm,
@@ -2399,15 +2666,15 @@ class _SettingsViewState extends State<SettingsView> {
                 onPressed: isSaving
                     ? null
                     : () => Navigator.of(dialogContext).pop(),
-                child: const Text(
+                child: Text(
                   'Cancel',
-                  style: TextStyle(color: AppTheme.textSecondary),
+                  style: TextStyle(color: AppTheme.textSecondaryOf(dialogContext)),
                 ),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.black87,
+                  backgroundColor: AppTheme.primaryOf(dialogContext),
+                  foregroundColor: AppTheme.isDark(dialogContext) ? Colors.black87 : Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -2433,11 +2700,14 @@ class _SettingsViewState extends State<SettingsView> {
                           if (mounted) {
                             setState(() {});
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                 content: Text(
                                   'Profile account updated successfully!',
+                                  style: TextStyle(
+                                    color: AppTheme.isDark(context) ? Colors.black87 : Colors.white,
+                                  ),
                                 ),
-                                backgroundColor: AppTheme.primary,
+                                backgroundColor: AppTheme.primaryOf(context),
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );
@@ -2455,12 +2725,12 @@ class _SettingsViewState extends State<SettingsView> {
                         }
                       },
                 child: isSaving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.black87,
+                          color: AppTheme.isDark(dialogContext) ? Colors.black87 : Colors.white,
                         ),
                       )
                     : const Text(
@@ -2476,6 +2746,7 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   InputDecoration _inputDecoration({
+    required BuildContext context,
     required String label,
     required String hint,
     required IconData icon,
@@ -2484,24 +2755,24 @@ class _SettingsViewState extends State<SettingsView> {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon, size: 18, color: AppTheme.primary),
+      prefixIcon: Icon(icon, size: 18, color: AppTheme.primaryOf(context)),
       suffixIcon: suffixIcon,
-      labelStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-      hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+      labelStyle: TextStyle(color: AppTheme.textSecondaryOf(context), fontSize: 13),
+      hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
       filled: true,
-      fillColor: AppTheme.cardSurface,
+      fillColor: AppTheme.cardSurfaceOf(context),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppTheme.border),
+        borderSide: BorderSide(color: AppTheme.borderOf(context)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppTheme.border),
+        borderSide: BorderSide(color: AppTheme.borderOf(context)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+        borderSide: BorderSide(color: AppTheme.primaryOf(context), width: 1.5),
       ),
     );
   }
@@ -2511,14 +2782,14 @@ class _SettingsViewState extends State<SettingsView> {
       padding: const EdgeInsets.only(left: 4, bottom: 10),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: AppTheme.primary),
+          Icon(icon, size: 18, color: AppTheme.primaryOf(context)),
           const SizedBox(width: 8),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryOf(context),
               letterSpacing: 0.3,
             ),
           ),
@@ -2529,11 +2800,11 @@ class _SettingsViewState extends State<SettingsView> {
 
   Widget _buildCard(List<Widget> children) {
     return Material(
-      color: AppTheme.surface,
+      color: AppTheme.surfaceOf(context),
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppTheme.border),
+        side: BorderSide(color: AppTheme.borderOf(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2551,19 +2822,19 @@ class _SettingsViewState extends State<SettingsView> {
     return SwitchListTile.adaptive(
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: AppTheme.textPrimary,
+          color: AppTheme.textPrimaryOf(context),
         ),
       ),
       subtitle: Text(
         subtitle,
-        style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+        style: TextStyle(fontSize: 12, color: AppTheme.textMutedOf(context)),
       ),
       value: value,
-      activeTrackColor: AppTheme.primary.withValues(alpha: 0.5),
-      activeThumbColor: AppTheme.primary,
+      activeTrackColor: AppTheme.primaryOf(context).withValues(alpha: 0.5),
+      activeThumbColor: AppTheme.primaryOf(context),
       onChanged: onChanged,
     );
   }
@@ -2588,7 +2859,7 @@ class _StorageLegend extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
+          style: TextStyle(fontSize: 10, color: AppTheme.textSecondaryOf(context)),
         ),
       ],
     );

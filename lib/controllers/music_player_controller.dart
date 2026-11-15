@@ -184,6 +184,13 @@ class MusicPlayerController extends ChangeNotifier {
   StreamSubscription<PlaybackEvent>? _playbackEventSub;
   StreamSubscription<int?>? _audioSessionSub;
   bool _audioPlayerHasSource = false;
+
+  /// Id of the song whose audio is actually loaded in [_audioPlayer].
+  ///
+  /// [currentSong] only reports the queue cursor, which points at the first
+  /// saved track before the user has pressed play. Hot-swapping an enrichment
+  /// based on that alone started playback on its own.
+  String? _loadedSongId;
   bool _isPlayingAudioInProgress = false;
 
   /// Id of the song whose audio load is currently in flight, so a request for
@@ -3822,12 +3829,21 @@ class MusicPlayerController extends ChangeNotifier {
         _fullTrackAttemptCount.remove(song.id);
       }
       _unavailableIds.remove(song.id);
-      // Hot-swap mid-playback or trigger newly resolved audio
-      if (song.id == currentSong?.id) {
-        _isPlaying = true;
-        _unmuteOnPlay();
-        _lastPositionUpdate = DateTime.now();
-        _startTimer();
+      // Hot-swap only when this song is the one the player actually loaded
+      // (playing, paused, or mid-load). Being the queue cursor is not enough:
+      // at startup the first saved song becomes currentSong before the user
+      // presses play, and background enrichment used to start it playing.
+      final isLoadedCurrentSong =
+          song.id == currentSong?.id &&
+          (_isPlaying ||
+              _loadingSongId == song.id ||
+              (_audioPlayerHasSource && _loadedSongId == song.id));
+      if (isLoadedCurrentSong) {
+        if (_isPlaying) {
+          _unmuteOnPlay();
+          _lastPositionUpdate = DateTime.now();
+          _startTimer();
+        }
         if (!_isPlayingAudioInProgress) {
           // ignore: discarded_futures
           _playCurrentSongAudio().then((_) {
@@ -4662,6 +4678,12 @@ class MusicPlayerController extends ChangeNotifier {
   /// verify that duplicate completion signals advance exactly one track.
   @visibleForTesting
   void handleSongCompleteForTesting() => _onSongComplete();
+
+  /// Applies an enrichment result without network access. Used by tests to
+  /// verify that background resolution never starts playback by itself.
+  @visibleForTesting
+  bool applyEnrichmentForTesting(Song song, TrackEnrichment enrichment) =>
+      _applyEnrichment(song, enrichment);
 
   Future<void> _cacheAudioOffline(Song song) async {
     // Automatic caching is playback-only. Imports and background enrichment
@@ -5998,6 +6020,7 @@ class MusicPlayerController extends ChangeNotifier {
       _audioPlayer.stop().catchError((_) {});
     } catch (_) {}
     _audioPlayerHasSource = false;
+    _loadedSongId = null;
     notifyListeners();
   }
 
@@ -6016,6 +6039,7 @@ class MusicPlayerController extends ChangeNotifier {
       _audioPlayer.stop().catchError((_) {});
     } catch (_) {}
     _audioPlayerHasSource = false;
+    _loadedSongId = null;
     notifyListeners();
   }
 
@@ -6980,6 +7004,7 @@ class MusicPlayerController extends ChangeNotifier {
         _pendingHotSwapReload = true;
         _pendingHotSwapResumePosition = Duration.zero;
         _audioPlayerHasSource = false;
+        _loadedSongId = null;
         _logDiag(
           'play superseded by a newer request — aborting old load',
           song: song,
@@ -7005,6 +7030,7 @@ class MusicPlayerController extends ChangeNotifier {
       // Drop it first. Bundled songs resolve instantly and are left as they are.
       if (_isDownloadableCatalogId(song.id)) {
         _audioPlayerHasSource = false;
+        _loadedSongId = null;
         try {
           await _audioPlayer.stop().timeout(const Duration(seconds: 1));
         } catch (_) {}
@@ -7100,9 +7126,11 @@ class MusicPlayerController extends ChangeNotifier {
           song: song,
         );
         _audioPlayerHasSource = true;
+        _loadedSongId = song.id;
         _clearSilentRetry();
       } on MissingPluginException {
         _audioPlayerHasSource = false;
+        _loadedSongId = null;
       } catch (loadErr) {
         // Aborted because a newer play request superseded this one: skip the
         // slow online recovery chain, the new attempt takes over.
@@ -7163,6 +7191,7 @@ class MusicPlayerController extends ChangeNotifier {
                   .setAudioSource(retrySource)
                   .timeout(const Duration(seconds: 8));
               _audioPlayerHasSource = true;
+              _loadedSongId = song.id;
               recovered = true;
               // Crucial: clear pending hot swap so finally block does not trigger a duplicate reload
               _pendingHotSwapReload = false;
@@ -7202,15 +7231,18 @@ class MusicPlayerController extends ChangeNotifier {
                   .setAudioSource(fallbackSource)
                   .timeout(const Duration(seconds: 6));
               _audioPlayerHasSource = true;
+              _loadedSongId = song.id;
               recovered = true;
             } catch (fbErr) {
               debugPrint(
                 '[MusicPlayerController] Fallback setAudioSource failed: $fbErr',
               );
               _audioPlayerHasSource = false;
+              _loadedSongId = null;
             }
           } else {
             _audioPlayerHasSource = false;
+            _loadedSongId = null;
           }
         }
       }
@@ -7226,9 +7258,11 @@ class MusicPlayerController extends ChangeNotifier {
       _ytRefreshAttemptedIds.remove(song.id);
       _playbackTimer?.cancel();
 
-      _unmuteOnPlay();
-      _activateAudioSession();
-      _lastPositionUpdate = DateTime.now();
+      if (_isPlaying) {
+        _unmuteOnPlay();
+        _activateAudioSession();
+        _lastPositionUpdate = DateTime.now();
+      }
       final effectiveVolume = _outputVolume;
       try {
         await _audioPlayer.setVolume(effectiveVolume);
@@ -7289,13 +7323,14 @@ class MusicPlayerController extends ChangeNotifier {
       // gets loaded instead of leaving the player on the old source.
       if (_pendingHotSwapReload && !_disposed) {
         _pendingHotSwapReload = false;
-        _isPlaying = true;
         final resumePos = _pendingHotSwapResumePosition;
         _pendingHotSwapResumePosition = Duration.zero;
         _logDiag('executing deferred hot-swap reload', song: song);
-        _unmuteOnPlay();
-        _lastPositionUpdate = DateTime.now();
-        _startTimer();
+        if (_isPlaying) {
+          _unmuteOnPlay();
+          _lastPositionUpdate = DateTime.now();
+          _startTimer();
+        }
         // ignore: discarded_futures
         _playCurrentSongAudio().then((_) {
           if (resumePos > Duration.zero) {
@@ -7397,6 +7432,7 @@ class MusicPlayerController extends ChangeNotifier {
             .setAudioSource(fallbackSource)
             .timeout(const Duration(seconds: 6));
         _audioPlayerHasSource = true;
+        _loadedSongId = song.id;
         _lastPositionUpdate = DateTime.now();
         _unmuteOnPlay();
         _activateAudioSession();
@@ -7420,6 +7456,7 @@ class MusicPlayerController extends ChangeNotifier {
           '[MusicPlayerController] Fallback asset recovery failed: $err',
         );
         _audioPlayerHasSource = false;
+        _loadedSongId = null;
         notifyListeners();
       }
     } else {
@@ -7427,6 +7464,7 @@ class MusicPlayerController extends ChangeNotifier {
       // there is genuinely nothing to play. Reset playing flag and timers so UI
       // does not freeze in an artificial playing-yet-stuck state.
       _audioPlayerHasSource = false;
+      _loadedSongId = null;
       _playbackTimer?.cancel();
       _cancelStallWatchdog();
       _logDiag(

@@ -54,7 +54,7 @@ class SidebarNav extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: AppTheme.surfaceOf(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -71,7 +71,7 @@ class SidebarNav extends StatelessWidget {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: AppTheme.textMutedOf(ctx).withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -85,35 +85,39 @@ class SidebarNav extends StatelessWidget {
                       size: 26,
                     ),
                     const SizedBox(width: 10),
-                    const Text(
-                      'Your Updates',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    Expanded(
+                      child: Text(
+                        'Your Updates',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimaryOf(ctx),
+                        ),
                       ),
                     ),
-                    const Spacer(),
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white70),
+                      icon: Icon(Icons.close, color: AppTheme.textMutedOf(ctx)),
                       onPressed: () => Navigator.of(ctx).pop(),
                     ),
                   ],
                 ),
                 const SizedBox(height: 14),
                 _buildUpdateTile(
+                  context: ctx,
                   title: 'Now Playing Artwork & Action Buttons',
                   description:
                       'Tap any song to view high-resolution cover art with Lyrics, Save, and Download actions.',
                   date: 'Just now',
                 ),
                 _buildUpdateTile(
+                  context: ctx,
                   title: 'Spotify & YouTube Fast Import',
                   description:
                       'Import playlists and songs with automatic full-track audio matching and offline caching.',
                   date: 'Recent',
                 ),
                 _buildUpdateTile(
+                  context: ctx,
                   title: '10-Band Graphic Equalizer',
                   description:
                       'Custom presets, dynamic visualizer, and acoustic tuning in Settings.',
@@ -128,6 +132,7 @@ class SidebarNav extends StatelessWidget {
   }
 
   Widget _buildUpdateTile({
+    required BuildContext context,
     required String title,
     required String description,
     required String date,
@@ -137,8 +142,12 @@ class SidebarNav extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFF282828),
+          color: AppTheme.cardSurfaceOf(context),
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppTheme.borderOf(context),
+            width: 1,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,8 +158,8 @@ class SidebarNav extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppTheme.textPrimaryOf(context),
                       fontSize: 14.5,
                       fontWeight: FontWeight.w600,
                     ),
@@ -158,8 +167,8 @@ class SidebarNav extends StatelessWidget {
                 ),
                 Text(
                   date,
-                  style: const TextStyle(
-                    color: Color(0xFFA7A7A7),
+                  style: TextStyle(
+                    color: AppTheme.textMutedOf(context),
                     fontSize: 11,
                   ),
                 ),
@@ -168,8 +177,8 @@ class SidebarNav extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               description,
-              style: const TextStyle(
-                color: Color(0xFFA7A7A7),
+              style: TextStyle(
+                color: AppTheme.textSecondaryOf(context),
                 fontSize: 12.5,
                 height: 1.3,
               ),
@@ -207,11 +216,15 @@ class SidebarNav extends StatelessWidget {
     return Container(
       width: isDrawer ? double.infinity : 240,
       decoration: BoxDecoration(
-        color: isDrawer ? const Color(0xFF121212) : AppTheme.surface,
+        color: isDrawer
+            ? (AppTheme.isDark(context)
+                ? const Color(0xFF121212)
+                : AppTheme.lightSurface)
+            : AppTheme.surfaceOf(context),
         border: isDrawer
             ? null
-            : const Border(
-                right: BorderSide(color: AppTheme.border, width: 1),
+            : Border(
+                right: BorderSide(color: AppTheme.borderOf(context), width: 1),
               ),
       ),
       child: SafeArea(
@@ -250,13 +263,13 @@ class SidebarNav extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'PULSE',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 2.0,
-                              color: AppTheme.textPrimary,
+                              color: AppTheme.textPrimaryOf(context),
                             ),
                           ),
                           Row(
@@ -267,7 +280,8 @@ class SidebarNav extends StatelessWidget {
                                   fontSize: 10,
                                   letterSpacing: 1.5,
                                   fontWeight: FontWeight.w600,
-                                  color: AppTheme.primary.withValues(alpha: 0.9),
+                                  color: AppTheme.primaryOf(context)
+                                      .withValues(alpha: 0.9),
                                 ),
                               ),
                             ],
@@ -278,18 +292,21 @@ class SidebarNav extends StatelessWidget {
                   ),
                 ),
                 _buildDesktopNavItem(
+                  context: context,
                   icon: Icons.home_rounded,
                   label: 'Home',
                   isSelected: controller.currentNavIndex == 0,
                   onTap: () => controller.setNavIndex(0),
                 ),
                 _buildDesktopNavItem(
+                  context: context,
                   icon: Icons.explore_rounded,
                   label: 'Explore',
                   isSelected: controller.currentNavIndex == 1,
                   onTap: () => controller.setNavIndex(1),
                 ),
                 _buildDesktopNavItem(
+                  context: context,
                   icon: Icons.library_music_rounded,
                   label: 'Library',
                   isSelected: controller.currentNavIndex == 2,
@@ -304,8 +321,14 @@ class SidebarNav extends StatelessWidget {
               // Top Profile Card (Spotify Style)
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF242424),
+                  color: AppTheme.isDark(context)
+                      ? const Color(0xFF242424)
+                      : AppTheme.lightCardSurface,
                   borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppTheme.borderOf(context),
+                    width: 1,
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -343,22 +366,22 @@ class SidebarNav extends StatelessWidget {
                                 children: [
                                   Text(
                                     displayName,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 17,
                                       fontWeight: FontWeight.w700,
-                                      color: Colors.white,
+                                      color: AppTheme.textPrimaryOf(context),
                                       letterSpacing: -0.2,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 3),
-                                  const Text(
+                                  Text(
                                     'View profile',
                                     style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w400,
-                                      color: Color(0xFFA7A7A7),
+                                      color: AppTheme.textMutedOf(context),
                                     ),
                                   ),
                                 ],
@@ -370,8 +393,8 @@ class SidebarNav extends StatelessWidget {
                     ),
 
                     // Divider line
-                    const Divider(
-                      color: Color(0xFF333333),
+                    Divider(
+                      color: AppTheme.borderOf(context),
                       height: 1,
                       thickness: 1,
                     ),
@@ -392,25 +415,27 @@ class SidebarNav extends StatelessWidget {
                             Container(
                               width: 32,
                               height: 32,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF333333),
+                              decoration: BoxDecoration(
+                                color: AppTheme.isDark(context)
+                                    ? const Color(0xFF333333)
+                                    : AppTheme.borderOf(context),
                                 shape: BoxShape.circle,
                               ),
                               alignment: Alignment.center,
-                              child: const Icon(
+                              child: Icon(
                                 Icons.add,
-                                color: Colors.white,
+                                color: AppTheme.textPrimaryOf(context),
                                 size: 20,
                               ),
                             ),
                             const SizedBox(width: 14),
-                            const Expanded(
+                            Expanded(
                               child: Text(
                                 'Add account',
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w500,
-                                  color: Colors.white,
+                                  color: AppTheme.textPrimaryOf(context),
                                 ),
                               ),
                             ),
@@ -427,9 +452,9 @@ class SidebarNav extends StatelessWidget {
               // Menu Items List
               _buildMenuItem(
                 context: context,
-                iconWidget: const _ListeningStatsIcon(
+                iconWidget: _ListeningStatsIcon(
                   size: 26,
-                  color: Colors.white,
+                  color: AppTheme.textPrimaryOf(context),
                 ),
                 label: 'Listening stats',
                 onTap: () => _openPage(
@@ -469,6 +494,7 @@ class SidebarNav extends StatelessWidget {
   }
 
   Widget _buildDesktopNavItem({
+    required BuildContext context,
     required IconData icon,
     required String label,
     required bool isSelected,
@@ -487,11 +513,11 @@ class SidebarNav extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
               color: isSelected
-                  ? AppTheme.primary.withValues(alpha: 0.15)
+                  ? AppTheme.primaryOf(context).withValues(alpha: 0.15)
                   : Colors.transparent,
               border: Border.all(
                 color: isSelected
-                    ? AppTheme.primary.withValues(alpha: 0.4)
+                    ? AppTheme.primaryOf(context).withValues(alpha: 0.4)
                     : Colors.transparent,
                 width: 1,
               ),
@@ -501,7 +527,9 @@ class SidebarNav extends StatelessWidget {
                 Icon(
                   icon,
                   size: 20,
-                  color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+                  color: isSelected
+                      ? AppTheme.primaryOf(context)
+                      : AppTheme.textSecondaryOf(context),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -512,8 +540,8 @@ class SidebarNav extends StatelessWidget {
                       fontWeight:
                           isSelected ? FontWeight.w600 : FontWeight.w500,
                       color: isSelected
-                          ? AppTheme.textPrimary
-                          : AppTheme.textSecondary,
+                          ? AppTheme.textPrimaryOf(context)
+                          : AppTheme.textSecondaryOf(context),
                     ),
                   ),
                 ),
@@ -523,8 +551,10 @@ class SidebarNav extends StatelessWidget {
                         const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? AppTheme.primary.withValues(alpha: 0.3)
-                          : Colors.white.withValues(alpha: 0.08),
+                          ? AppTheme.primaryOf(context).withValues(alpha: 0.3)
+                          : (AppTheme.isDark(context)
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.black.withValues(alpha: 0.06)),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -532,8 +562,9 @@ class SidebarNav extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color:
-                            isSelected ? AppTheme.primary : AppTheme.textMuted,
+                        color: isSelected
+                            ? AppTheme.primaryOf(context)
+                            : AppTheme.textMutedOf(context),
                       ),
                     ),
                   ),
@@ -552,11 +583,16 @@ class SidebarNav extends StatelessWidget {
     required String label,
     required VoidCallback onTap,
   }) {
+    final textColor = AppTheme.textPrimaryOf(context);
+    final isDark = AppTheme.isDark(context);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
+        splashColor: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.08),
+        highlightColor: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
           child: Row(
@@ -568,17 +604,17 @@ class SidebarNav extends StatelessWidget {
                     Icon(
                       icon,
                       size: 26,
-                      color: Colors.white,
+                      color: textColor,
                     ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16.5,
                     fontWeight: FontWeight.w500,
-                    color: Colors.white,
+                    color: textColor,
                     letterSpacing: -0.2,
                   ),
                 ),

@@ -16,21 +16,27 @@ class ProfileView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: AppTheme.backgroundOf(context),
       appBar: AppBar(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: AppTheme.surfaceOf(context),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back_rounded,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryOf(context),
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('View Profile'),
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: AppTheme.border),
+        title: Text(
+          'View Profile',
+          style: TextStyle(
+            color: AppTheme.textPrimaryOf(context),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, color: AppTheme.borderOf(context)),
         ),
       ),
       body: StreamBuilder<Object?>(
@@ -55,9 +61,9 @@ class ProfileView extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: AppTheme.surface,
+                        color: AppTheme.surfaceOf(context),
                         borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: AppTheme.border),
+                        border: Border.all(color: AppTheme.borderOf(context)),
                       ),
                       child: Column(
                         children: [
@@ -73,7 +79,7 @@ class ProfileView extends StatelessWidget {
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppTheme.primary.withValues(
+                                  color: AppTheme.primaryOf(context).withValues(
                                     alpha: 0.2,
                                   ),
                                   blurRadius: 24,
@@ -95,19 +101,19 @@ class ProfileView extends StatelessWidget {
                           Text(
                             displayName,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              color: AppTheme.textPrimary,
+                              color: AppTheme.textPrimaryOf(context),
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             email.isEmpty ? 'No email on file' : email,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
-                              color: AppTheme.textSecondary,
+                              color: AppTheme.textSecondaryOf(context),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -117,10 +123,10 @@ class ProfileView extends StatelessWidget {
                               vertical: 5,
                             ),
                             decoration: BoxDecoration(
-                              color: AppTheme.primary.withValues(alpha: 0.12),
+                              color: AppTheme.primaryOf(context).withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: AppTheme.primary.withValues(alpha: 0.3),
+                                color: AppTheme.primaryOf(context).withValues(alpha: 0.3),
                               ),
                             ),
                             child: Text(
@@ -131,7 +137,7 @@ class ProfileView extends StatelessWidget {
                                 letterSpacing: 1.1,
                                 color: role == 'admin'
                                     ? Colors.amber
-                                    : AppTheme.primary,
+                                    : AppTheme.primaryOf(context),
                               ),
                             ),
                           ),
@@ -141,9 +147,9 @@ class ProfileView extends StatelessWidget {
                     const SizedBox(height: 20),
                     Container(
                       decoration: BoxDecoration(
-                        color: AppTheme.surface,
+                        color: AppTheme.surfaceOf(context),
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: AppTheme.border),
+                        border: Border.all(color: AppTheme.borderOf(context)),
                       ),
                       child: Column(
                         children: [
@@ -152,7 +158,7 @@ class ProfileView extends StatelessWidget {
                             label: 'Primary email',
                             value: email.isEmpty ? 'Not set' : email,
                           ),
-                          const Divider(height: 1, color: AppTheme.border),
+                          Divider(height: 1, color: AppTheme.borderOf(context)),
                           _ProfileInfoRow(
                             icon: Icons.mark_email_read_outlined,
                             label: 'Backup email',
@@ -160,13 +166,13 @@ class ProfileView extends StatelessWidget {
                                 ? 'Not set'
                                 : backupEmail,
                           ),
-                          const Divider(height: 1, color: AppTheme.border),
+                          Divider(height: 1, color: AppTheme.borderOf(context)),
                           _ProfileInfoRow(
                             icon: Icons.phone_outlined,
                             label: 'Phone number',
                             value: phone.isEmpty ? 'Not set' : phone,
                           ),
-                          const Divider(height: 1, color: AppTheme.border),
+                          Divider(height: 1, color: AppTheme.borderOf(context)),
                           _ProfileInfoRow(
                             icon: Icons.badge_outlined,
                             label: 'Account type',
@@ -183,8 +189,8 @@ class ProfileView extends StatelessWidget {
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       label: const Text('Edit Profile'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.primary,
-                        foregroundColor: Colors.black,
+                        backgroundColor: AppTheme.primaryOf(context),
+                        foregroundColor: AppTheme.isDark(context) ? Colors.black87 : Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),
@@ -195,8 +201,8 @@ class ProfileView extends StatelessWidget {
                       icon: const Icon(Icons.group_add_outlined, size: 18),
                       label: const Text('Manage Accounts'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.textPrimary,
-                        side: const BorderSide(color: AppTheme.border),
+                        foregroundColor: AppTheme.textPrimaryOf(context),
+                        side: BorderSide(color: AppTheme.borderOf(context)),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),
@@ -233,10 +239,10 @@ class _ProfileInfoRow extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppTheme.cardSurface,
+              color: AppTheme.cardSurfaceOf(context),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, size: 18, color: AppTheme.textSecondary),
+            child: Icon(icon, size: 18, color: AppTheme.textSecondaryOf(context)),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -245,18 +251,18 @@ class _ProfileInfoRow extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     letterSpacing: 0.4,
-                    color: AppTheme.textMuted,
+                    color: AppTheme.textMutedOf(context),
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryOf(context),
                   ),
                 ),
               ],
