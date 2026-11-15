@@ -42,18 +42,24 @@ class _AlbumCardState extends State<AlbumCard> {
           width: 175,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: active ? AppTheme.cardSurfaceHover : AppTheme.cardSurface,
+            color: active
+                ? AppTheme.cardSurfaceHoverOf(context)
+                : AppTheme.cardSurfaceOf(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: widget.isSelected
-                  ? AppTheme.primary
-                  : (_isHovered ? AppTheme.borderActive : AppTheme.border),
+                  ? AppTheme.primaryOf(context)
+                  : (_isHovered
+                      ? AppTheme.borderActiveOf(context)
+                      : AppTheme.borderOf(context)),
               width: widget.isSelected ? 2 : 1,
             ),
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: (widget.isSelected ? AppTheme.primary : widget.playlist.gradient.first)
+                      color: (widget.isSelected
+                              ? AppTheme.primaryOf(context)
+                              : widget.playlist.gradient.first)
                           .withValues(alpha: widget.isSelected ? 0.35 : 0.25),
                       blurRadius: widget.isSelected ? 20 : 16,
                       offset: const Offset(0, 6),
@@ -136,10 +142,10 @@ class _AlbumCardState extends State<AlbumCard> {
               // Title
               Text(
                 widget.playlist.title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.textPrimaryOf(context),
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -151,8 +157,11 @@ class _AlbumCardState extends State<AlbumCard> {
                 widget.playlist.subtitle,
                 style: TextStyle(
                   fontSize: 12,
-                  color: widget.isSelected ? AppTheme.primary : AppTheme.textMuted,
-                  fontWeight: widget.isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: widget.isSelected
+                      ? AppTheme.primaryOf(context)
+                      : AppTheme.textMutedOf(context),
+                  fontWeight:
+                      widget.isSelected ? FontWeight.w600 : FontWeight.normal,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

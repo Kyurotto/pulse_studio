@@ -253,7 +253,7 @@ class _DiscoveryRail extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _header(),
+        _header(context),
         const SizedBox(height: 14),
         SizedBox(
           height: _railHeight,
@@ -261,29 +261,29 @@ class _DiscoveryRail extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             itemCount: section.songs.length,
             separatorBuilder: (_, _) => const SizedBox(width: 14),
-            itemBuilder: (context, index) => _tile(section.songs[index], index),
+            itemBuilder: (context, index) => _tile(context, section.songs[index], index),
           ),
         ),
       ],
     );
   }
 
-  Widget _header() {
+  Widget _header(BuildContext context) {
     final titles = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           section.title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryOf(context),
           ),
         ),
         const SizedBox(height: 4),
         Text(
           section.subtitle,
-          style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+          style: TextStyle(fontSize: 13, color: AppTheme.textMutedOf(context)),
         ),
       ],
     );
@@ -298,21 +298,21 @@ class _DiscoveryRail extends StatelessWidget {
         children: [
           Expanded(child: titles),
           const SizedBox(width: 8),
-          const Text(
+          Text(
             'See all',
-            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondaryOf(context)),
           ),
-          const Icon(
+          Icon(
             Icons.chevron_right_rounded,
             size: 20,
-            color: AppTheme.textSecondary,
+            color: AppTheme.textSecondaryOf(context),
           ),
         ],
       ),
     );
   }
 
-  Widget _tile(Song song, int index) {
+  Widget _tile(BuildContext context, Song song, int index) {
     return SizedBox(
       width: _tileWidth,
       child: InkWell(
@@ -405,17 +405,17 @@ class _DiscoveryRail extends StatelessWidget {
               song.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryOf(context),
               ),
             ),
             Text(
               song.artist,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+              style: TextStyle(fontSize: 11, color: AppTheme.textMutedOf(context)),
             ),
           ],
         ),

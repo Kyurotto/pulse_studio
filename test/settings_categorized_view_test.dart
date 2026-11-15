@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music/controllers/music_player_controller.dart';
+import 'package:music/theme/app_theme.dart';
 import 'package:music/views/settings_view.dart';
 
 void main() {
@@ -150,6 +151,99 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Wi-Fi streaming quality'), findsOneWidget);
       expect(find.text('Audio download quality'), findsOneWidget);
+
+      // Clean up
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
+    'Settings subviews use black text, subtle borders, and black sliders in Light Mode',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final controller = MusicPlayerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.light(),
+          home: SettingsView(controller: controller),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 1. Account category in light mode
+      await tester.tap(find.text('Account'));
+      await tester.pumpAndSettle();
+
+      // Verify "Edit" button pill has black text and black icon
+      final editText = tester.widget<Text>(find.text('Edit'));
+      expect(editText.style?.color, AppTheme.lightTextPrimary);
+
+      expect(
+        find.byIcon(Icons.edit_rounded),
+        findsWidgets,
+      );
+
+      // Verify profile card text has dark/black text
+      final profileName = tester.widget<Text>(find.text('Guest'));
+      expect(profileName.style?.color, AppTheme.lightTextPrimary);
+
+      // Back to main settings
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.pumpAndSettle();
+
+      // 2. Playback category in light mode
+      await tester.tap(find.text('Playback'));
+      await tester.pumpAndSettle();
+
+      // Verify Crossfade label is dark
+      final crossfadeLabel = tester.widget<Text>(find.text('Crossfade'));
+      expect(crossfadeLabel.style?.color, AppTheme.lightTextPrimary);
+
+      // Verify Slider activeTrackColor and thumbColor are black/dark in light mode
+      final sliderThemeFinder = find.byType(SliderTheme);
+      expect(sliderThemeFinder, findsOneWidget);
+      final sliderTheme = tester.widget<SliderTheme>(sliderThemeFinder);
+      expect(sliderTheme.data.activeTrackColor, AppTheme.lightPrimary);
+      expect(sliderTheme.data.thumbColor, AppTheme.lightPrimary);
+
+      // Verify Equalizer logo/icon trailing is black/dark in light mode
+      final eqIcon = tester.widget<Icon>(find.byIcon(Icons.tune_rounded));
+      expect(eqIcon.color, AppTheme.lightPrimary);
+
+      final eqTitle = tester.widget<Text>(find.text('Equalizer'));
+      expect(eqTitle.style?.color, AppTheme.lightTextPrimary);
+
+      // Back to main settings
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.pumpAndSettle();
+
+      // 3. Data-saving category in light mode
+      await tester.tap(find.text('Data-saving and offline'));
+      await tester.pumpAndSettle();
+
+      final cacheTitle = tester.widget<Text>(find.text('Local Audio Cache'));
+      expect(cacheTitle.style?.color, AppTheme.lightTextPrimary);
+
+      // Back to main settings
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.pumpAndSettle();
+
+      // 4. Media quality category in light mode
+      await tester.tap(find.text('Media quality'));
+      await tester.pumpAndSettle();
+
+      final wifiTitle = tester.widget<Text>(find.text('Wi-Fi streaming quality'));
+      expect(wifiTitle.style?.color, AppTheme.lightTextPrimary);
+
+      final dlTitle = tester.widget<Text>(find.text('Audio download quality'));
+      expect(dlTitle.style?.color, AppTheme.lightTextPrimary);
 
       // Clean up
       await tester.pumpWidget(const SizedBox());

@@ -94,8 +94,8 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
           ]);
         }
       });
+      _loadDynamicRadios();
     }
-    _loadDynamicRadios();
   }
 
   Future<void> _loadDynamicRadios() async {
@@ -588,10 +588,12 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
 
         return Scaffold(
           key: _scaffoldKey,
-          backgroundColor: AppTheme.background,
+          backgroundColor: AppTheme.backgroundOf(context),
           drawer: isMobile
               ? Drawer(
-                  backgroundColor: const Color(0xFF121212),
+                  backgroundColor: AppTheme.isDark(context)
+                      ? const Color(0xFF121212)
+                      : AppTheme.lightSurface,
                   child: SafeArea(
                     child: SidebarNav(
                       controller: _controller,
@@ -642,8 +644,8 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                             Expanded(
                               child: RefreshIndicator(
                                 onRefresh: _handleRefresh,
-                                color: AppTheme.primary,
-                                backgroundColor: AppTheme.cardSurface,
+                                color: AppTheme.primaryOf(context),
+                                backgroundColor: AppTheme.cardSurfaceOf(context),
                                 notificationPredicate: (notification) {
                                   // Only the page's own vertical scroll counts. Horizontal
                                   // discovery carousels (depth > 0, pixels == 0) used to flip
@@ -729,11 +731,12 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surface,
-        border: const Border(top: BorderSide(color: AppTheme.border, width: 1)),
+        color: AppTheme.surfaceOf(context),
+        border: Border(top: BorderSide(color: AppTheme.borderOf(context), width: 1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.4),
+            color: (AppTheme.isDark(context) ? Colors.black : Colors.grey.shade400)
+                .withValues(alpha: AppTheme.isDark(context) ? 0.4 : 0.2),
             blurRadius: 12,
             offset: const Offset(0, -2),
           ),
@@ -803,7 +806,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                       ),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? AppTheme.primary.withValues(alpha: 0.18)
+                            ? AppTheme.primaryOf(context).withValues(alpha: 0.18)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -811,8 +814,8 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                         icon,
                         size: 22,
                         color: isSelected
-                            ? AppTheme.primary
-                            : AppTheme.textMuted,
+                            ? AppTheme.primaryOf(context)
+                            : AppTheme.textMutedOf(context),
                       ),
                     ),
                     if (badge != null)
@@ -825,7 +828,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                             vertical: 1,
                           ),
                           decoration: BoxDecoration(
-                            color: AppTheme.primary,
+                            color: AppTheme.primaryOf(context),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -847,8 +850,8 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                     fontSize: 11,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                     color: isSelected
-                        ? AppTheme.textPrimary
-                        : AppTheme.textMuted,
+                        ? AppTheme.textPrimaryOf(context)
+                        : AppTheme.textMutedOf(context),
                     letterSpacing: 0.2,
                   ),
                 ),
@@ -861,82 +864,87 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   }
 
   Widget _buildTopHeader(bool isMobile, bool isDesktop) {
+    final isDashboard = _controller.currentNavIndex == 0;
+    if (!isDashboard && !isMobile) {
+      return const SizedBox.shrink();
+    }
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: isMobile ? 12 : 24,
         vertical: 12,
       ),
-      decoration: const BoxDecoration(
-        color: AppTheme.surface,
-        border: Border(bottom: BorderSide(color: AppTheme.border, width: 1)),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceOf(context),
+        border: Border(bottom: BorderSide(color: AppTheme.borderOf(context), width: 1)),
       ),
       child: Row(
         children: [
           if (isMobile) ...[
             IconButton(
               tooltip: 'Open menu',
-              icon: const Icon(
+              icon: Icon(
                 Icons.menu_rounded,
                 size: 24,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryOf(context),
               ),
               onPressed: () => _scaffoldKey.currentState?.openDrawer(),
             ),
             const SizedBox(width: 6),
           ],
 
-          // Search Input Bar (full width, single line, no wrapping)
-          Expanded(
-            child: Container(
-              height: 42,
-              decoration: BoxDecoration(
-                color: AppTheme.background,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.border, width: 1),
-              ),
-              child: TextField(
-                controller: _searchTextController,
-                maxLines: 1,
-                textAlignVertical: TextAlignVertical.center,
-                onChanged: (val) => _controller.setSearchQuery(val),
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: AppTheme.textPrimary,
+          // Search Input Bar (only displayed on Dashboard)
+          if (isDashboard)
+            Expanded(
+              child: Container(
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppTheme.cardSurfaceOf(context),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.borderOf(context), width: 1),
                 ),
-                decoration: InputDecoration(
-                  isDense: true,
-                  hintText: 'Search songs, artists, albums...',
-                  hintStyle: const TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.textMuted,
+                child: TextField(
+                  controller: _searchTextController,
+                  maxLines: 1,
+                  textAlignVertical: TextAlignVertical.center,
+                  onChanged: (val) => _controller.setSearchQuery(val),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textPrimaryOf(context),
                   ),
-                  prefixIcon: const Icon(
-                    Icons.search_rounded,
-                    size: 20,
-                    color: AppTheme.textSecondary,
-                  ),
-                  suffixIcon: _searchTextController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(
-                            Icons.clear_rounded,
-                            size: 16,
-                            color: AppTheme.textMuted,
-                          ),
-                          onPressed: () {
-                            _searchTextController.clear();
-                            _controller.setSearchQuery('');
-                          },
-                        )
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Search songs, artists, albums...',
+                    hintStyle: TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.textMutedOf(context),
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      size: 20,
+                      color: AppTheme.textSecondaryOf(context),
+                    ),
+                    suffixIcon: _searchTextController.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(
+                              Icons.clear_rounded,
+                              size: 16,
+                              color: AppTheme.textMutedOf(context),
+                            ),
+                            onPressed: () {
+                              _searchTextController.clear();
+                              _controller.setSearchQuery('');
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -976,9 +984,9 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
           // Interactive Track Table
           Container(
             decoration: BoxDecoration(
-              color: AppTheme.cardSurface,
+              color: AppTheme.cardSurfaceOf(context),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.border, width: 1),
+              border: Border.all(color: AppTheme.borderOf(context), width: 1),
             ),
             child: TrackListView(
               songs: _controller.filteredSongs,
@@ -1028,12 +1036,12 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Popular radio',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryOf(context),
               ),
             ),
             Row(
@@ -1051,12 +1059,12 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                 ],
                 TextButton(
                   onPressed: _loadDynamicRadios,
-                  child: const Text(
+                  child: Text(
                     'Show all',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondary,
+                      color: AppTheme.textSecondaryOf(context),
                     ),
                   ),
                 ),
@@ -1128,16 +1136,16 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                       'More like',
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.white.withValues(alpha: 0.6),
+                        color: AppTheme.textMutedOf(context),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const Text(
+                    Text(
                       'Sugarfree',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textPrimaryOf(context),
                       ),
                     ),
                   ],
@@ -1146,12 +1154,12 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
             ),
             TextButton(
               onPressed: () {},
-              child: const Text(
+              child: Text(
                 'Show all',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.textSecondary,
+                  color: AppTheme.textSecondaryOf(context),
                 ),
               ),
             ),
@@ -1221,16 +1229,16 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                       'More like',
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.white.withValues(alpha: 0.6),
+                        color: AppTheme.textMutedOf(context),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const Text(
+                    Text(
                       'Maroon 5',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textPrimaryOf(context),
                       ),
                     ),
                   ],
@@ -1239,12 +1247,12 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
             ),
             TextButton(
               onPressed: () {},
-              child: const Text(
+              child: Text(
                 'Show all',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.textSecondary,
+                  color: AppTheme.textSecondaryOf(context),
                 ),
               ),
             ),
@@ -1536,9 +1544,9 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
           // Spotify-style List View
           Container(
             decoration: BoxDecoration(
-              color: AppTheme.cardSurface,
+              color: AppTheme.cardSurfaceOf(context),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.border),
+              border: Border.all(color: AppTheme.borderOf(context)),
             ),
             child: ListView.separated(
               shrinkWrap: true,
@@ -1547,7 +1555,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
               separatorBuilder: (context, index) => Divider(
                 height: 1,
                 thickness: 0.5,
-                color: AppTheme.border.withValues(alpha: 0.5),
+                color: AppTheme.borderOf(context).withValues(alpha: 0.5),
               ),
               itemBuilder: (context, index) {
                 final playlist = visiblePlaylists[index];
@@ -1607,9 +1615,9 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
         const SizedBox(height: 20),
         Container(
           decoration: BoxDecoration(
-            color: AppTheme.cardSurface,
+            color: AppTheme.cardSurfaceOf(context),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppTheme.border, width: 1),
+            border: Border.all(color: AppTheme.borderOf(context), width: 1),
           ),
           child: TrackListView(
             songs: favorites,
@@ -1628,17 +1636,17 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w800,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryOf(context),
             letterSpacing: -0.3,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           subtitle,
-          style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+          style: TextStyle(fontSize: 13, color: AppTheme.textMutedOf(context)),
         ),
       ],
     );
@@ -2089,10 +2097,10 @@ class _LibraryPlaylistTile extends StatelessWidget {
                   children: [
                     Text(
                       playlist.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textPrimaryOf(context),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -2101,9 +2109,9 @@ class _LibraryPlaylistTile extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         cleanSubtitle,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: AppTheme.textMuted,
+                          color: AppTheme.textMutedOf(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -2115,18 +2123,18 @@ class _LibraryPlaylistTile extends StatelessWidget {
               if (onDelete != null)
                 IconButton(
                   tooltip: 'Delete playlist',
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.delete_outline_rounded,
                     size: 18,
-                    color: AppTheme.textMuted,
+                    color: AppTheme.textMutedOf(context),
                   ),
                   onPressed: onDelete,
                 ),
               const SizedBox(width: 4),
-              const Icon(
+              Icon(
                 Icons.arrow_forward_ios_rounded,
                 size: 14,
-                color: AppTheme.textMuted,
+                color: AppTheme.textMutedOf(context),
               ),
             ],
           ),

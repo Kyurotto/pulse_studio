@@ -63,61 +63,67 @@ class _RecentsViewState extends State<RecentsView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: AppTheme.backgroundOf(context),
       appBar: AppBar(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: AppTheme.surfaceOf(context),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back_rounded,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryOf(context),
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('Recents'),
+        title: Text(
+          'Recents',
+          style: TextStyle(
+            color: AppTheme.textPrimaryOf(context),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: 'Refresh',
-            icon: const Icon(
+            icon: Icon(
               Icons.refresh_rounded,
-              color: AppTheme.textSecondary,
+              color: AppTheme.textSecondaryOf(context),
             ),
             onPressed: _load,
           ),
         ],
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: AppTheme.border),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, color: AppTheme.borderOf(context)),
         ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
-              color: AppTheme.primary,
-              backgroundColor: AppTheme.cardSurface,
+              color: AppTheme.primaryOf(context),
+              backgroundColor: AppTheme.cardSurfaceOf(context),
               child: _entries.isEmpty
                   ? ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(32),
-                      children: const [
-                        SizedBox(height: 90),
+                      children: [
+                        const SizedBox(height: 90),
                         Icon(
                           Icons.history_rounded,
                           size: 54,
-                          color: AppTheme.textMuted,
+                          color: AppTheme.textMutedOf(context),
                         ),
-                        SizedBox(height: 16),
+                        const SizedBox(height: 16),
                         Text(
                           'Nothing played yet',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 19,
                             fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimary,
+                            color: AppTheme.textPrimaryOf(context),
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Text(
                           'Songs you play will show up here so you can jump '
                           'back into them quickly.',
@@ -125,7 +131,7 @@ class _RecentsViewState extends State<RecentsView> {
                           style: TextStyle(
                             fontSize: 13,
                             height: 1.5,
-                            color: AppTheme.textSecondary,
+                            color: AppTheme.textSecondaryOf(context),
                           ),
                         ),
                       ],
@@ -141,11 +147,11 @@ class _RecentsViewState extends State<RecentsView> {
                             child: Text(
                               '${_entries.length} recently played '
                               '${_entries.length == 1 ? 'song' : 'songs'}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 0.6,
-                                color: AppTheme.textMuted,
+                                color: AppTheme.textMutedOf(context),
                               ),
                             ),
                           );
@@ -167,11 +173,11 @@ class _RecentsViewState extends State<RecentsView> {
                                 ),
                                 child: Text(
                                   _dayLabel(entry.startedAt),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 1.0,
-                                    color: AppTheme.textSecondary,
+                                    color: AppTheme.textSecondaryOf(context),
                                   ),
                                 ),
                               ),
@@ -229,7 +235,7 @@ class _RecentTile extends StatelessWidget {
         ? ' · ${_shortDuration(entry.listenedSeconds)}'
         : '';
     return Material(
-      color: AppTheme.surface,
+      color: AppTheme.surfaceOf(context),
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -238,7 +244,7 @@ class _RecentTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.border),
+            border: Border.all(color: AppTheme.borderOf(context)),
           ),
           child: Row(
             children: [
@@ -256,28 +262,28 @@ class _RecentTile extends StatelessWidget {
                   children: [
                     Text(
                       entry.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textPrimaryOf(context),
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
                       entry.artist,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: AppTheme.textSecondary,
+                        color: AppTheme.textSecondaryOf(context),
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 3),
                     Text(
                       '$time$listened',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 10.5,
-                        color: AppTheme.textMuted,
+                        color: AppTheme.textMutedOf(context),
                       ),
                     ),
                   ],
@@ -293,12 +299,12 @@ class _RecentTile extends StatelessWidget {
                   ),
                 ),
               if (onTap != null)
-                const Padding(
-                  padding: EdgeInsets.only(left: 6),
+                Padding(
+                  padding: const EdgeInsets.only(left: 6),
                   child: Icon(
                     Icons.play_arrow_rounded,
                     size: 22,
-                    color: AppTheme.textSecondary,
+                    color: AppTheme.textSecondaryOf(context),
                   ),
                 ),
             ],

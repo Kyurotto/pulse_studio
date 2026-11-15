@@ -1662,16 +1662,23 @@ class LocalDatabase {
 
   Future<void> saveSetting(String key, String value) async {
     final db = await database;
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS app_settings (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      )
-    ''');
-    await db.insert('app_settings', {
-      'key': key,
-      'value': value,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    try {
+      await db.insert('app_settings', {
+        'key': key,
+        'value': value,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    } catch (_) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS app_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )
+      ''');
+      await db.insert('app_settings', {
+        'key': key,
+        'value': value,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
   }
 
   Future<void> setSetting(String key, String value) => saveSetting(key, value);

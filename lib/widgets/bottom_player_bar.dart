@@ -28,13 +28,18 @@ class BottomPlayerBar extends StatelessWidget {
 
         return Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF0F131D),
-            border: const Border(
-              top: BorderSide(color: AppTheme.border, width: 1),
+            color: AppTheme.isDark(context)
+                ? const Color(0xFF0F131D)
+                : AppTheme.lightSurface,
+            border: Border(
+              top: BorderSide(color: AppTheme.borderOf(context), width: 1),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
+                color: (AppTheme.isDark(context)
+                        ? Colors.black
+                        : Colors.grey.shade400)
+                    .withValues(alpha: AppTheme.isDark(context) ? 0.5 : 0.2),
                 blurRadius: 16,
                 offset: const Offset(0, -4),
               ),
@@ -88,19 +93,19 @@ class BottomPlayerBar extends StatelessWidget {
                           children: [
                             Text(
                               song?.title ?? 'No track selected',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
-                                color: AppTheme.textPrimary,
+                                color: AppTheme.textPrimaryOf(context),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
                               song?.artist ?? 'Select or add a track',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: AppTheme.textMuted,
+                                color: AppTheme.textMutedOf(context),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -195,10 +200,10 @@ class BottomPlayerBar extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.skip_next_rounded,
                   size: 26,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.textPrimaryOf(context),
                 ),
                 onPressed: song != null ? controller.next : null,
               ),
@@ -261,10 +266,10 @@ class BottomPlayerBar extends StatelessWidget {
                             children: [
                               Text(
                                 song?.title ?? 'No track selected',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: AppTheme.textPrimary,
+                                  color: AppTheme.textPrimaryOf(context),
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -272,9 +277,9 @@ class BottomPlayerBar extends StatelessWidget {
                               const SizedBox(height: 3),
                               Text(
                                 song?.artist ?? 'Select a song to play',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: AppTheme.textSecondary,
+                                  color: AppTheme.textSecondaryOf(context),
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -410,10 +415,10 @@ class BottomPlayerBar extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.skip_previous_rounded,
                         size: 26,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textPrimaryOf(context),
                       ),
                       splashRadius: 20,
                       onPressed: song != null ? controller.previous : null,
@@ -456,10 +461,10 @@ class BottomPlayerBar extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.skip_next_rounded,
                         size: 26,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textPrimaryOf(context),
                       ),
                       splashRadius: 20,
                       onPressed: song != null ? controller.next : null,
@@ -472,8 +477,8 @@ class BottomPlayerBar extends StatelessWidget {
                             : Icons.repeat_rounded,
                         size: 18,
                         color: controller.repeatMode != PlaybackRepeatMode.off
-                            ? AppTheme.primary
-                            : AppTheme.textMuted,
+                            ? AppTheme.primaryOf(context)
+                            : AppTheme.textMutedOf(context),
                       ),
                       splashRadius: 18,
                       tooltip: 'Repeat: ${controller.repeatMode.name}',
@@ -485,9 +490,9 @@ class BottomPlayerBar extends StatelessWidget {
                   children: [
                     Text(
                       Song.formatTime(controller.currentPosition),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: AppTheme.textMuted,
+                        color: AppTheme.textMutedOf(context),
                       ),
                     ),
                     Expanded(
@@ -534,9 +539,9 @@ class BottomPlayerBar extends StatelessWidget {
                       song != null
                           ? Song.formatTime(controller.displayDurationFor(song))
                           : '0:00',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: AppTheme.textMuted,
+                        color: AppTheme.textMutedOf(context),
                       ),
                     ),
                   ],
@@ -551,10 +556,10 @@ class BottomPlayerBar extends StatelessWidget {
               children: [
                 if (onOpenLyrics != null)
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.lyrics_rounded,
                       size: 20,
-                      color: AppTheme.textSecondary,
+                      color: AppTheme.textSecondaryOf(context),
                     ),
                     tooltip: 'View Lyrics',
                     splashRadius: 18,

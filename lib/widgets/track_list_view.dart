@@ -347,14 +347,14 @@ class _TrackRowState extends State<_TrackRow> {
             margin: const EdgeInsets.symmetric(vertical: 2),
             decoration: BoxDecoration(
               color: widget.isCurrent
-                  ? AppTheme.primary.withValues(alpha: 0.12)
+                  ? AppTheme.primaryOf(context).withValues(alpha: 0.12)
                   : (_isHovered
-                        ? AppTheme.cardSurfaceHover
+                        ? AppTheme.cardSurfaceHoverOf(context)
                         : Colors.transparent),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: widget.isCurrent
-                    ? AppTheme.borderActive
+                    ? AppTheme.borderActiveOf(context)
                     : Colors.transparent,
                 width: 1,
               ),
@@ -378,10 +378,10 @@ class _TrackRowState extends State<_TrackRow> {
                               ),
                             )
                           : (_isHovered
-                                ? const Icon(
+                                ? Icon(
                                     Icons.play_arrow_rounded,
                                     size: 18,
-                                    color: AppTheme.textPrimary,
+                                    color: AppTheme.textPrimaryOf(context),
                                   )
                                 : Text(
                                     '${widget.index}',
@@ -389,8 +389,8 @@ class _TrackRowState extends State<_TrackRow> {
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
                                       color: widget.isCurrent
-                                          ? AppTheme.primary
-                                          : AppTheme.textMuted,
+                                          ? AppTheme.primaryOf(context)
+                                          : AppTheme.textMutedOf(context),
                                     ),
                                   )),
                     ),
@@ -415,8 +415,8 @@ class _TrackRowState extends State<_TrackRow> {
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: widget.isCurrent
-                              ? AppTheme.primary
-                              : AppTheme.textPrimary,
+                              ? AppTheme.primaryOf(context)
+                              : AppTheme.textPrimaryOf(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -435,9 +435,9 @@ class _TrackRowState extends State<_TrackRow> {
                           Expanded(
                             child: Text(
                               widget.song.artist,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: AppTheme.textSecondary,
+                                color: AppTheme.textSecondaryOf(context),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -457,9 +457,9 @@ class _TrackRowState extends State<_TrackRow> {
                       padding: const EdgeInsets.only(right: 8.0),
                       child: Text(
                         widget.song.album,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: AppTheme.textMuted,
+                          color: AppTheme.textMutedOf(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -473,9 +473,9 @@ class _TrackRowState extends State<_TrackRow> {
                     width: 90,
                     child: Text(
                       widget.song.plays,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: AppTheme.textMuted,
+                        color: AppTheme.textMutedOf(context),
                         fontWeight: FontWeight.w500,
                       ),
                       textAlign: TextAlign.right,
@@ -488,9 +488,9 @@ class _TrackRowState extends State<_TrackRow> {
                   width: widget.isCompact ? 50 : 70,
                   child: Text(
                     widget.song.formattedDuration,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12.5,
-                      color: AppTheme.textMuted,
+                      color: AppTheme.textMutedOf(context),
                     ),
                     textAlign: TextAlign.right,
                     maxLines: 1,
@@ -515,7 +515,7 @@ class _TrackRowState extends State<_TrackRow> {
                           size: 18,
                           color: widget.song.isLiked
                               ? AppTheme.accentPink
-                              : AppTheme.textMuted,
+                              : AppTheme.textMutedOf(context),
                         ),
                       ),
                     ),
@@ -523,12 +523,12 @@ class _TrackRowState extends State<_TrackRow> {
                       InkWell(
                         onTap: widget.onAddToPlaylist,
                         borderRadius: BorderRadius.circular(20),
-                        child: const Padding(
-                          padding: EdgeInsets.all(5),
+                        child: Padding(
+                          padding: const EdgeInsets.all(5),
                           child: Icon(
                             Icons.playlist_add_rounded,
                             size: 19,
-                            color: AppTheme.textMuted,
+                            color: AppTheme.textMutedOf(context),
                           ),
                         ),
                       ),
@@ -536,12 +536,12 @@ class _TrackRowState extends State<_TrackRow> {
                       InkWell(
                         onTap: widget.onDelete,
                         borderRadius: BorderRadius.circular(20),
-                        child: const Padding(
-                          padding: EdgeInsets.all(5),
+                        child: Padding(
+                          padding: const EdgeInsets.all(5),
                           child: Icon(
                             Icons.delete_outline_rounded,
                             size: 18,
-                            color: AppTheme.textMuted,
+                            color: AppTheme.textMutedOf(context),
                           ),
                         ),
                       ),
