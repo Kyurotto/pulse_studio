@@ -30,8 +30,6 @@ class MusicDashboardView extends StatefulWidget {
 class _MusicDashboardViewState extends State<MusicDashboardView> {
   late final MusicPlayerController _controller;
   final TextEditingController _searchTextController = TextEditingController();
-  final TextEditingController _librarySearchController =
-      TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey<DiscoverySectionsState> _discoveryKey =
       GlobalKey<DiscoverySectionsState>();
@@ -40,14 +38,12 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   StreamSubscription<Object?>? _authSub;
 
   String _libraryFilter = 'All'; // 'All', 'Playlists', 'Artists', 'Albums'
-  String _librarySearchQuery = '';
-  bool _isLibraryGridView = false;
+  final String _librarySearchQuery = '';
+  final bool _isLibraryGridView = false;
   int _libraryVisibleCount = 40;
   final ScrollController _pageScrollController = ScrollController();
-  String _exploreCategory = 'All'; // 'All', 'Music', 'Podcasts', 'Audiobooks'
   List<RadioStation> _dynamicPopularRadios = [];
   bool _isLoadingDynamicRadios = false;
-  final TextEditingController _radioSearchController = TextEditingController();
 
   String? _lastSongId;
   bool _autoLyricsSheetOpen = false;
@@ -168,41 +164,6 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
     );
   }
 
-  Future<void> _searchRadioStation(String query) async {
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) {
-      setState(() {
-        _dynamicPopularRadios = RadioDiscoveryService.instance
-            .getPopularRadios();
-      });
-      return;
-    }
-    setState(() => _isLoadingDynamicRadios = true);
-    try {
-      final station = await RadioDiscoveryService.instance.searchSpotifyRadio(
-        trimmed,
-      );
-      if (mounted) {
-        setState(() {
-          final existing = List<RadioStation>.from(_dynamicPopularRadios);
-          existing.removeWhere((s) => s.id == station.id);
-          _dynamicPopularRadios = [station, ...existing];
-          _isLoadingDynamicRadios = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoadingDynamicRadios = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No Spotify radio found for "$trimmed"'),
-            backgroundColor: const Color(0xFFDC2626),
-          ),
-        );
-      }
-    }
-  }
-
   /// Loads more library playlists as the page nears the bottom instead of
   /// building every card/row at once.
   void _onPageScroll() {
@@ -305,8 +266,6 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       ..dispose();
     _controller.dispose();
     _searchTextController.dispose();
-    _librarySearchController.dispose();
-    _radioSearchController.dispose();
     super.dispose();
   }
 
@@ -1065,119 +1024,6 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Category Pills (All, Music, Podcasts, Audiobooks) as seen in Screenshot 1
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: ['All', 'Music', 'Podcasts', 'Audiobooks'].map((cat) {
-              final isSelected = _exploreCategory == cat;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8.0),
-                child: FilterChip(
-                  label: Text(cat),
-                  selected: isSelected,
-                  onSelected: (_) => setState(() => _exploreCategory = cat),
-                  backgroundColor: AppTheme.cardSurface,
-                  selectedColor: AppTheme.primary,
-                  checkmarkColor: Colors.white,
-                  labelStyle: TextStyle(
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                    color: isSelected ? Colors.white : AppTheme.textSecondary,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: isSelected ? AppTheme.primary : AppTheme.border,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Spotify Radio / Artist Dynamic Search Bar
-        Container(
-          height: 44,
-          decoration: BoxDecoration(
-            color: AppTheme.cardSurface,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: AppTheme.border),
-          ),
-          child: Row(
-            children: [
-              const SizedBox(width: 14),
-              const Icon(
-                Icons.search_rounded,
-                size: 20,
-                color: AppTheme.textSecondary,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _radioSearchController,
-                  onSubmitted: _searchRadioStation,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.textPrimary,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText:
-                        'Search any Spotify radio or artist (e.g. Flow G, Air Supply, LANY, Ben&Ben)...',
-                    hintStyle: TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.textMuted,
-                    ),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-              ),
-              if (_isLoadingDynamicRadios)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 14),
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppTheme.accentGreen,
-                    ),
-                  ),
-                )
-              else if (_radioSearchController.text.isNotEmpty)
-                IconButton(
-                  icon: const Icon(
-                    Icons.clear_rounded,
-                    size: 16,
-                    color: AppTheme.textMuted,
-                  ),
-                  onPressed: () {
-                    _radioSearchController.clear();
-                    _searchRadioStation('');
-                  },
-                )
-              else
-                IconButton(
-                  tooltip: 'Search radio',
-                  icon: const Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 16,
-                    color: AppTheme.accentGreen,
-                  ),
-                  onPressed: () =>
-                      _searchRadioStation(_radioSearchController.text),
-                ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 24),
-
         // Section 1: "Popular radio" matching Screenshot 2 & 3
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1577,94 +1423,6 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
               );
             }).toList(),
           ),
-        ),
-
-        const SizedBox(height: 14),
-
-        // Search in Library and Sort / Layout Switcher Row
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppTheme.cardSurface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.border),
-                ),
-                child: TextField(
-                  controller: _librarySearchController,
-                  onChanged: (val) => setState(() {
-                    _librarySearchQuery = val;
-                    _libraryVisibleCount = 40;
-                  }),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.textPrimary,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search in Your Library...',
-                    hintStyle: const TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textMuted,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search,
-                      size: 18,
-                      color: AppTheme.textSecondary,
-                    ),
-                    suffixIcon: _librarySearchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(
-                              Icons.clear,
-                              size: 14,
-                              color: AppTheme.textMuted,
-                            ),
-                            onPressed: () {
-                              _librarySearchController.clear();
-                              setState(() {
-                                _librarySearchQuery = '';
-                                _libraryVisibleCount = 40;
-                              });
-                            },
-                          )
-                        : null,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 9),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            // Recents indicator & Layout toggle
-            Row(
-              children: [
-                const Text(
-                  'Recents',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: _isLibraryGridView
-                      ? 'Switch to List view'
-                      : 'Switch to Grid view',
-                  icon: Icon(
-                    _isLibraryGridView
-                        ? Icons.list_rounded
-                        : Icons.grid_view_rounded,
-                    size: 20,
-                    color: AppTheme.textSecondary,
-                  ),
-                  onPressed: () =>
-                      setState(() => _isLibraryGridView = !_isLibraryGridView),
-                ),
-              ],
-            ),
-          ],
         ),
 
         const SizedBox(height: 18),
