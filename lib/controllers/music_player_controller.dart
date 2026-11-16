@@ -449,9 +449,13 @@ class MusicPlayerController extends ChangeNotifier {
   bool _autoplay = true;
   bool _dataSaverMode = false;
   bool _reduceAnimations = false;
+  bool _isLoadingPlaylists = true;
   String _streamingQuality = 'Very High (320 kbps)';
   String _downloadQuality = 'High (160 kbps)';
   double _crossfadeSeconds = 4.0;
+
+  /// Whether saved playlists are currently being loaded from local storage.
+  bool get isLoadingPlaylists => _isLoadingPlaylists;
 
   /// Pop the lyrics sheet automatically whenever a new song starts.
   bool get autoLyrics => _autoLyrics;
@@ -1815,6 +1819,7 @@ class MusicPlayerController extends ChangeNotifier {
 
   /// Restores all saved imported playlists and songs for [userId] (or the current user).
   Future<void> loadSavedPlaylists({String? userId}) async {
+    _isLoadingPlaylists = true;
     try {
       final uid = userId ?? AuthService.instance.currentUserId;
       _loadedUserId = uid;
@@ -2431,7 +2436,7 @@ class MusicPlayerController extends ChangeNotifier {
       final toEnrich = _allSongs
           .where(
             (s) =>
-                s.id.startsWith('spotify-') &&
+                _isImportedCatalogId(s.id) &&
                 (s.isSilentPlaceholder ||
                     s.isPreview ||
                     s.isYouTubeAudio ||
@@ -2486,6 +2491,9 @@ class MusicPlayerController extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('[MusicPlayerController] loadSavedPlaylists skipped: $e');
+    } finally {
+      _isLoadingPlaylists = false;
+      notifyListeners();
     }
   }
 
@@ -3288,7 +3296,7 @@ class MusicPlayerController extends ChangeNotifier {
         if (_disposed) return;
         final id = row['id']?.toString() ?? '';
         if (id.isEmpty ||
-            !id.startsWith('spotify-') ||
+            !_isImportedCatalogId(id) ||
             resolvedIds.contains(id) ||
             _pendingEnrichment.containsKey(id) ||
             _pendingEnrichment.containsKey('$id:preview') ||
@@ -3366,7 +3374,7 @@ class MusicPlayerController extends ChangeNotifier {
       if (_disposed) return;
       final id = row['id']?.toString() ?? '';
       if (id.isEmpty ||
-          !id.startsWith('spotify-') ||
+          !_isImportedCatalogId(id) ||
           resolvedIds.contains(id)) {
         continue;
       }
@@ -3603,6 +3611,10 @@ class MusicPlayerController extends ChangeNotifier {
     }
   }
 
+  static bool _isImportedCatalogId(String id) {
+    return id.startsWith('spotify-') || id.startsWith('itunes-');
+  }
+
   static bool _isDownloadableCatalogId(String id) {
     return id.startsWith('spotify-') ||
         id.startsWith('itunes-') ||
@@ -3614,11 +3626,22 @@ class MusicPlayerController extends ChangeNotifier {
         id.startsWith('recent-');
   }
 
-  /// Catalog tracks are resolved strictly via YouTube. Local/bundled tracks
-  /// keep their own audio and must never be searched on YouTube.
-  static bool _isYouTubeCatalogSong(Song song) {
-    return _isDownloadableCatalogId(song.id);
+  /// Explore radio/discovery tracks resolve strictly via YouTube. Local and
+  /// bundled tracks keep their own audio and never reach this path.
+  ///
+  /// Spotify/iTunes imports deliberately return false: YouTube is still tried
+  /// first (prioritizeYouTube), but when YouTube cannot serve a stream the
+  /// import must fall back to the full-track chain (JioSaavn, SoundCloud,
+  /// web/Archive.org) instead of staying on LOCATING forever. Strict mode
+  /// applies to every import automatically, not to one playlist.
+  static bool _requiresStrictYouTube(Song song) {
+    return song.id.startsWith('radio-') || song.id.startsWith('discovery-');
   }
+
+  /// Test seam for the strict-YouTube catalog policy above.
+  @visibleForTesting
+  static bool requiresStrictYouTubeForTesting(Song song) =>
+      _requiresStrictYouTube(song);
 
   Future<void> _enrichOneSong(
     Song song, {
@@ -3733,10 +3756,10 @@ class MusicPlayerController extends ChangeNotifier {
         }
       }
 
-      // Every catalog track is resolved strictly via YouTube. Discovery and
-      // imported tracks previously fell through Saavn → SoundCloud → web →
-      // YouTube, which took 30-45s per song. Local/bundled tracks keep their
-      // own audio and never reach this path.
+      // Imports try YouTube first, then fall back to the other full-track
+      // sources (JioSaavn → SoundCloud → web/Archive) so a YouTube outage or
+      // region block never leaves an imported playlist stuck on LOCATING.
+      // Explore radio/discovery stays strictly YouTube via youtubeOnly.
       final enrichment = await _enrichment.enrichTrack(
         title: song.title,
         artist: song.artist,
@@ -3746,7 +3769,7 @@ class MusicPlayerController extends ChangeNotifier {
         allowPreviewFallback: false,
         prioritizeYouTube: true,
         fastImport: fastImport,
-        youtubeOnly: _isYouTubeCatalogSong(song),
+        youtubeOnly: _requiresStrictYouTube(song),
         preferredBitrateKbps: qualityKbps,
       );
       _logDiag(
@@ -4742,7 +4765,7 @@ class MusicPlayerController extends ChangeNotifier {
             previewFallbackOnly: false,
             allowPreviewFallback: false,
             prioritizeYouTube: true,
-            youtubeOnly: _isYouTubeCatalogSong(song),
+            youtubeOnly: _requiresStrictYouTube(song),
             preferredBitrateKbps: effectiveDownloadQualityKbps,
           );
           if (enrichment.hasAudio &&
@@ -5042,7 +5065,7 @@ class MusicPlayerController extends ChangeNotifier {
             previewFallbackOnly: true,
             allowPreviewFallback: true,
             prioritizeYouTube: true,
-            youtubeOnly: _isYouTubeCatalogSong(song),
+            youtubeOnly: _requiresStrictYouTube(song),
             preferredBitrateKbps: effectiveDownloadQualityKbps,
           );
           if (enrichment.hasAudio &&
@@ -5741,7 +5764,7 @@ class MusicPlayerController extends ChangeNotifier {
         duration: song.duration,
         allowPreviewFallback: true,
         prioritizeYouTube: false,
-        youtubeOnly: _isYouTubeCatalogSong(song),
+        youtubeOnly: _requiresStrictYouTube(song),
         preferredBitrateKbps: effectiveStreamingQualityKbps,
       );
       if (enrichment.hasAudio || enrichment.hasLyrics) {

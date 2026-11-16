@@ -2148,25 +2148,44 @@ class LocalDatabase {
   /// a full track: silent rows plus 30s previews. Used by the one-by-one
   /// background backfill so no artist playlist or radio stays muted on
   /// LOCATING. Ordered oldest-playlist first for stable resume.
+  ///
+  /// Optional columns are detected at runtime: a database created by an older
+  /// build may not have `youtube_video_id`/`is_explicit`/`is_deleted` yet, and
+  /// the previous unconditional SELECT made this whole backfill return an
+  /// empty list (silently leaving every imported track on LOCATING).
   Future<List<Map<String, Object?>>> getUnresolvedImportedSongs({
     int limit = 200,
   }) async {
     final db = await database;
     try {
+      final columns = <String>{
+        for (final row in await db.rawQuery('PRAGMA table_info(imported_songs)'))
+          row['name']?.toString() ?? '',
+      };
+      final youtubeVideoId = columns.contains('youtube_video_id')
+          ? 's.youtube_video_id AS youtube_video_id'
+          : 'NULL AS youtube_video_id';
+      final isExplicit = columns.contains('is_explicit')
+          ? 's.is_explicit AS is_explicit'
+          : '0 AS is_explicit';
+      final notDeleted = columns.contains('is_deleted')
+          ? 'AND (s.is_deleted IS NULL OR s.is_deleted = 0)'
+          : '';
       return await db.rawQuery(
         '''
         SELECT DISTINCT s.id AS id, s.title AS title, s.artist AS artist,
                s.album AS album, s.duration_ms AS duration_ms,
                s.audio_url AS audio_url, s.is_preview AS is_preview,
                s.is_youtube_audio AS is_youtube_audio,
-               s.youtube_video_id AS youtube_video_id,
-               s.is_explicit AS is_explicit,
+               $youtubeVideoId,
+               $isExplicit,
                s.lyrics AS lyrics
         FROM imported_songs s
         INNER JOIN imported_playlist_songs ps ON ps.song_id = s.id
         INNER JOIN imported_playlists p ON p.id = ps.playlist_id
         WHERE (s.audio_url IS NULL OR s.audio_url = '' OR s.is_preview = 1)
-          AND s.id LIKE 'spotify-%'
+          AND (s.id LIKE 'spotify-%' OR s.id LIKE 'itunes-%')
+          $notDeleted
         ORDER BY p.created_at ASC, ps.position ASC
         LIMIT ?
         ''',

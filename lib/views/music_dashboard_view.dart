@@ -17,6 +17,7 @@ import '../widgets/song_artwork_widget.dart';
 import '../services/display_rate_service.dart';
 import 'discovery_sections.dart';
 import 'playlist_screen.dart';
+import '../widgets/skeleton_loader.dart';
 import '../services/discovery_service.dart';
 import '../services/radio_discovery_service.dart';
 
@@ -98,9 +99,14 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
     }
   }
 
-  Future<void> _loadDynamicRadios() async {
+  Future<void> _loadDynamicRadios({bool clearCurrent = false}) async {
     if (_isLoadingDynamicRadios) return;
-    if (_dynamicPopularRadios.isEmpty) {
+    if (clearCurrent) {
+      setState(() {
+        _isLoadingDynamicRadios = true;
+        _dynamicPopularRadios = [];
+      });
+    } else if (_dynamicPopularRadios.isEmpty) {
       setState(() => _isLoadingDynamicRadios = true);
     }
     try {
@@ -1029,6 +1035,10 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
     final opmRadios = RadioDiscoveryService.instance.getOpmRadios();
     final globalRadios = RadioDiscoveryService.instance.getGlobalRadios();
 
+    if (_isLoadingDynamicRadios && _dynamicPopularRadios.isEmpty) {
+      return ExploreSkeleton(reduceAnimations: _controller.reduceAnimations);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1058,7 +1068,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                   const SizedBox(width: 8),
                 ],
                 TextButton(
-                  onPressed: _loadDynamicRadios,
+                  onPressed: () => _loadDynamicRadios(clearCurrent: true),
                   child: Text(
                     'Show all',
                     style: TextStyle(
@@ -1362,15 +1372,15 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
           actions: [
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.cardSurface,
-                foregroundColor: AppTheme.textPrimary,
+                backgroundColor: AppTheme.cardSurfaceOf(context),
+                foregroundColor: AppTheme.textPrimaryOf(context),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 12,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: AppTheme.border),
+                  side: BorderSide(color: AppTheme.borderOf(context)),
                 ),
               ),
               onPressed: _importFromSpotify,
@@ -1379,8 +1389,8 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
             ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                foregroundColor: Colors.white,
+                backgroundColor: AppTheme.primaryOf(context),
+                foregroundColor: AppTheme.isDark(context) ? Colors.black : Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 12,
@@ -1413,18 +1423,25 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                     _libraryFilter = filter;
                     _libraryVisibleCount = 40;
                   }),
-                  backgroundColor: AppTheme.cardSurface,
-                  selectedColor: AppTheme.primary,
-                  checkmarkColor: Colors.white,
+                  backgroundColor: AppTheme.cardSurfaceOf(context),
+                  selectedColor: AppTheme.primaryOf(context),
+                  checkmarkColor:
+                      AppTheme.isDark(context) ? Colors.black : Colors.white,
                   labelStyle: TextStyle(
                     fontSize: 13,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                    color: isSelected ? Colors.white : AppTheme.textSecondary,
+                    color: isSelected
+                        ? (AppTheme.isDark(context)
+                            ? Colors.black
+                            : Colors.white)
+                        : AppTheme.textSecondaryOf(context),
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                     side: BorderSide(
-                      color: isSelected ? AppTheme.primary : AppTheme.border,
+                      color: isSelected
+                          ? AppTheme.primaryOf(context)
+                          : AppTheme.borderOf(context),
                     ),
                   ),
                 ),
@@ -1436,14 +1453,18 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
         const SizedBox(height: 18),
 
         // The Library Items
-        if (filteredPlaylists.isEmpty)
+        if (_controller.isLoadingPlaylists && filteredPlaylists.isEmpty)
+          LibrarySkeletonGrid(
+            reduceAnimations: _controller.reduceAnimations,
+          )
+        else if (filteredPlaylists.isEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
             decoration: BoxDecoration(
-              color: AppTheme.cardSurface,
+              color: AppTheme.cardSurfaceOf(context),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.border),
+              border: Border.all(color: AppTheme.borderOf(context)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1451,17 +1472,17 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                 Icon(
                   Icons.library_music_outlined,
                   size: 48,
-                  color: AppTheme.textMuted.withValues(alpha: 0.6),
+                  color: AppTheme.textMutedOf(context).withValues(alpha: 0.6),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   _librarySearchQuery.isNotEmpty
                       ? 'No playlists match "$_librarySearchQuery"'
                       : 'Your library is empty',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryOf(context),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -1469,9 +1490,9 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                   _librarySearchQuery.isNotEmpty
                       ? 'Check your search spelling or clear the filter.'
                       : 'Import a Spotify playlist link or create a new playlist.',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
-                    color: AppTheme.textSecondary,
+                    color: AppTheme.textSecondaryOf(context),
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -1484,8 +1505,10 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                     children: [
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppTheme.primaryOf(context),
+                          foregroundColor: AppTheme.isDark(context)
+                              ? Colors.black
+                              : Colors.white,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 10,
@@ -1500,8 +1523,8 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                       ),
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.textPrimary,
-                          side: const BorderSide(color: AppTheme.border),
+                          foregroundColor: AppTheme.textPrimaryOf(context),
+                          side: BorderSide(color: AppTheme.borderOf(context)),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 10,

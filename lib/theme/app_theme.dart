@@ -110,6 +110,17 @@ class AppTheme {
   static Color secondaryOf(BuildContext context) =>
       isDark(context) ? secondary : lightSecondary;
 
+  // Skeleton / Shimmer colors
+  static const Color skeletonBaseDark = Color(0xFF1F1F1F);
+  static const Color skeletonHighlightDark = Color(0xFF2E2E2E);
+  static const Color skeletonBaseLight = Color(0xFFE2E8F0);
+  static const Color skeletonHighlightLight = Color(0xFFF1F5F9);
+
+  static Color skeletonBaseOf(BuildContext context) =>
+      isDark(context) ? skeletonBaseDark : skeletonBaseLight;
+  static Color skeletonHighlightOf(BuildContext context) =>
+      isDark(context) ? skeletonHighlightDark : skeletonHighlightLight;
+
   // Gradients
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],

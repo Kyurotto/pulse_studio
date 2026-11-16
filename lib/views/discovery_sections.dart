@@ -8,6 +8,7 @@ import '../services/discovery_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/song_artwork_widget.dart';
 import '../widgets/spotify_lyrics_sheet.dart';
+import '../widgets/skeleton_loader.dart';
 import 'playlist_screen.dart';
 
 /// Automatic dashboard rows (Quick Picks, Covers & Remixes, Long Listens,
@@ -206,11 +207,8 @@ class DiscoverySectionsState extends State<DiscoverySections> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading && _sections.isEmpty) {
-      return const SizedBox(
-        height: 120,
-        child: Center(
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+      return DashboardSkeleton(
+        reduceAnimations: widget.controller.reduceAnimations,
       );
     }
 
