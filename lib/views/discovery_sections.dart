@@ -220,6 +220,7 @@ class DiscoverySectionsState extends State<DiscoverySections> {
         for (final section in _sections) ...[
           _DiscoveryRail(
             section: section,
+            controller: widget.controller,
             onPlay: (index) => _playFrom(section, index),
             onOpen: section.openable ? () => _openSection(section) : null,
           ),
@@ -233,11 +234,13 @@ class DiscoverySectionsState extends State<DiscoverySections> {
 class _DiscoveryRail extends StatelessWidget {
   const _DiscoveryRail({
     required this.section,
+    required this.controller,
     required this.onPlay,
     this.onOpen,
   });
 
   final DiscoverySection section;
+  final MusicPlayerController controller;
   final ValueChanged<int> onPlay;
 
   /// Non-null for sections that open a playlist-style page.
@@ -311,6 +314,7 @@ class _DiscoveryRail extends StatelessWidget {
   }
 
   Widget _tile(BuildContext context, Song song, int index) {
+    final locatingExhausted = controller.isLocatingExhausted(song.id);
     return SizedBox(
       width: _tileWidth,
       child: InkWell(
@@ -362,33 +366,39 @@ class _DiscoveryRail extends StatelessWidget {
                         color: Colors.black.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: AppTheme.accentPink.withValues(alpha: 0.5),
+                          color: (locatingExhausted
+                                  ? AppTheme.textMutedOf(context)
+                                  : AppTheme.accentPink)
+                              .withValues(alpha: 0.5),
                           width: 1,
                         ),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          SizedBox(
-                            width: 8,
-                            height: 8,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 1.5,
-                              color: AppTheme.accentPink,
+                          if (!locatingExhausted)
+                            const SizedBox(
+                              width: 8,
+                              height: 8,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                color: AppTheme.accentPink,
+                              ),
                             ),
-                          ),
-                          SizedBox(width: 4),
+                          if (!locatingExhausted) const SizedBox(width: 4),
                           Flexible(
                             child: Text(
-                              'LOCATING',
+                              locatingExhausted ? 'NOT FOUND' : 'LOCATING',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 0.5,
-                                color: AppTheme.accentPink,
+                                color: locatingExhausted
+                                    ? AppTheme.textMutedOf(context)
+                                    : AppTheme.accentPink,
                               ),
                             ),
                           ),

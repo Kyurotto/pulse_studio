@@ -36,6 +36,10 @@ class TrackEnrichment {
   /// few hours, so the player resolves a fresh one when a saved URL fails.
   final bool isYouTube;
   final String? youtubeVideoId;
+
+  /// True when [previewUrl] is a fragmented-MP4 HLS playlist (SoundCloud).
+  /// It must be materialised into a file before playback or download.
+  final bool isHlsAudio;
   final List<String> lyrics;
 
   const TrackEnrichment({
@@ -45,6 +49,7 @@ class TrackEnrichment {
     this.isFullTrack = false,
     this.isYouTube = false,
     this.youtubeVideoId,
+    this.isHlsAudio = false,
     this.lyrics = const [],
   });
 
@@ -153,6 +158,7 @@ class TrackEnrichmentService {
         isFullTrack: preview?.isFullLength ?? false,
         isYouTube: preview?.isYouTube ?? false,
         youtubeVideoId: preview?.youtubeVideoId,
+        isHlsAudio: preview?.isHls ?? false,
         lyrics: lyrics,
       );
     } catch (_) {
@@ -250,7 +256,7 @@ class TrackEnrichmentService {
               title: title,
               artist: artist,
               duration: duration,
-            ).timeout(const Duration(seconds: 4), onTimeout: () => null),
+            ).timeout(const Duration(seconds: 10), onTimeout: () => null),
             _fetchSaavnFullAudio(
               title: title,
               artist: artist,
@@ -267,7 +273,11 @@ class TrackEnrichmentService {
               .where(
                 (h) =>
                     h.previewUrl.isNotEmpty &&
-                    !h.previewUrl.toLowerCase().contains('.m3u8'),
+                    // SoundCloud full tracks are fragmented-MP4 playlists that
+                    // the controller materialises into a file, so they are a
+                    // valid hit even though the URL looks like an m3u8.
+                    (h.isHls ||
+                        !h.previewUrl.toLowerCase().contains('.m3u8')),
               )
               .toList();
           if (validHits.isNotEmpty) {
@@ -324,7 +334,8 @@ class TrackEnrichmentService {
           sw,
           sc != null ? 'HIT ${Uri.tryParse(sc.previewUrl)?.host}' : 'miss',
         );
-        if (sc != null && !sc.previewUrl.toLowerCase().contains('.m3u8')) {
+        if (sc != null &&
+            (sc.isHls || !sc.previewUrl.toLowerCase().contains('.m3u8'))) {
           return sc;
         }
       } catch (e) {
@@ -664,6 +675,27 @@ class TrackEnrichmentService {
   static const _ytKey = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
   static const _ytClientVersion = '20.10.38';
 
+  /// Set when YouTube answers the player endpoint with a bot check, 429 or
+  /// 503. Continuing to hammer it for every track in a playlist turns a short
+  /// block into a permanent one, and leaves imported tracks on LOCATING while
+  /// the working fallbacks (SoundCloud) never get a turn.
+  DateTime? _ytPlayerCoolDownUntil;
+
+  bool get youtubeCoolingDown {
+    final until = _ytPlayerCoolDownUntil;
+    return until != null && DateTime.now().isBefore(until);
+  }
+
+  void _noteYouTubeBlocked() {
+    _ytPlayerCoolDownUntil = DateTime.now().add(const Duration(minutes: 2));
+    debugPrint('[Enrich] yt-cooling set for 2m');
+  }
+
+  /// Explicitly reset the player cooldown (e.g. when the user asks for a retry).
+  void clearYouTubeCooldown() {
+    _ytPlayerCoolDownUntil = null;
+  }
+
   /// Markers identifying non-studio uploads (karaoke, instrumentals,
   /// piano/drum covers, minus-one backing, sped-up edits). A candidate
   /// carrying one is skipped unless the wanted title carries it too, so
@@ -891,6 +923,7 @@ class TrackEnrichmentService {
   }) async {
     final vid = videoId.trim();
     if (vid.isEmpty) return null;
+    if (youtubeCoolingDown) return null;
     try {
       final stream = await _ytAudioStream(
         vid,
@@ -925,6 +958,7 @@ class TrackEnrichmentService {
     bool fastSearch = false,
     int? preferredBitrateKbps,
   }) async {
+    if (youtubeCoolingDown) return null;
     final cleanTitle = _cleanQuery(title);
     final cleanArtist = _cleanQuery(artist);
     if (cleanTitle.isEmpty) return null;
@@ -1029,6 +1063,10 @@ class TrackEnrichmentService {
             .toList();
 
     final scored = <({_YouTubeCandidate c, int score})>[];
+    var rejTitle = 0;
+    var rejVersion = 0;
+    var rejStudio = 0;
+    var rejArtist = 0;
     for (final c in candidates) {
       if (c.videoId.isEmpty || c.title.isEmpty) continue;
       final hitTitle = _normalize(c.title);
@@ -1045,11 +1083,20 @@ class TrackEnrichmentService {
         hitTitle: c.title,
         hitChannel: c.channel,
       );
-      if (!titleMatch.matches) continue;
-      if (!versionCompatible(wantTitle, hitTitle)) continue;
+      if (!titleMatch.matches) {
+        rejTitle++;
+        continue;
+      }
+      if (!versionCompatible(wantTitle, hitTitle)) {
+        rejVersion++;
+        continue;
+      }
 
       final lowered = '${c.title} ${c.channel}'.toLowerCase();
-      if (isNonStudioVariant(lowered, '$title $artist')) continue;
+      if (isNonStudioVariant(lowered, '$title $artist')) {
+        rejStudio++;
+        continue;
+      }
 
       final hitChannel = _normalize(c.channel);
       if (wantArtist.isNotEmpty) {
@@ -1072,7 +1119,10 @@ class TrackEnrichmentService {
             channelMatchesAny ||
             titleMatchesAny;
 
-        if (!artistMatches) continue;
+        if (!artistMatches) {
+          rejArtist++;
+          continue;
+        }
       }
 
       var score = titleMatch.exact ? 4 : 2;
@@ -1106,7 +1156,14 @@ class TrackEnrichmentService {
 
       scored.add((c: c, score: score));
     }
-    if (scored.isEmpty) return null;
+    if (scored.isEmpty) {
+      debugPrint(
+        '[Enrich] yt-nomatch n=${candidates.length} '
+        'title=$rejTitle ver=$rejVersion studio=$rejStudio '
+        'artist=$rejArtist query="$query"',
+      );
+      return null;
+    }
     scored.sort((a, b) => b.score.compareTo(a.score));
 
     // Try the best candidates in order: progressive MP4 streams (itag 18)
@@ -1425,6 +1482,10 @@ class TrackEnrichmentService {
     String videoId, {
     int? preferredKbps,
   }) async {
+    if (youtubeCoolingDown) {
+      debugPrint('[Enrich] yt-player $videoId skipped cooling');
+      return null;
+    }
     final uri = Uri.https('www.youtube.com', '/youtubei/v1/player', {
       'key': _ytKey,
       'prettyPrint': 'false',
@@ -1449,8 +1510,15 @@ class TrackEnrichmentService {
           .post(
             uri,
             headers: {
-              'User-Agent': _browserUserAgent,
+              // The ANDROID innertube client expects the matching Android
+              // app UA. Sending a desktop browser UA with it is a client/UA
+              // mismatch, and YouTube answers that combination with "Sign in
+              // to confirm you're not a bot" (LOGIN_REQUIRED) on many mobile
+              // carrier IPs.
+              'User-Agent': ytAndroidUserAgent,
               'Content-Type': 'application/json',
+              'X-YouTube-Client-Name': '3',
+              'X-YouTube-Client-Version': _ytClientVersion,
             },
             body: body,
           )
@@ -1461,6 +1529,9 @@ class TrackEnrichmentService {
     }
     if (response.statusCode != 200) {
       debugPrint('[Enrich] yt-player $videoId status ${response.statusCode}');
+      if (response.statusCode == 429 || response.statusCode == 503) {
+        _noteYouTubeBlocked();
+      }
       return null;
     }
 
@@ -1477,14 +1548,21 @@ class TrackEnrichmentService {
 
     final playability = decoded['playabilityStatus'];
     if (playability is Map<String, dynamic>) {
-      if (playability['status']?.toString() != 'OK') {
+      final status = playability['status']?.toString();
+      if (status != 'OK') {
+        final reason = playability['reason']?.toString() ?? '';
         debugPrint(
           '[Enrich] yt-player $videoId playability '
-          '${playability['status']} reason=${playability['reason']}',
+          '$status reason=$reason',
         );
+        if (status == 'LOGIN_REQUIRED' ||
+            reason.toLowerCase().contains('not a bot')) {
+          _noteYouTubeBlocked();
+        }
         return null;
       }
     }
+    _ytPlayerCoolDownUntil = null;
     final streamingData = decoded['streamingData'];
     if (streamingData is! Map<String, dynamic>) {
       debugPrint('[Enrich] yt-player $videoId no streamingData');
@@ -1900,37 +1978,83 @@ class TrackEnrichmentService {
 
   static String? _scCachedClientId;
   static DateTime? _scClientIdExpiry;
+  static Future<String?>? _scClientIdInFlight;
 
-  Future<String?> _getSoundCloudClientId() async {
-    if (_scCachedClientId != null &&
+  /// SoundCloud exposes its API client in the page hydration payload:
+  /// `{"hydratable":"apiClient","data":{"id":"...","isExpiring":true}}`.
+  /// Reading it from the 80 KB HTML is far faster (and more reliable on
+  /// mobile data) than downloading the multi-megabyte JS bundles.
+  static final RegExp _scHydrationClientIdPattern = RegExp(
+    '"hydratable"\\s*:\\s*"apiClient"\\s*,\\s*"data"\\s*:\\s*\\{[^}]*'
+    '"id"\\s*:\\s*"([a-zA-Z0-9_-]{20,})"',
+  );
+
+  static final RegExp _scScriptClientIdPattern = RegExp(
+    "(?:client_id|clientId)\\s*[:=]\\s*[\"']([a-zA-Z0-9_-]{20,})[\"']",
+  );
+
+  void _invalidateSoundCloudClientId() {
+    _scCachedClientId = null;
+    _scClientIdExpiry = null;
+  }
+
+  Future<String?> _getSoundCloudClientId({bool forceRefresh = false}) {
+    if (!forceRefresh &&
+        _scCachedClientId != null &&
         _scClientIdExpiry != null &&
         DateTime.now().isBefore(_scClientIdExpiry!)) {
-      return _scCachedClientId;
+      return Future<String?>.value(_scCachedClientId);
     }
+    final inFlight = _scClientIdInFlight;
+    if (inFlight != null) return inFlight;
+    final future = _fetchSoundCloudClientId().whenComplete(() {
+      _scClientIdInFlight = null;
+    });
+    _scClientIdInFlight = future;
+    return future;
+  }
 
+  Future<String?> _fetchSoundCloudClientId() async {
     try {
       final homeRes = await _client
           .get(
             Uri.parse('https://soundcloud.com'),
             headers: {'User-Agent': _browserUserAgent},
           )
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 10));
 
       if (homeRes.statusCode == 200) {
-        final jsRegex = RegExp(r'<script[^>]+src="([^">]+\.js)"');
-        final scriptUrls = jsRegex
-            .allMatches(homeRes.body)
+        final html = utf8.decode(homeRes.bodyBytes, allowMalformed: true);
+
+        final hydrated = _scHydrationClientIdPattern.firstMatch(html);
+        if (hydrated != null) {
+          _scCachedClientId = hydrated.group(1);
+          _scClientIdExpiry = DateTime.now().add(const Duration(hours: 6));
+          return _scCachedClientId;
+        }
+
+        // Older layouts only carry the id in the JS bundles. Fetch the most
+        // likely candidates in parallel instead of one slow sequential pass.
+        final scriptUrls = RegExp(r'<script[^>]+src="([^">]+\.js)"')
+            .allMatches(html)
             .map((m) => m.group(1)!)
             .where((u) => u.contains('sndcdn.com'))
+            .toList()
+            .reversed
+            .take(3)
             .toList();
-
-        final cidRegex = RegExp(r'client_id[:=]"([a-zA-Z0-9]{32})"');
-        for (final sUrl in scriptUrls.reversed) {
+        for (final sUrl in scriptUrls) {
           try {
+            final uri = Uri.parse(
+              sUrl.startsWith('http') ? sUrl : 'https://soundcloud.com$sUrl',
+            );
             final jsRes = await _client
-                .get(Uri.parse(sUrl))
-                .timeout(const Duration(seconds: 3));
-            final match = cidRegex.firstMatch(jsRes.body);
+                .get(uri, headers: {'User-Agent': _browserUserAgent})
+                .timeout(const Duration(seconds: 12));
+            if (jsRes.statusCode != 200) continue;
+            final match = _scScriptClientIdPattern.firstMatch(
+              utf8.decode(jsRes.bodyBytes, allowMalformed: true),
+            );
             if (match != null) {
               _scCachedClientId = match.group(1);
               _scClientIdExpiry = DateTime.now().add(const Duration(hours: 6));
@@ -1941,10 +2065,9 @@ class TrackEnrichmentService {
       }
     } catch (_) {}
 
-    // Fallback known live client ID so resolution never stalls
-    _scCachedClientId = 'vI5BsvpTIlavDLl7RDbbcFAPg8kls8Bg';
-    _scClientIdExpiry = DateTime.now().add(const Duration(hours: 1));
-    return _scCachedClientId;
+    // Never fall back to a hard-coded id: SoundCloud rotates them and a stale
+    // id makes every lookup 401 forever.
+    return null;
   }
 
   Future<_PreviewHit?> _fetchSoundCloudFullAudio({
@@ -1956,7 +2079,7 @@ class TrackEnrichmentService {
     final cleanArtist = _cleanQuery(artist);
     if (cleanTitle.isEmpty) return null;
 
-    final clientId = await _getSoundCloudClientId();
+    var clientId = await _getSoundCloudClientId();
     if (clientId == null || clientId.isEmpty) return null;
 
     final primaryArtist = cleanArtist.split(RegExp(r'[,&/]')).first.trim();
@@ -1973,10 +2096,26 @@ class TrackEnrichmentService {
 
     for (final q in queries) {
       try {
-        final uri = Uri.parse(
-          'https://api-v2.soundcloud.com/search/tracks?q=${Uri.encodeComponent(q)}&client_id=$clientId&limit=8',
+        Uri searchUri(String cid) => Uri.parse(
+          'https://api-v2.soundcloud.com/search/tracks?q=${Uri.encodeComponent(q)}&client_id=$cid&limit=8',
         );
-        final res = await _client.get(uri).timeout(const Duration(seconds: 5));
+        final searchHeaders = {
+          'User-Agent': _browserUserAgent,
+          'Accept': 'application/json',
+        };
+        var res = await _client
+            .get(searchUri(clientId!), headers: searchHeaders)
+            .timeout(const Duration(seconds: 8));
+        if (res.statusCode == 401 || res.statusCode == 403) {
+          // The API client expired or rotated: refresh once and retry.
+          _invalidateSoundCloudClientId();
+          final refreshed = await _getSoundCloudClientId(forceRefresh: true);
+          if (refreshed == null || refreshed.isEmpty) return null;
+          clientId = refreshed;
+          res = await _client
+              .get(searchUri(clientId), headers: searchHeaders)
+              .timeout(const Duration(seconds: 8));
+        }
         if (res.statusCode != 200) continue;
 
         final Object? decoded;
@@ -2041,6 +2180,7 @@ class TrackEnrichmentService {
             if (transcodings == null || transcodings.isEmpty) continue;
 
             String? streamUrl;
+            var streamIsHls = false;
             for (final t in transcodings) {
               if (t is! Map<String, dynamic>) continue;
               final format = t['format'];
@@ -2048,13 +2188,21 @@ class TrackEnrichmentService {
                   (format is Map ? format['protocol']?.toString() : null)
                       ?.toLowerCase() ??
                   '';
+              final mime =
+                  (format is Map ? format['mime_type']?.toString() : null)
+                      ?.toLowerCase() ??
+                  '';
               final infoUrl = t['url']?.toString();
               if (infoUrl == null || infoUrl.isEmpty) continue;
 
-              // Strictly reject HLS streams: ExoPlayer fails on SoundCloud m3u8 manifests with gzip/source errors,
-              // and m3u8 text playlists cannot be cached or played as direct audio files.
-              if (protocol == 'hls' || infoUrl.contains('/hls')) continue;
-              if (protocol.isNotEmpty &&
+              final isHls = protocol == 'hls' || infoUrl.contains('/hls');
+              // Full-length SoundCloud tracks are HLS-only; the progressive
+              // URL only exists for 30-second snippets (already filtered out
+              // above). Only the fragmented-MP4 variant is usable: the legacy
+              // `audio/mpegurl` preset resolves to 404.
+              if (isHls && !mime.contains('mp4')) continue;
+              if (!isHls &&
+                  protocol.isNotEmpty &&
                   protocol != 'progressive' &&
                   !infoUrl.contains('/progressive')) {
                 continue;
@@ -2062,8 +2210,11 @@ class TrackEnrichmentService {
 
               try {
                 final resolveRes = await _client
-                    .get(Uri.parse('$infoUrl?client_id=$clientId'))
-                    .timeout(const Duration(seconds: 4));
+                    .get(
+                      Uri.parse('$infoUrl?client_id=$clientId'),
+                      headers: {'User-Agent': _browserUserAgent},
+                    )
+                    .timeout(const Duration(seconds: 5));
                 if (resolveRes.statusCode == 200) {
                   final Object? sDecoded;
                   try {
@@ -2075,11 +2226,17 @@ class TrackEnrichmentService {
                   }
                   if (sDecoded is Map<String, dynamic>) {
                     final mediaUrl = sDecoded['url']?.toString();
-                    if (mediaUrl != null &&
-                        mediaUrl.isNotEmpty &&
-                        !mediaUrl.toLowerCase().contains('.m3u8') &&
-                        !mediaUrl.toLowerCase().contains('/hls')) {
+                    if (mediaUrl == null || mediaUrl.isEmpty) continue;
+                    final lowerMedia = mediaUrl.toLowerCase();
+                    if (isHls) {
                       streamUrl = mediaUrl;
+                      streamIsHls = true;
+                      break;
+                    }
+                    if (!lowerMedia.contains('.m3u8') &&
+                        !lowerMedia.contains('/hls')) {
+                      streamUrl = mediaUrl;
+                      streamIsHls = false;
                       break;
                     }
                   }
@@ -2087,9 +2244,7 @@ class TrackEnrichmentService {
               } catch (_) {}
             }
 
-            if (streamUrl != null &&
-                streamUrl.isNotEmpty &&
-                !streamUrl.toLowerCase().contains('.m3u8')) {
+            if (streamUrl != null && streamUrl.isNotEmpty) {
               bestScore = score;
               final artwork = item['artwork_url']?.toString().replaceAll(
                 'large.jpg',
@@ -2100,6 +2255,7 @@ class TrackEnrichmentService {
                 artworkUrl: artwork,
                 duration: Duration(seconds: durSec),
                 isFullLength: true,
+                isHls: streamIsHls,
               );
             }
           }
@@ -3200,6 +3356,9 @@ class _PreviewHit {
   final bool isYouTube;
   final String? youtubeVideoId;
 
+  /// Fragmented-MP4 HLS playlist that has to be downloaded into a file first.
+  final bool isHls;
+
   const _PreviewHit({
     required this.previewUrl,
     this.artworkUrl,
@@ -3207,5 +3366,6 @@ class _PreviewHit {
     this.isFullLength = false,
     this.isYouTube = false,
     this.youtubeVideoId,
+    this.isHls = false,
   });
 }

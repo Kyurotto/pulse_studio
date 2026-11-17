@@ -156,6 +156,50 @@ void main() {
     },
   );
 
+  test(
+    'library import with the same title as an Explore radio stays visible',
+    () async {
+      // Reproduces "I imported a Spotify playlist, but after reopening the app
+      // the card is gone": the import was titled like an existing Explore
+      // station ("Hev Abi Radio"). getImportedPlaylistsForUser used to merge
+      // rows by title only, so the older radio row swallowed the import's id
+      // and the Library card was routed to Explore on every reload.
+      const userId = '2';
+      const radioId = 'radio-hev-abi';
+      const importId = 'playlist-import-hev-abi';
+
+      Future<void> insertPlaylist(String id, String subtitle, int createdAt) {
+        return db.insert('imported_playlists', {
+          'id': id,
+          'user_id': userId,
+          'title': 'Hev Abi Radio',
+          'subtitle': subtitle,
+          'is_deleted': 0,
+          'created_at': createdAt,
+          'updated_at': createdAt,
+        });
+      }
+
+      // Explore radio existed first and owns the title on reload.
+      await insertPlaylist(radioId, 'Radio', 1000);
+      // The user then imported the Spotify playlist with the same name.
+      await insertPlaylist(importId, 'Created by you', 2000);
+
+      final playlists = await LocalDatabase.instance
+          .getImportedPlaylistsForUser(userId);
+      final ids = playlists.map((p) => p['id']).toSet();
+
+      expect(ids, contains(radioId));
+      expect(
+        ids,
+        contains(importId),
+        reason:
+            'A library import must never be collapsed into an Explore radio '
+            'just because the titles match',
+      );
+    },
+  );
+
   test('getUnresolvedImportedSongs returns silent and preview tracks of every user', () async {
     Map<String, Object?> song(
       String id,
@@ -198,13 +242,40 @@ void main() {
         song('spotify-silent-2', 'Silent Two'),
       ],
     );
+    // User-imported playlists carry shared radio rows too. Those are visible in
+    // the user's own library, so they must be backfilled like spotify rows.
+    await LocalDatabase.instance.saveImportedPlaylistOffline(
+      id: 'playlist-import-1',
+      userId: 'user-a',
+      title: 'Imported Mix',
+      songs: [
+        song('radio-flowg-5', 'Makasarili Malambing'),
+        song('radio-dyn-1', 'Dynamic Row'),
+      ],
+    );
+    // Seeded explore stations are resolved by the screens that show them; the
+    // background backfill must not queue their hundreds of radio rows.
+    await LocalDatabase.instance.saveImportedPlaylistOffline(
+      id: 'radio-seeded-1',
+      userId: 'user-a',
+      title: 'Seeded Station',
+      songs: [
+        song('radio-seeded-song-1', 'Station Row'),
+      ],
+    );
 
     final unresolved =
         await LocalDatabase.instance.getUnresolvedImportedSongs();
     final ids = unresolved.map((r) => r['id'] as String).toSet();
-    expect(ids,
-        {'spotify-silent-1', 'spotify-prev-1', 'spotify-silent-2'});
+    expect(ids, {
+      'spotify-silent-1',
+      'spotify-prev-1',
+      'spotify-silent-2',
+      'radio-flowg-5',
+      'radio-dyn-1',
+    });
     expect(ids, isNot(contains('spotify-full-1')));
+    expect(ids, isNot(contains('radio-seeded-song-1')));
   });
 
   test('Every user has their own imported playlists (user separation)', () async {

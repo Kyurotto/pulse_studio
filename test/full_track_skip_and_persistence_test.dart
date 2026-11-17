@@ -987,6 +987,58 @@ void main() {
     );
 
     test(
+      'import titled like an Explore radio stays in the Library after restart',
+      () async {
+        // Regression: a Spotify import named exactly like an Explore station
+        // ("Hev Abi Radio") disappeared from the Library after every restart
+        // because the reload merged its id into the older radio row.
+        const userId = '2';
+        const radioId = 'radio-hev-abi';
+        const importId = 'playlist-import-hev-abi';
+
+        await db.insert('imported_playlists', {
+          'id': radioId,
+          'user_id': userId,
+          'title': 'Hev Abi Radio',
+          'subtitle': 'Radio',
+          'is_deleted': 0,
+          'created_at': 1000,
+          'updated_at': 1000,
+        });
+        await LocalDatabase.instance.saveImportedPlaylistOffline(
+          id: importId,
+          userId: userId,
+          title: 'Hev Abi Radio',
+          subtitle: 'Created by you',
+          songs: const [
+            {
+              'id': 'spotify-hev-abi-track-1',
+              'title': 'Alam Mo Ba Girl',
+              'artist': 'Hev Abi',
+              'duration_ms': 180000,
+            },
+          ],
+        );
+
+        final controller = MusicPlayerController();
+        await controller.loadSavedPlaylists(userId: userId);
+
+        expect(
+          controller.libraryPlaylists.map((p) => p.id),
+          contains(importId),
+          reason: 'The imported playlist must stay in the Library',
+        );
+        expect(
+          controller.exploreRadioPlaylists.map((p) => p.id),
+          contains(radioId),
+          reason: 'The Explore radio must remain in Explore',
+        );
+
+        controller.dispose();
+      },
+    );
+
+    test(
       'Re-importing a playlist whose title was previously deleted unmasks and displays it properly',
       () async {
         // 1. Mark a playlist title as deleted in settings

@@ -101,6 +101,7 @@ class DiscoveryPlaylistPage extends StatelessWidget {
                   isCurrent: isCurrent,
                   isPlaying: isCurrent && controller.isPlaying,
                   duration: _clock(song.duration),
+                  locatingExhausted: controller.isLocatingExhausted(song.id),
                   onTap: () => isCurrent
                       ? controller.togglePlayPause()
                       : _playFrom(songs, songIndex),
@@ -223,6 +224,7 @@ class _SongRow extends StatelessWidget {
     required this.isCurrent,
     required this.isPlaying,
     required this.duration,
+    required this.locatingExhausted,
     required this.onTap,
   });
 
@@ -231,6 +233,7 @@ class _SongRow extends StatelessWidget {
   final bool isCurrent;
   final bool isPlaying;
   final String duration;
+  final bool locatingExhausted;
   final VoidCallback onTap;
 
   @override
@@ -289,24 +292,32 @@ class _SongRow extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // LOCATING badge first (fixed width) so it never
+                          // Status badge first (fixed width) so it never
                           // pushes the artist text into overflow.
                           if (!song.hasAudio) ...[
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                               decoration: BoxDecoration(
-                                color: AppTheme.accentPink.withValues(alpha: 0.15),
+                                color: (locatingExhausted
+                                        ? AppTheme.textMuted
+                                        : AppTheme.accentPink)
+                                    .withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(
-                                  color: AppTheme.accentPink.withValues(alpha: 0.4),
+                                  color: (locatingExhausted
+                                          ? AppTheme.textMuted
+                                          : AppTheme.accentPink)
+                                      .withValues(alpha: 0.4),
                                 ),
                               ),
-                              child: const Text(
-                                'LOCATING',
+                              child: Text(
+                                locatingExhausted ? 'NOT FOUND' : 'LOCATING',
                                 style: TextStyle(
                                   fontSize: 8,
                                   fontWeight: FontWeight.w800,
-                                  color: AppTheme.accentPink,
+                                  color: locatingExhausted
+                                      ? AppTheme.textMuted
+                                      : AppTheme.accentPink,
                                 ),
                               ),
                             ),
