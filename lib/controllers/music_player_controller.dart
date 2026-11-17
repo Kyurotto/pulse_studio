@@ -22,6 +22,7 @@ import '../services/audio_equalizer_service.dart';
 import '../services/playlist_persistence_service.dart';
 import '../services/radio_discovery_service.dart';
 import '../services/spotify_import_service.dart';
+import '../services/soundcloud_hls_downloader.dart';
 import '../services/track_enrichment_service.dart';
 
 enum PlaybackRepeatMode { off, all, one }
@@ -191,6 +192,16 @@ class MusicPlayerController extends ChangeNotifier {
   /// saved track before the user has pressed play. Hot-swapping an enrichment
   /// based on that alone started playback on its own.
   String? _loadedSongId;
+
+  /// The exact audio source (and preview flag) that was handed to
+  /// [_audioPlayer] for [_loadedSongId].
+  ///
+  /// Enrichment normally lands on a *copy* of the queue song, so comparing
+  /// that copy's own before/after values (or `currentSong.audioUrl`, which can
+  /// still be empty mid-load) mistook the same file for a new source and
+  /// reloaded a downloaded track several times right after it started.
+  String? _loadedAudioUrl;
+  bool _loadedWasPreview = false;
   bool _isPlayingAudioInProgress = false;
 
   /// Id of the song whose audio load is currently in flight, so a request for
@@ -235,6 +246,24 @@ class MusicPlayerController extends ChangeNotifier {
   /// single refresh so an expired saved URL resolves fresh instead of
   /// going silent.
   final Set<String> _ytRefreshAttemptedIds = {};
+
+  /// Consecutive audio-source load failures per song in this session. Recovery
+  /// re-resolves the stream once; if the fresh source also fails there is no
+  /// point hot-swapping the same broken track forever (a stale YouTube URL
+  /// that keeps answering 403 used to relaunch the player in a loop and leave
+  /// `_isPlayingAudioInProgress` stuck, so every later tap was ignored).
+  /// Cleared as soon as real playback advances.
+  final Map<String, int> _playbackFailureCount = {};
+
+  /// How many load failures are tolerated before automatic recovery stops.
+  /// The user can always retry manually (tap / play), which starts a fresh
+  /// budget.
+  static const int _maxPlaybackLoadFailures = 2;
+
+  /// Test seam for the bounded playback-recovery policy.
+  @visibleForTesting
+  static bool shouldAbandonPlaybackForTesting(int failures) =>
+      failures >= _maxPlaybackLoadFailures;
 
   /// Songs currently playing a bundled offline fallback asset (playback-only).
   /// Their in-memory audioUrl/lyrics are placeholders so real enrichment can
@@ -974,6 +1003,7 @@ class MusicPlayerController extends ChangeNotifier {
       }),
     );
     unawaited(_loadEqualizerPreset());
+    unawaited(_abandonedRemoteLoaded);
   }
 
   /// Routes the media notification's previous/next buttons to this controller.
@@ -1073,6 +1103,12 @@ class MusicPlayerController extends ChangeNotifier {
           // A real position means this is genuine audio, not a placeholder.
           // Clear any stale fallback flag so future upgrades work normally.
           final song = currentSong;
+          if (song != null && pos > Duration.zero) {
+            // Audio is actually flowing: give this track a fresh failure
+            // budget so a later genuine failure can still recover once.
+            _playbackFailureCount.remove(song.id);
+            _ytRefreshAttemptedIds.remove(song.id);
+          }
           if (song != null &&
               pos > Duration.zero &&
               _offlineFallbackIds.contains(song.id) &&
@@ -1214,11 +1250,8 @@ class MusicPlayerController extends ChangeNotifier {
   }
 
   /// Helper to check if a playlist ID belongs to an internal Explore radio station.
-  static bool isExploreRadioPlaylist(String id) {
-    return id.startsWith('radio-') ||
-        id.startsWith('dailymix-') ||
-        id.startsWith('artist-');
-  }
+  static bool isExploreRadioPlaylist(String id) =>
+      LocalDatabase.isExploreRadioPlaylistId(id);
 
   /// Returns only user library playlists, strictly excluding Explore radio stations.
   List<MusicPlaylist> get libraryPlaylists =>
@@ -1616,6 +1649,10 @@ class MusicPlayerController extends ChangeNotifier {
     for (final s in newlyAdded) {
       _fullUpgradeAttemptedAt.remove(s.id);
       _fullTrackAttemptCount.remove(s.id);
+      _clearLocatingExhausted(s.id);
+      // A fresh import is a user-initiated retry; do not inherit a dead-stream
+      // marker from a previous copy of the same track.
+      _clearAbandonedRemoteStream(s.id);
     }
     // Locate all imported tracks (full audio + lyrics) immediately.
     // As each song resolves, _applyEnrichment automatically downloads the audio
@@ -1826,6 +1863,9 @@ class MusicPlayerController extends ChangeNotifier {
 
       // Purge any playlists or songs that were explicitly marked deleted by ID from in-memory state
       final allSettings = await LocalDatabase.instance.getAllSettings();
+      // Make the durable dead-stream markers authoritative before any row is
+      // merged, so a quarantined row can never inherit an old in-memory URL.
+      await _abandonedRemoteLoaded;
       _autoCachePlayedSongs = allSettings[_autoCachePlayedSongsKey] != 'false';
       _allowExplicit = allSettings[allowExplicitSettingKey] != 'false';
       _visualizerEnabled = allSettings[visualizerSettingKey] != 'false';
@@ -2003,6 +2043,29 @@ class MusicPlayerController extends ChangeNotifier {
             hasChanges = true;
           } else {
             final existing = _allSongs[existingIdx];
+            // The playlist row is the source of truth on startup. When the DB
+            // has no durable audio, drop any remote signature still hanging on
+            // the in-memory instance (or a quarantined one), otherwise a row
+            // that is really NOT FOUND renders FULL TRACK and offers a download
+            // that can only fail. Downloaded/local paths are left untouched.
+            final existingIsRemote =
+                existing.audioUrl.startsWith('http://') ||
+                existing.audioUrl.startsWith('https://');
+            final existingIsEphemeral =
+                existing.audioUrl.contains('googlevideo.com') ||
+                existing.audioUrl.contains('apple.com') ||
+                existing.audioUrl.contains('itunes') ||
+                existing.audioUrl.contains('deezer') ||
+                existing.audioUrl.contains('dzcdn.net');
+            if (resolvedAudio.isEmpty &&
+                existingIsRemote &&
+                (existingIsEphemeral ||
+                    _abandonedRemoteIds.contains(songId))) {
+              existing.audioUrl = '';
+              existing.isPreview = false;
+              existing.isYouTubeAudio = false;
+              hasChanges = true;
+            }
             final storedExplicit =
                 s['is_explicit'] == 1 ||
                 s['is_explicit'] == true ||
@@ -2430,26 +2493,27 @@ class MusicPlayerController extends ChangeNotifier {
         notifyListeners();
       }
 
-      // Re-enrich songs that are missing audio, previews, have unplayable
-      // YouTube URLs, or are still missing lyrics (full-track Saavn hits with
-      // no lyrics would otherwise never fetch lyrics on restart).
+      // Re-enrich songs that are actually missing playable audio: no URL,
+      // a preview, a dead preview host, or an expired YouTube stream.
+      //
+      // `isYouTubeAudio` alone is not a reason to re-resolve: it stays true
+      // for every YouTube-backed track, so including it here made the app
+      // re-run hundreds of lookups on every launch and left the library
+      // showing LOCATING while that queue drained.
       final toEnrich = _allSongs
           .where(
             (s) =>
                 _isImportedCatalogId(s.id) &&
                 (s.isSilentPlaceholder ||
                     s.isPreview ||
-                    s.isYouTubeAudio ||
                     s.audioUrl.isEmpty ||
                     s.audioUrl.contains('apple.com') ||
                     s.audioUrl.contains('itunes') ||
                     s.audioUrl.contains('deezer') ||
                     s.title.toLowerCase().contains('lips of an angel') ||
-                    s.audioUrl.contains('googlevideo.com') ||
-                    s.lyrics.isEmpty ||
-                    !s.lyrics.any((l) => l.trim().startsWith('[')) ||
-                    _offlineFallbackIds.contains(s.id) ||
-                    _offlineFakeLyricsIds.contains(s.id)),
+                    (s.audioUrl.contains('googlevideo.com') &&
+                        _isGoogleVideoExpired(s.audioUrl)) ||
+                    _offlineFallbackIds.contains(s.id)),
           )
           .toList();
       if (toEnrich.isNotEmpty) {
@@ -3034,9 +3098,11 @@ class MusicPlayerController extends ChangeNotifier {
           while (!_disposed) {
             final song = nextIdx < ordered.length ? ordered[nextIdx++] : null;
             if (song == null) break;
-            // Clear stale backoff so fast-locate never skips a song
+            // Clear the stale backoff timestamp so fast-locate never skips a
+            // song, but KEEP the failure count: clearing it here reset every
+            // row to "LOCATING" on each pass, so a track that kept failing
+            // could never reach the NOT FOUND state.
             _fullUpgradeAttemptedAt.remove(song.id);
-            _fullTrackAttemptCount.remove(song.id);
             _enrichingIds.add(song.id);
             _fullUpgradeAttemptedAt[song.id] = DateTime.now();
             try {
@@ -3126,6 +3192,41 @@ class MusicPlayerController extends ChangeNotifier {
   /// Drives the "can't play" message and Retry in the player bar.
   final Set<String> _unavailableIds = {};
 
+  /// Remote tracks that failed two loads in a row and were abandoned. The
+  /// block is persisted in `app_settings` because a background enrichment pass
+  /// used to re-resolve the same broken googlevideo signature a few minutes
+  /// later, flipping NOT FOUND back to FULL TRACK even though the stream still
+  /// answered 403. Automatic retry is suppressed until the entry expires or
+  /// the user asks for a manual retry.
+  final Set<String> _abandonedRemoteIds = {};
+  static const String _abandonedRemoteKeyPrefix = 'abandoned_remote_';
+  static const Duration _abandonedRemoteTtl = Duration(hours: 6);
+  late final Future<void> _abandonedRemoteLoaded =
+      _loadPersistedRetryState();
+
+  /// Songs that already used up their full-track attempts. Persisted (with the
+  /// same TTL) so reopening the app does not show them as LOCATING again while
+  /// the background pass works through its next round. A successful resolve,
+  /// a new import, or a manual retry clears the marker.
+  static const String _locatingFailedKeyPrefix = 'locating_failed_';
+
+  /// True when repeated full-track lookups have failed for [songId]. The row
+  /// keeps retrying in the background with backoff, but the UI should stop
+  /// showing an endless spinner for a track that is not going to appear any
+  /// time soon. Display-only: a later successful resolve clears the count and
+  /// the row becomes playable.
+  bool isLocatingExhausted(String songId) =>
+      (_fullTrackAttemptCount[songId] ?? 0) >= 3;
+
+  /// Test seam for the NOT FOUND threshold: records failed full-track
+  /// lookups without running the network pipeline.
+  @visibleForTesting
+  void registerFullTrackFailureForTesting(String songId, {int times = 1}) {
+    if (times <= 0) return;
+    _fullTrackAttemptCount[songId] =
+        (_fullTrackAttemptCount[songId] ?? 0) + times;
+  }
+
   bool isUnavailable(String songId) => _unavailableIds.contains(songId);
 
   /// True on cellular without Wi-Fi/ethernet. Returns false when the platform
@@ -3172,6 +3273,7 @@ class MusicPlayerController extends ChangeNotifier {
     final song = currentSong;
     if (song == null) return;
     resetEnrichmentBackoff(song.id);
+    _playbackFailureCount.remove(song.id);
     _unavailableIds.remove(song.id);
     _clearSilentRetry();
     _isPlaying = true;
@@ -3181,6 +3283,114 @@ class MusicPlayerController extends ChangeNotifier {
     _playCurrentSongAudio();
     notifyListeners();
   }
+
+  Future<void> _loadPersistedRetryState() async {
+    try {
+      final settings = await LocalDatabase.instance.getAllSettings();
+      final now = DateTime.now();
+      final expired = <String>[];
+      for (final entry in settings.entries) {
+        final isAbandoned = entry.key.startsWith(_abandonedRemoteKeyPrefix);
+        final isExhausted = entry.key.startsWith(_locatingFailedKeyPrefix);
+        if (!isAbandoned && !isExhausted) continue;
+        final prefix = isAbandoned
+            ? _abandonedRemoteKeyPrefix
+            : _locatingFailedKeyPrefix;
+        final songId = entry.key.substring(prefix.length);
+        if (songId.isEmpty) continue;
+        final stamp = int.tryParse(entry.value);
+        final markedAt = stamp == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(stamp);
+        if (markedAt != null &&
+            now.difference(markedAt) < _abandonedRemoteTtl) {
+          if (isAbandoned) {
+            _abandonedRemoteIds.add(songId);
+          } else {
+            _fullTrackAttemptCount[songId] = 3;
+          }
+        } else {
+          // Expired (or unreadable) marker: allow one fresh attempt.
+          expired.add(entry.key);
+        }
+      }
+      for (final key in expired) {
+        unawaited(
+          LocalDatabase.instance.removeSetting(key).catchError((_) {}),
+        );
+      }
+    } catch (_) {}
+  }
+
+  /// Durable "this remote stream is dead" marker. Background enrichment reads
+  /// it so a URL that already failed twice cannot come back as FULL TRACK.
+  Future<void> _abandonRemoteStream(String songId) async {
+    if (songId.isEmpty) return;
+    _abandonedRemoteIds.add(songId);
+    try {
+      await LocalDatabase.instance.saveSetting(
+        '$_abandonedRemoteKeyPrefix$songId',
+        DateTime.now().millisecondsSinceEpoch.toString(),
+      );
+    } catch (_) {}
+  }
+
+  void _clearAbandonedRemoteStream(String songId) {
+    if (!_abandonedRemoteIds.remove(songId)) return;
+    unawaited(
+      LocalDatabase.instance
+          .removeSetting('$_abandonedRemoteKeyPrefix$songId')
+          .catchError((_) {}),
+    );
+  }
+
+  /// Remember that [songId] already showed NOT FOUND so a restart does not
+  /// flash LOCATING until the retry loop catches up.
+  void _markLocatingExhausted(String songId) {
+    if ((_fullTrackAttemptCount[songId] ?? 0) < 3) return;
+    unawaited(
+      LocalDatabase.instance
+          .saveSetting(
+            '$_locatingFailedKeyPrefix$songId',
+            DateTime.now().millisecondsSinceEpoch.toString(),
+          )
+          .catchError((_) {}),
+    );
+  }
+
+  void _clearLocatingExhausted(String songId) {
+    unawaited(
+      LocalDatabase.instance
+          .removeSetting('$_locatingFailedKeyPrefix$songId')
+          .catchError((_) {}),
+    );
+  }
+
+  /// True when automatic enrichment should stay away from [songId] because its
+  /// remote stream already failed twice.
+  @visibleForTesting
+  Future<bool> isAutoRetryBlockedForTesting(String songId) async {
+    await _abandonedRemoteLoaded;
+    return _abandonedRemoteIds.contains(songId);
+  }
+
+  /// Test seam mirroring the persistence done when playback gives up.
+  @visibleForTesting
+  Future<void> abandonRemoteStreamForTesting(String songId) =>
+      _abandonRemoteStream(songId);
+
+  /// Test seam: waits for persisted retry state, then reports the badge state.
+  @visibleForTesting
+  Future<bool> isLocatingExhaustedAfterLoadForTesting(String songId) async {
+    await _abandonedRemoteLoaded;
+    return isLocatingExhausted(songId);
+  }
+
+  /// Test seam for the playback recovery path. A quarantined track must return
+  /// without attaching a freshly resolved remote signature.
+  @visibleForTesting
+  Future<void> recoverAudioForTesting(Song song) =>
+      _ensureRecoverableAudio(song);
 
   /// Polls reachability every 10s and reacts to changes. There is no
   /// platform connectivity callback in this app, so without this the
@@ -3213,7 +3423,10 @@ class MusicPlayerController extends ChangeNotifier {
   /// preview imported track, current song first.
   void _onBackOnline() {
     _fullUpgradeAttemptedAt.clear();
-    _fullTrackAttemptCount.clear();
+    // Keep _fullTrackAttemptCount: it is only incremented for attempts made
+    // while online, and clearing it here made every NOT FOUND row flash back to
+    // LOCATING after a Wi-Fi/mobile-data flap. The backoff timestamps above are
+    // what actually gate retries, so those rows are retried immediately.
     _ytRefreshAttemptedIds.clear();
     _unavailableIds.clear();
     final pending = _allSongs
@@ -3238,6 +3451,10 @@ class MusicPlayerController extends ChangeNotifier {
   void resetEnrichmentBackoff(String songId) {
     _fullUpgradeAttemptedAt.remove(songId);
     _fullTrackAttemptCount.remove(songId);
+    _clearLocatingExhausted(songId);
+    // A manual retry is the escape hatch from the durable dead-stream marker:
+    // the user may know the track changed or want to try another source.
+    _clearAbandonedRemoteStream(songId);
   }
 
   bool _shouldAttemptFullUpgrade(String songId) {
@@ -3286,6 +3503,10 @@ class MusicPlayerController extends ChangeNotifier {
     _backfillRunning = true;
     try {
       if (!await _isDeviceOnline()) return;
+      // Never spend a provider lookup on a row whose remote stream already
+      // failed twice. The marker is durable, so a cold start must respect it
+      // before the first pass touches the row.
+      await _abandonedRemoteLoaded;
       final rows = await LocalDatabase.instance.getUnresolvedImportedSongs();
       if (rows.isEmpty || _disposed) return;
       debugPrint(
@@ -3296,7 +3517,8 @@ class MusicPlayerController extends ChangeNotifier {
         if (_disposed) return;
         final id = row['id']?.toString() ?? '';
         if (id.isEmpty ||
-            !_isImportedCatalogId(id) ||
+            _abandonedRemoteIds.contains(id) ||
+            !_isBackfillableId(id) ||
             resolvedIds.contains(id) ||
             _pendingEnrichment.containsKey(id) ||
             _pendingEnrichment.containsKey('$id:preview') ||
@@ -3374,7 +3596,8 @@ class MusicPlayerController extends ChangeNotifier {
       if (_disposed) return;
       final id = row['id']?.toString() ?? '';
       if (id.isEmpty ||
-          !_isImportedCatalogId(id) ||
+          _abandonedRemoteIds.contains(id) ||
+          !_isBackfillableId(id) ||
           resolvedIds.contains(id)) {
         continue;
       }
@@ -3535,6 +3758,13 @@ class MusicPlayerController extends ChangeNotifier {
     int? preferredBitrateKbps,
   }) {
     if (_disposed) return Future<void>.value();
+    // Dead-stream marker: skip the whole provider chain. This keeps a row that
+    // already settled on NOT FOUND from flickering back to LOCATING when a
+    // background pass (connectivity recovery, queue preload) runs.
+    if (_abandonedRemoteIds.contains(song.id)) {
+      _fullTrackAttemptCount[song.id] = 3;
+      return Future<void>.value();
+    }
     final key = previewFallbackOnly ? '${song.id}:preview' : song.id;
     final existing = _pendingEnrichment[key];
     if (existing != null) return existing;
@@ -3559,6 +3789,17 @@ class MusicPlayerController extends ChangeNotifier {
     String? failedUrl,
     String? failedVideoId,
   }) async {
+    // The direct YouTube lookup below bypasses the provider chain, so it also
+    // bypassed the dead-stream gate. That is how a quarantined row (Kaba) kept
+    // coming back as FULL TRACK on every launch: the startup backfill called
+    // _ensureEnrichment (blocked), then resolved song.youtubeVideoId anyway and
+    // attached a fresh googlevideo signature that answered 403 again.
+    await _abandonedRemoteLoaded;
+    if (_abandonedRemoteIds.contains(song.id)) {
+      _fullTrackAttemptCount[song.id] = 3;
+      _markLocatingExhausted(song.id);
+      return;
+    }
     final isImported = _isDownloadableCatalogId(song.id);
     if (!isImported) {
       // Local/bundled tracks have no full-track catalog to search.
@@ -3588,7 +3829,8 @@ class MusicPlayerController extends ChangeNotifier {
     if (song.hasAudio &&
         !song.isPreview &&
         !isGvExpired &&
-        !song.audioUrl.toLowerCase().contains('.m3u8') &&
+        !(song.audioUrl.toLowerCase().contains('.m3u8') &&
+            !SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(song.audioUrl)) &&
         !isFailedUrl) {
       return;
     }
@@ -3611,9 +3853,87 @@ class MusicPlayerController extends ChangeNotifier {
     }
   }
 
+  /// Records a failed audio-source load for [song]. Returns true when
+  /// automatic recovery should stop instead of re-resolving a stream that
+  /// keeps failing.
+  bool _registerPlaybackFailure(Song song) {
+    final failures = (_playbackFailureCount[song.id] ?? 0) + 1;
+    _playbackFailureCount[song.id] = failures;
+    return failures >= _maxPlaybackLoadFailures;
+  }
+
+  /// Stops automatic recovery for a track that keeps failing: the row is
+  /// marked unavailable and playback advances instead of spinning on the same
+  /// broken URL forever.
+  void _abandonPlayback(Song song) {
+    _logDiag(
+      'recovery: giving up after ${_playbackFailureCount[song.id] ?? 0} failed loads',
+      song: song,
+    );
+    _unavailableIds.add(song.id);
+    // Two failed loads after a stream refresh mean this remote URL is not a
+    // usable full track. Drop it so the row stops advertising FULL TRACK (and
+    // stops offering a download that is guaranteed to fail). Background
+    // enrichment can still resolve a new stream later.
+    //
+    // The first failure already clears song.audioUrl before re-resolving, so an
+    // empty URL here still means "this was a remote stream": local files and
+    // bundled assets are never cleared on that path.
+    final isLocalFile = song.audioUrl.isNotEmpty &&
+        !song.audioUrl.startsWith('http://') &&
+        !song.audioUrl.startsWith('https://') &&
+        !song.audioUrl.startsWith('assets/') &&
+        !song.audioUrl.startsWith('asset:/');
+    // A track that never had any source at all must stay eligible for
+    // background locating; only a stream that was actually attempted and
+    // failed earns the dead-stream marker. The refresh marker survives the
+    // first failure's URL clearing, so an empty URL here still identifies a
+    // previously remote track.
+    final wasRemoteStream = !isLocalFile &&
+        (song.audioUrl.isNotEmpty ||
+            _ytRefreshAttemptedIds.contains(song.id) ||
+            song.isYouTubeAudio);
+    if (!isLocalFile) {
+      song.audioUrl = '';
+      song.isYouTubeAudio = false;
+      song.isPreview = false;
+      _fullTrackAttemptCount[song.id] = 3;
+      _markLocatingExhausted(song.id);
+      _syncSongPathToQueueAndDb(song);
+    }
+    if (wasRemoteStream) {
+      unawaited(_abandonRemoteStream(song.id));
+    }
+    // A recovery that started while this song was current can finish after the
+    // queue moved on. It must only update its own row, never tear down the
+    // track that is actually playing now.
+    if (song.id != currentSong?.id || !_isPlaying) {
+      notifyListeners();
+      return;
+    }
+    _audioPlayerHasSource = false;
+    _loadedSongId = null;
+    _pendingHotSwapReload = false;
+    _pendingHotSwapResumePosition = Duration.zero;
+    _playbackTimer?.cancel();
+    _cancelStallWatchdog();
+    if (_queue.length > 1) {
+      next();
+    } else {
+      _isPlaying = false;
+      notifyListeners();
+    }
+  }
+
   static bool _isImportedCatalogId(String id) {
     return id.startsWith('spotify-') || id.startsWith('itunes-');
   }
+
+  /// Catalog ids the background backfill may resolve. Imported playlists mix
+  /// `spotify-*` rows with shared `radio-*`/`artist-*`/`dyn-*` rows, and a row
+  /// the user can see must not stay on LOCATING just because YouTube is
+  /// bot-checking. This is the same set the download pipeline can resolve.
+  static bool _isBackfillableId(String id) => _isDownloadableCatalogId(id);
 
   static bool _isDownloadableCatalogId(String id) {
     return id.startsWith('spotify-') ||
@@ -3634,8 +3954,22 @@ class MusicPlayerController extends ChangeNotifier {
   /// import must fall back to the full-track chain (JioSaavn, SoundCloud,
   /// web/Archive.org) instead of staying on LOCATING forever. Strict mode
   /// applies to every import automatically, not to one playlist.
+  ///
+  /// `radio-dyn-*` rows are shared dynamic-radio songs that also get merged
+  /// into imported playlists. They must not be strict, otherwise a YouTube
+  /// bot-check leaves the user's own playlist stuck on LOCATING even though
+  /// the same track resolves from SoundCloud.
+  ///
+  /// `radio-flowg-*` is the same case for the Flow G station: those rows are
+  /// seeded once and shared by the radio playlists and the user's imports, so
+  /// they follow the same flexible policy.
   static bool _requiresStrictYouTube(Song song) {
-    return song.id.startsWith('radio-') || song.id.startsWith('discovery-');
+    if (song.id.startsWith('discovery-')) return true;
+    if (song.id.startsWith('radio-dyn-') ||
+        song.id.startsWith('radio-flowg-')) {
+      return false;
+    }
+    return song.id.startsWith('radio-');
   }
 
   /// Test seam for the strict-YouTube catalog policy above.
@@ -3652,7 +3986,12 @@ class MusicPlayerController extends ChangeNotifier {
     // Playback resolution honours the Streaming Quality setting; downloads pass
     // Download Quality explicitly when they need to resolve a fresh stream.
     final qualityKbps = preferredBitrateKbps ?? effectiveStreamingQualityKbps;
-    if (!previewFallbackOnly) {
+    // Every full-track provider below is a network call. Probing first keeps
+    // the LOCATING -> NOT FOUND counter honest (three offline launches must
+    // not exhaust a row that simply had no connection) and lets the provider
+    // chain be skipped entirely. Cached files and the DB are still consulted.
+    final online = await _isDeviceOnline();
+    if (!previewFallbackOnly && online) {
       final isStuck =
           !song.hasAudio ||
           song.isPreview ||
@@ -3660,8 +3999,10 @@ class MusicPlayerController extends ChangeNotifier {
               _isGoogleVideoExpired(song.audioUrl)) ||
           _offlineFallbackIds.contains(song.id);
       if (isStuck) {
+        final wasExhausted = (_fullTrackAttemptCount[song.id] ?? 0) >= 3;
         _fullTrackAttemptCount[song.id] =
             (_fullTrackAttemptCount[song.id] ?? 0) + 1;
+        if (!wasExhausted) _markLocatingExhausted(song.id);
       }
     }
     song.isEnrichingLyrics = true;
@@ -3688,6 +4029,19 @@ class MusicPlayerController extends ChangeNotifier {
           } catch (_) {}
           _invalidateOfflineLookup(song.id);
         }
+      }
+
+      // A stream that already failed twice must not be resolved again by a
+      // background pass: re-resolving used to bring back the same 403
+      // googlevideo signature minutes after the row settled on NOT FOUND.
+      // Manual retry (and the TTL) clears this marker.
+      await _abandonedRemoteLoaded;
+      if (_abandonedRemoteIds.contains(song.id)) {
+        _fullTrackAttemptCount[song.id] = 3;
+        song.isEnrichingLyrics = false;
+        _locatingStatusVersion++;
+        notifyListeners();
+        return;
       }
 
       // If we already have a known youtubeVideoId, resolve its live stream immediately:
@@ -3735,13 +4089,20 @@ class MusicPlayerController extends ChangeNotifier {
         final dbPreview = (savedDbSong['is_preview'] as int? ?? 0) == 1;
         if (!dbPreview &&
             dbAudio.isNotEmpty &&
+            !_unavailableIds.contains(song.id) &&
+            !_isGoogleVideoExpired(dbAudio) &&
             !dbAudio.contains('apple.com') &&
             !dbAudio.contains('itunes') &&
             !dbAudio.contains('deezer') &&
             !dbAudio.contains('dzcdn.net')) {
-          final dbLyrics = (savedDbSong['lyrics'] as List<dynamic>? ?? [])
-              .map((e) => e.toString())
-              .toList();
+          // The DB stores lyrics as a JSON string; getImportedSong returns the
+          // raw row. Casting that string to List<dynamic> threw before the
+          // fast path could run, aborting enrichment for every song that had
+          // saved lyrics.
+          final rawLyrics = savedDbSong['lyrics'];
+          final dbLyrics = rawLyrics is List
+              ? rawLyrics.map((e) => e.toString()).toList()
+              : _decodeDbLyrics(rawLyrics is String ? rawLyrics : null);
           final changed = _applyEnrichment(
             song,
             TrackEnrichment(
@@ -3760,6 +4121,14 @@ class MusicPlayerController extends ChangeNotifier {
       // sources (JioSaavn → SoundCloud → web/Archive) so a YouTube outage or
       // region block never leaves an imported playlist stuck on LOCATING.
       // Explore radio/discovery stays strictly YouTube via youtubeOnly.
+      if (!online) {
+        // Cache and DB were checked above; nothing else can succeed without a
+        // connection, so stop before the multi-provider network chain.
+        song.isEnrichingLyrics = false;
+        _locatingStatusVersion++;
+        notifyListeners();
+        return;
+      }
       final enrichment = await _enrichment.enrichTrack(
         title: song.title,
         artist: song.artist,
@@ -3781,17 +4150,183 @@ class MusicPlayerController extends ChangeNotifier {
       if (enrichment.hasAudio || enrichment.hasLyrics) {
         _enrichedIds.add(song.id);
       }
-      final changed = _applyEnrichment(song, enrichment);
+      _applyEnrichment(song, enrichment);
+      // SoundCloud's only full-length stream is an HLS playlist; turn it into
+      // a real file in the background so a slow multi-megabyte download never
+      // holds an enrichment worker (or the rest of the playlist) hostage.
+      if (enrichment.isHlsAudio) {
+        unawaited(_materializeHlsAudio(song));
+      }
       song.isEnrichingLyrics = false;
-      if (changed) notifyListeners();
-    } catch (_) {
+      // Bump even when nothing resolved: the attempt count drives the
+      // LOCATING -> NOT FOUND badge, which otherwise never refreshed.
+      _locatingStatusVersion++;
+      notifyListeners();
+    } catch (e) {
       _logDiag(
-        'enrichment FAILED after ${DateTime.now().difference(enrichStart).inMilliseconds}ms',
+        'enrichment FAILED after ${DateTime.now().difference(enrichStart).inMilliseconds}ms: $e',
         song: song,
       );
       song.isEnrichingLyrics = false;
     } finally {
       _enrichingIds.remove(song.id);
+    }
+  }
+
+  /// SoundCloud serves full-length tracks only as fragmented-MP4 HLS, whose
+  /// playlist URL expires and cannot be played or stored directly. Downloading
+  /// its init segment plus media segments produces one normal `.m4a` file, so
+  /// the track becomes streamable and available offline in a single step.
+  final Set<String> _materializingHlsIds = <String>{};
+
+  /// Background enrichment resolves many HLS tracks at once. Letting every
+  /// one download concurrently saturates a mobile connection and makes whole
+  /// tracks fail mid-way, so at most three are materialised in parallel.
+  int _activeHlsMaterialisations = 0;
+  final List<Completer<void>> _hlsMaterialisationWaiters = <Completer<void>>[];
+
+  Future<T> _withHlsMaterialisationSlot<T>(Future<T> Function() action) async {
+    while (_activeHlsMaterialisations >= 3) {
+      final waiter = Completer<void>();
+      _hlsMaterialisationWaiters.add(waiter);
+      await waiter.future;
+    }
+    _activeHlsMaterialisations++;
+    try {
+      return await action();
+    } finally {
+      _activeHlsMaterialisations--;
+      if (_hlsMaterialisationWaiters.isNotEmpty) {
+        _hlsMaterialisationWaiters.removeAt(0).complete();
+      }
+    }
+  }
+
+  Future<bool> _materializeHlsAudio(Song song) async {
+    final playlistUrl = song.audioUrl;
+    if (!SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(playlistUrl)) {
+      return false;
+    }
+    if (!_materializingHlsIds.add(song.id)) return false;
+    var ok = false;
+    try {
+      ok = await _withHlsMaterialisationSlot(
+        () => _downloadHlsToFile(song, playlistUrl),
+      );
+    } finally {
+      _materializingHlsIds.remove(song.id);
+    }
+
+    if (ok) {
+      _hlsMaterialiseFailures.remove(song.id);
+      return true;
+    }
+    if (_disposed) return false;
+
+    // One stalled segment must not leave a track silent for the whole
+    // session. Retry the same signed playlist (valid for hours) with
+    // backoff; after that, drop it so normal enrichment can resolve a
+    // fresh URL instead of keeping an unplayable playlist in memory.
+    final failures = (_hlsMaterialiseFailures[song.id] ?? 0) + 1;
+    _hlsMaterialiseFailures[song.id] = failures;
+    if (failures <= 2 &&
+        SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(song.audioUrl)) {
+      Timer(Duration(seconds: 60 * failures), () {
+        if (!_disposed &&
+            song.audioUrl == playlistUrl &&
+            !_materializingHlsIds.contains(song.id)) {
+          unawaited(_materializeHlsAudio(song));
+        }
+      });
+    } else if (song.audioUrl == playlistUrl) {
+      song.audioUrl = '';
+      song.isPreview = false;
+      song.isYouTubeAudio = false;
+      _syncSongPathToQueueAndDb(song);
+      notifyListeners();
+    }
+    return false;
+  }
+
+  /// Failed HLS materialisation counts, used for the bounded retry above.
+  final Map<String, int> _hlsMaterialiseFailures = <String, int>{};
+
+  Future<bool> _downloadHlsToFile(Song song, String playlistUrl) async {
+    final downloader = SoundCloudHlsDownloader();
+    try {
+      final offlineDir = await _getPersistentOfflineDirectory();
+      final tempFile = File(p.join(offlineDir.path, '${song.id}.hls.tmp'));
+      final bytes = await downloader.download(
+        playlistUrl: playlistUrl,
+        target: tempFile,
+      );
+      if (bytes < _minimumAudioFileBytes) {
+        debugPrint(
+          '[MusicPlayerController] HLS download incomplete for ${song.title} '
+          '($bytes bytes)',
+        );
+        return false;
+      }
+
+      final targetFile = File(p.join(offlineDir.path, '${song.id}.m4a'));
+      if (await targetFile.exists()) {
+        try {
+          await targetFile.delete();
+        } catch (_) {}
+      }
+      await tempFile.rename(targetFile.path);
+
+      _invalidateOfflineLookup(song.id);
+      _downloadedSongIds.add(song.id);
+      LocalDatabase.notifyAudioCacheChanged();
+
+      song.audioUrl = targetFile.path;
+      song.isPreview = false;
+      song.isYouTubeAudio = false;
+      _syncSongPathToQueueAndDb(song);
+      _locatingStatusVersion++;
+      notifyListeners();
+      debugPrint(
+        '[MusicPlayerController] Materialised SoundCloud HLS ${song.title} '
+        '($bytes bytes) to: ${targetFile.path}',
+      );
+
+      try {
+        final db = LocalDatabase.instance;
+        await db.ensureImportedSong(
+          id: song.id,
+          title: song.title,
+          artist: song.artist,
+          album: song.album,
+          durationMs: song.duration.inMilliseconds,
+          imageUrl: song.imageUrl,
+          lyrics: song.lyrics,
+          genre: song.genre,
+          isPreview: false,
+          isYouTubeAudio: false,
+          youtubeVideoId: song.youtubeVideoId,
+          isExplicit: song.isExplicit,
+        );
+        await db.updateImportedSong(
+          id: song.id,
+          audioUrl: targetFile.path,
+          isPreview: false,
+          isYouTubeAudio: false,
+          durationMs: song.duration.inMilliseconds,
+          imageUrl: song.imageUrl,
+          lyrics: song.lyrics,
+        );
+      } catch (e) {
+        debugPrint('[MusicPlayerController] persist HLS error: $e');
+      }
+      return true;
+    } catch (e) {
+      debugPrint(
+        '[MusicPlayerController] HLS materialise error for ${song.title}: $e',
+      );
+      return false;
+    } finally {
+      downloader.dispose();
     }
   }
 
@@ -3806,11 +4341,24 @@ class MusicPlayerController extends ChangeNotifier {
 
     final isImported = _isDownloadableCatalogId(song.id);
     final isFallbackAudio = _offlineFallbackIds.contains(song.id);
+    // A SoundCloud HLS playlist is not directly playable, but it is a real
+    // full-length stream: attach it so the row leaves LOCATING, then
+    // [_materializeHlsAudio] turns it into a normal file.
     final isM3u8 =
-        enrichment.previewUrl?.toLowerCase().contains('.m3u8') ?? false;
+        !enrichment.isHlsAudio &&
+        (enrichment.previewUrl?.toLowerCase().contains('.m3u8') ?? false);
+    // Offline-first: a downloaded full file already on disk must never be
+    // replaced by a remote stream. Doing so threw away the only source that
+    // works without a connection and queued a hot-swap reload on every
+    // background enrichment pass (audible restarts at the start of playback).
+    final hasCompleteLocalAudio =
+        !song.isPreview &&
+        _isLocalAudioPath(song.audioUrl) &&
+        File(song.audioUrl).existsSync();
     final shouldAttachAudio =
         enrichment.hasAudio &&
         !isM3u8 &&
+        !hasCompleteLocalAudio &&
         (!isImported || enrichment.isFullTrack) &&
         (!song.hasAudio ||
             song.audioUrl.contains('googlevideo.com') ||
@@ -3820,7 +4368,16 @@ class MusicPlayerController extends ChangeNotifier {
             ((song.isYouTubeAudio ||
                     song.audioUrl.contains('googlevideo.com')) &&
                 enrichment.isFullTrack));
-    if (shouldAttachAudio) {
+    // Last line of defence: a quarantined row may only accept local audio.
+    // Attaching another remote signature would flip NOT FOUND back to FULL
+    // TRACK even though playback is guaranteed to fail. A manual retry clears
+    // the marker first, so user-initiated recovery still works.
+    final attachesRemoteStream =
+        (enrichment.previewUrl ?? '').startsWith('http');
+    if (shouldAttachAudio &&
+        !(attachesRemoteStream && _abandonedRemoteIds.contains(song.id))) {
+      final previousAudioUrl = song.audioUrl;
+      final previousWasPreview = song.isPreview;
       final resumePosition = song.id == currentSong?.id
           ? _currentPosition
           : Duration.zero;
@@ -3850,6 +4407,7 @@ class MusicPlayerController extends ChangeNotifier {
         // no longer applies to this track.
         _fullUpgradeAttemptedAt.remove(song.id);
         _fullTrackAttemptCount.remove(song.id);
+        _clearLocatingExhausted(song.id);
       }
       _unavailableIds.remove(song.id);
       // Hot-swap only when this song is the one the player actually loaded
@@ -3861,7 +4419,39 @@ class MusicPlayerController extends ChangeNotifier {
           (_isPlaying ||
               _loadingSongId == song.id ||
               (_audioPlayerHasSource && _loadedSongId == song.id));
-      if (isLoadedCurrentSong) {
+      // Re-applying the same stream must not reload the player. Background
+      // enrichment can return the identical URL (or the same googlevideo
+      // signature) while the song is mid-load; treating that as a change
+      // queued a hot-swap after every attempt and looped forever.
+      //
+      // Compare against the exact source handed to the player. Enrichment
+      // usually lands on a *copy* of the song, and `currentSong.audioUrl` can
+      // still be empty while a load is resolving its cached file, which made
+      // the same downloaded file look like a brand new stream.
+      final loadedUrlMatches =
+          _audioPlayerHasSource && _loadedSongId == song.id;
+      final isSameInstance = identical(song, currentSong);
+      final referenceAudioUrl = loadedUrlMatches
+          ? (_loadedAudioUrl ?? '')
+          : (isSameInstance
+              ? previousAudioUrl
+              : (currentSong?.audioUrl ?? previousAudioUrl));
+      final referenceWasPreview = loadedUrlMatches
+          ? _loadedWasPreview
+          : (isSameInstance
+              ? previousWasPreview
+              : (currentSong?.isPreview ?? previousWasPreview));
+      // There is nothing to swap away from when no source is attached yet:
+      // the in-flight load (or the next play) already resolves the updated
+      // song, so queuing a reload here only restarted playback.
+      final audioSourceChanged = referenceAudioUrl.isNotEmpty &&
+          _audioSourceChanged(
+            referenceAudioUrl,
+            referenceWasPreview,
+            song.audioUrl,
+            song.isPreview,
+          );
+      if (isLoadedCurrentSong && audioSourceChanged) {
         if (_isPlaying) {
           _unmuteOnPlay();
           _lastPositionUpdate = DateTime.now();
@@ -3880,7 +4470,11 @@ class MusicPlayerController extends ChangeNotifier {
           _pendingHotSwapReload = true;
           _pendingHotSwapResumePosition = resumePosition;
           _logDiag(
-            'hot-swap deferred — play in progress, queued reload',
+            'hot-swap deferred — play in progress, queued reload '
+            '${_audioSourceLabel(referenceAudioUrl)} -> '
+            '${_audioSourceLabel(song.audioUrl)} '
+            '(preview $referenceWasPreview -> ${song.isPreview}, '
+            'full=${enrichment.isFullTrack})',
             song: song,
           );
         }
@@ -3905,12 +4499,19 @@ class MusicPlayerController extends ChangeNotifier {
     }
 
     if (changed &&
+        !enrichment.isHlsAudio &&
         (_isDownloadableCatalogId(song.id) ||
             song.id.startsWith('discovery-'))) {
       try {
+        // Keep live YouTube URLs in the DB: discarding them made every
+        // YouTube-backed track return to LOCATING after a restart even when
+        // the URL was still valid. Expiry is checked on load/playback, and
+        // `_isGoogleVideoExpired` forces a refresh only when needed.
+        // SoundCloud HLS playlists do expire, so they are never persisted:
+        // `_materializeHlsAudio` writes the downloaded file path instead.
         final dbAudioUrl =
-            (song.audioUrl.contains('googlevideo.com') ||
-                song.audioUrl.toLowerCase().contains('.m3u8'))
+            song.audioUrl.toLowerCase().contains('.m3u8') ||
+                SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(song.audioUrl)
             ? ''
             : song.audioUrl;
         unawaited(
@@ -4227,6 +4828,9 @@ class MusicPlayerController extends ChangeNotifier {
   /// an HLS playlist, a local path, or a known preview URL.
   bool _needsFreshDownloadUrl(Song song, String url) {
     if (url.isEmpty) return true;
+    // A SoundCloud HLS playlist is a usable full-length source: it gets
+    // materialised into a file instead of being re-resolved.
+    if (SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(url)) return false;
     final lower = url.toLowerCase();
     if (lower.contains('.m3u8')) return true;
     if (_isGoogleVideoExpired(url)) return true;
@@ -4485,6 +5089,79 @@ class MusicPlayerController extends ChangeNotifier {
     }
   }
 
+  /// Whether playback should look for a fresher stream before loading.
+  ///
+  /// A live googlevideo URL only needs a fresh resolve once it has expired.
+  /// Treating every googlevideo URL as stale made each hot-swap reload
+  /// re-enrich the song, which queued another reload: an endless loop of play
+  /// requests on a perfectly playable track.
+  static bool _needsFreshStream(Song song) {
+    if (song.title.toLowerCase().contains('lips of an angel')) return false;
+    final url = song.audioUrl;
+    final hasUsableGoogleVideo =
+        url.contains('googlevideo.com') && !_isGoogleVideoExpired(url);
+    return song.isSilentPlaceholder ||
+        url.isEmpty ||
+        song.isPreview ||
+        (url.contains('googlevideo.com') && !hasUsableGoogleVideo) ||
+        url.toLowerCase().contains('.m3u8');
+  }
+
+  /// Records what the player is actually holding. Used by the hot-swap guard:
+  /// a resolved source is only a "change" when it differs from this exact URL.
+  void _markSourceLoaded(Song song) {
+    _audioPlayerHasSource = true;
+    _loadedSongId = song.id;
+    _loadedAudioUrl = song.audioUrl;
+    _loadedWasPreview = song.isPreview;
+  }
+
+  /// True when [url] points at a file on the device (not a remote stream or a
+  /// bundled asset).
+  static bool _isLocalAudioPath(String url) {
+    if (url.isEmpty) return false;
+    final lower = url.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return false;
+    }
+    if (lower.startsWith('assets/') || lower.startsWith('asset:/')) {
+      return false;
+    }
+    return true;
+  }
+
+  /// Short, log-safe description of an audio source (no signed query strings).
+  static String _audioSourceLabel(String url) {
+    if (url.isEmpty) return 'none';
+    final lower = url.toLowerCase();
+    if (lower.startsWith('assets/') || lower.startsWith('asset:/')) {
+      return 'asset';
+    }
+    if (lower.contains('.m3u8')) return 'hls';
+    if (lower.contains('googlevideo.com')) return 'googlevideo';
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return 'http:${_hostOf(url)}';
+    }
+    return 'local:${p.basename(url)}';
+  }
+
+  static bool _audioSourceChanged(
+    String previousAudioUrl,
+    bool previousWasPreview,
+    String newAudioUrl,
+    bool newIsPreview,
+  ) {
+    // The same file on disk is not a source change, even when only the
+    // preview flag differs. Reloading for that made a downloaded track
+    // restart several times right after playback began.
+    if (_isLocalAudioPath(previousAudioUrl) &&
+        _isLocalAudioPath(newAudioUrl) &&
+        p.basename(previousAudioUrl) == p.basename(newAudioUrl)) {
+      return false;
+    }
+    return previousAudioUrl != newAudioUrl || previousWasPreview != newIsPreview;
+  }
+
   static bool _isGoogleVideoExpired(String url) {
     if (!url.contains('googlevideo.com')) return false;
     final uri = Uri.tryParse(url);
@@ -4544,50 +5221,24 @@ class MusicPlayerController extends ChangeNotifier {
     final now = DateTime.now();
     var ok = false;
     try {
+      // Start every probe eagerly instead of wrapping each one in
+      // `Future<bool>(() async ...)`. That wrapper schedules a zero-duration
+      // timer per probe, which widget tests reported as "a timer is still
+      // pending" once the tree was disposed. A `.timeout` on the DNS lookup
+      // leaked the same way whenever an HTTP probe answered first: the timer
+      // survived until the resolver finished. The HTTP probes below already
+      // bound the whole check, so DNS needs no timeout of its own.
       ok = await _firstSuccess(<Future<bool>>[
-        Future<bool>(() async {
-          final res = await InternetAddress.lookup(
-            'dns.google',
-          ).timeout(const Duration(seconds: 2));
-          return res.isNotEmpty && res.first.rawAddress.isNotEmpty;
-        }),
-        Future<bool>(() async {
-          final res = await http
-              .get(
-                Uri.parse('http://connectivitycheck.gstatic.com/generate_204'),
-                headers: {
-                  'User-Agent': TrackEnrichmentService.browserUserAgent,
-                },
-              )
-              .timeout(const Duration(milliseconds: 2500));
-          // Any HTTP answer (even a 4xx or redirect) proves the network is up.
-          return res.statusCode > 0 && res.statusCode < 500;
-        }),
+        _probeDns(),
+        _probeHttp(
+          Uri.parse('http://connectivitycheck.gstatic.com/generate_204'),
+          useHead: false,
+        ),
         // Hosts this app really needs. Some carriers and Wi-Fi networks block
         // Google's check hosts while Spotify/iTunes work, so a Google-only
         // probe reported "offline" on a perfectly usable connection.
-        Future<bool>(() async {
-          final res = await http
-              .head(
-                Uri.parse('https://itunes.apple.com/'),
-                headers: {
-                  'User-Agent': TrackEnrichmentService.browserUserAgent,
-                },
-              )
-              .timeout(const Duration(milliseconds: 2500));
-          return res.statusCode > 0 && res.statusCode < 500;
-        }),
-        Future<bool>(() async {
-          final res = await http
-              .head(
-                Uri.parse('https://open.spotify.com/'),
-                headers: {
-                  'User-Agent': TrackEnrichmentService.browserUserAgent,
-                },
-              )
-              .timeout(const Duration(milliseconds: 2500));
-          return res.statusCode > 0 && res.statusCode < 500;
-        }),
+        _probeHttp(Uri.parse('https://itunes.apple.com/')),
+        _probeHttp(Uri.parse('https://open.spotify.com/')),
       ]);
     } catch (_) {
       ok = false;
@@ -4595,6 +5246,33 @@ class MusicPlayerController extends ChangeNotifier {
     _cachedOnline = ok;
     _lastOnlineCheck = now;
     return ok;
+  }
+
+  static Future<bool> _probeDns() async {
+    final res = await InternetAddress.lookup('dns.google');
+    return res.isNotEmpty && res.first.rawAddress.isNotEmpty;
+  }
+
+  /// Any HTTP answer (even a 4xx or redirect) proves the network is up.
+  static Future<bool> _probeHttp(Uri uri, {bool useHead = true}) async {
+    final res = useHead
+        ? await http
+            .head(
+              uri,
+              headers: {
+                'User-Agent': TrackEnrichmentService.browserUserAgent,
+              },
+            )
+            .timeout(const Duration(milliseconds: 2500))
+        : await http
+            .get(
+              uri,
+              headers: {
+                'User-Agent': TrackEnrichmentService.browserUserAgent,
+              },
+            )
+            .timeout(const Duration(milliseconds: 2500));
+    return res.statusCode > 0 && res.statusCode < 500;
   }
 
   /// Completes with `true` as soon as any probe succeeds, and with `false`
@@ -4707,6 +5385,26 @@ class MusicPlayerController extends ChangeNotifier {
   @visibleForTesting
   bool applyEnrichmentForTesting(Song song, TrackEnrichment enrichment) =>
       _applyEnrichment(song, enrichment);
+
+  /// Guards the hot-swap loop: a usable, unexpired googlevideo stream must not
+  /// trigger another enrichment pass on every play attempt.
+  @visibleForTesting
+  static bool needsFreshStreamForTesting(Song song) => _needsFreshStream(song);
+
+  /// Guards the hot-swap loop: re-applying an identical stream is a no-op.
+  @visibleForTesting
+  static bool audioSourceChangedForTesting({
+    required String previousAudioUrl,
+    required bool previousWasPreview,
+    required String newAudioUrl,
+    required bool newIsPreview,
+  }) =>
+      _audioSourceChanged(
+        previousAudioUrl,
+        previousWasPreview,
+        newAudioUrl,
+        newIsPreview,
+      );
 
   Future<void> _cacheAudioOffline(Song song) async {
     // Automatic caching is playback-only. Imports and background enrichment
@@ -4925,6 +5623,7 @@ class MusicPlayerController extends ChangeNotifier {
       if (s.id == song.id) {
         s.audioUrl = song.audioUrl;
         s.isPreview = song.isPreview;
+        s.isYouTubeAudio = song.isYouTubeAudio;
         s.duration = song.duration;
       }
     }
@@ -4932,14 +5631,15 @@ class MusicPlayerController extends ChangeNotifier {
       if (s.id == song.id) {
         s.audioUrl = song.audioUrl;
         s.isPreview = song.isPreview;
+        s.isYouTubeAudio = song.isYouTubeAudio;
         s.duration = song.duration;
       }
     }
     if (_isDownloadableCatalogId(song.id) || song.id.startsWith('discovery-')) {
       try {
         final dbAudioUrl =
-            (song.audioUrl.contains('googlevideo.com') ||
-                song.audioUrl.toLowerCase().contains('.m3u8'))
+            song.audioUrl.toLowerCase().contains('.m3u8') ||
+                SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(song.audioUrl)
             ? ''
             : song.audioUrl;
         unawaited(
@@ -5023,10 +5723,33 @@ class MusicPlayerController extends ChangeNotifier {
       _invalidateOfflineLookup(song.id);
     }
 
+    // A quarantined remote stream cannot produce a permanent download. Local
+    // files were handled above; a manual retry clears the marker first.
+    await _abandonedRemoteLoaded;
+    if (_abandonedRemoteIds.contains(song.id)) {
+      _logDiag('downloadSong skipped: remote stream quarantined', song: song);
+      return false;
+    }
+
     // Don't download over mobile data unless the user allowed it.
     if (!await _mayDownloadNow()) {
       _logDiag('downloadSong skipped: on mobile data', song: song);
       return false;
+    }
+
+    // Everything below resolves a remote stream. Without a connection the
+    // automatic download workers used to fire a full provider chain per track
+    // on every offline launch (dozens of doomed DNS lookups) instead of
+    // leaving the rows queued for the next online session.
+    if (!await _isDeviceOnline()) {
+      _logDiag('downloadSong skipped: offline', song: song);
+      return false;
+    }
+
+    // A SoundCloud HLS playlist is a full-length stream that has to be
+    // materialised before it can be stored.
+    if (SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(song.audioUrl)) {
+      if (await _materializeHlsAudio(song)) return true;
     }
 
     if (_cachingIds.contains(song.id)) return false;
@@ -5870,6 +6593,7 @@ class MusicPlayerController extends ChangeNotifier {
     _cancelStallWatchdog();
     _startTimer();
     _clearSilentRetry();
+    _playbackFailureCount.remove(_queue[_currentIndex].id);
     _playCurrentSongAudio();
     notifyListeners();
   }
@@ -5943,6 +6667,7 @@ class MusicPlayerController extends ChangeNotifier {
     _cancelStallWatchdog();
     _startTimer();
     _clearSilentRetry();
+    _playbackFailureCount.remove(_queue[_currentIndex].id);
     _playCurrentSongAudio();
     notifyListeners();
   }
@@ -5957,7 +6682,6 @@ class MusicPlayerController extends ChangeNotifier {
     for (final s in songs) {
       if (!seen.add(s.id)) continue;
       _fullUpgradeAttemptedAt.remove(s.id);
-      _fullTrackAttemptCount.remove(s.id);
       unique.add(s);
     }
     // Earlier rows (Quick Picks first) are located first, 2 at a time to prevent UI lag.
@@ -5974,7 +6698,6 @@ class MusicPlayerController extends ChangeNotifier {
     for (final s in songs) {
       if (!seen.add(s.id)) continue;
       _fullUpgradeAttemptedAt.remove(s.id);
-      _fullTrackAttemptCount.remove(s.id);
       unique.add(s);
     }
     _enrichImportedSongs(unique, fastImport: true, maxConcurrency: 4);
@@ -6014,7 +6737,6 @@ class MusicPlayerController extends ChangeNotifier {
     for (final s in targets) {
       if (!seen.add(s.id)) continue;
       _fullUpgradeAttemptedAt.remove(s.id);
-      _fullTrackAttemptCount.remove(s.id);
       unique.add(s);
     }
     _enrichImportedSongs(unique, fastImport: true, maxConcurrency: 6);
@@ -6109,6 +6831,9 @@ class MusicPlayerController extends ChangeNotifier {
     _cancelStallWatchdog();
     _startTimer();
     _clearSilentRetry();
+    // Explicit user action: a manual retry always starts a fresh recovery
+    // budget even if automatic recovery already gave up on this track.
+    _playbackFailureCount.remove(song.id);
     _playCurrentSongAudio();
     notifyListeners();
   }
@@ -6122,6 +6847,7 @@ class MusicPlayerController extends ChangeNotifier {
     _isPlaying = !_isPlaying;
     if (_isPlaying) {
       _completionHandled = false;
+      _playbackFailureCount.remove(currentSong!.id);
       _unmuteOnPlay();
       _activateAudioSession();
       _lastPositionUpdate = DateTime.now();
@@ -6729,6 +7455,18 @@ class MusicPlayerController extends ChangeNotifier {
     MediaItem mediaItem, {
     bool forceAsset = false,
   }) async {
+    // Materialise a SoundCloud HLS playlist before ExoPlayer sees it: the
+    // playlist URL is not a directly playable source and it expires.
+    if (SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(song.audioUrl)) {
+      final materialised = await _materializeHlsAudio(song);
+      if (materialised) {
+        final file = File(song.audioUrl);
+        if (file.existsSync()) {
+          return AudioSource.file(file.path, tag: mediaItem);
+        }
+      }
+    }
+
     // Drop unplayable .m3u8 or expired googlevideo streams so ExoPlayer is never sent unplayable sources
     if (song.audioUrl.toLowerCase().contains('.m3u8') ||
         (song.audioUrl.contains('googlevideo.com') &&
@@ -7007,6 +7745,18 @@ class MusicPlayerController extends ChangeNotifier {
       _notifyExplicitBlocked(song);
       return;
     }
+    // A row quarantined after two failed remote loads must not reuse a URL
+    // still attached to this in-memory instance (the startup merge used to keep
+    // one alive). Clearing it here makes playback fail fast, marks the row
+    // unavailable and advances the queue instead of stalling on a 403.
+    await _abandonedRemoteLoaded;
+    if (_abandonedRemoteIds.contains(song.id) &&
+        (song.audioUrl.startsWith('http://') ||
+            song.audioUrl.startsWith('https://'))) {
+      song.audioUrl = '';
+      song.isYouTubeAudio = false;
+      song.isPreview = false;
+    }
     // A stale half-fade from an interrupted transition must not leave the new
     // track quieter than the user's slider value. A completed fade-out sets
     // [_automixFadeInPending], which is the only case we keep the 0-volume.
@@ -7071,17 +7821,7 @@ class MusicPlayerController extends ChangeNotifier {
 
       // Opportunistic upgrade: if online and song is on fallback or preview,
       // fire background enrichment without blocking audible playback.
-      final isLipsOfAnAngel = song.title.toLowerCase().contains(
-        'lips of an angel',
-      );
-      final needsUpgrade =
-          !isLipsOfAnAngel &&
-          (song.isSilentPlaceholder ||
-              song.audioUrl.isEmpty ||
-              song.isPreview ||
-              song.audioUrl.contains('googlevideo.com') ||
-              song.audioUrl.toLowerCase().contains('.m3u8') ||
-              _isGoogleVideoExpired(song.audioUrl));
+      final needsUpgrade = _needsFreshStream(song);
 
       if (online && needsUpgrade && !_enrichingIds.contains(song.id)) {
         // Fire-and-forget. Awaiting enrichment here blocked playback for up to
@@ -7148,8 +7888,7 @@ class MusicPlayerController extends ChangeNotifier {
           'setAudioSource OK in ${DateTime.now().difference(loadStart).inMilliseconds}ms',
           song: song,
         );
-        _audioPlayerHasSource = true;
-        _loadedSongId = song.id;
+        _markSourceLoaded(song);
         _clearSilentRetry();
       } on MissingPluginException {
         _audioPlayerHasSource = false;
@@ -7165,6 +7904,14 @@ class MusicPlayerController extends ChangeNotifier {
         debugPrint(
           '[MusicPlayerController] Primary setAudioSource failed ($loadErr)',
         );
+        // A broken source (for example an expired YouTube signature that keeps
+        // answering 403) fails the same way no matter how often it is
+        // re-resolved. Allow one automatic retry, then mark the row
+        // unavailable and move on instead of looping forever.
+        if (_registerPlaybackFailure(song)) {
+          _abandonPlayback(song);
+          return;
+        }
         var recovered = false;
 
         // Re-resolve the stream: a fresh full-length source first (Saavn →
@@ -7213,8 +7960,7 @@ class MusicPlayerController extends ChangeNotifier {
               await _audioPlayer
                   .setAudioSource(retrySource)
                   .timeout(const Duration(seconds: 8));
-              _audioPlayerHasSource = true;
-              _loadedSongId = song.id;
+              _markSourceLoaded(song);
               recovered = true;
               // Crucial: clear pending hot swap so finally block does not trigger a duplicate reload
               _pendingHotSwapReload = false;
@@ -7253,8 +7999,7 @@ class MusicPlayerController extends ChangeNotifier {
               await _audioPlayer
                   .setAudioSource(fallbackSource)
                   .timeout(const Duration(seconds: 6));
-              _audioPlayerHasSource = true;
-              _loadedSongId = song.id;
+              _markSourceLoaded(song);
               recovered = true;
             } catch (fbErr) {
               debugPrint(
@@ -7408,6 +8153,13 @@ class MusicPlayerController extends ChangeNotifier {
     }
 
     // 2. Online stream recovery: if connected, try to refresh full stream
+    // Bounded retry: the custom fallback above already gave the cached file a
+    // chance. A second failed load means automatic recovery is done; retrying
+    // the same broken source is what left the player stuck before.
+    if (_registerPlaybackFailure(song)) {
+      _abandonPlayback(song);
+      return;
+    }
     final online = await _isDeviceOnline();
     if (online && !_ytRefreshAttemptedIds.contains(song.id)) {
       _ytRefreshAttemptedIds.add(song.id);
@@ -7434,6 +8186,11 @@ class MusicPlayerController extends ChangeNotifier {
       } catch (_) {}
     }
 
+    // Recovery can outlive the track it started for (the queue may have
+    // auto-skipped or the user tapped another song). Never let that stale
+    // pass replace or skip the track that is actually playing now.
+    if (_disposed || song.id != currentSong?.id) return;
+
     // 3. Offline Fallback: Only play bundled audio if a genuine matching asset exists for THIS song (title match)
     final matchingAsset = _cleanAssetUri(_getOfflineAssetFallback(song));
     if (matchingAsset.isNotEmpty) {
@@ -7454,8 +8211,7 @@ class MusicPlayerController extends ChangeNotifier {
         await _audioPlayer
             .setAudioSource(fallbackSource)
             .timeout(const Duration(seconds: 6));
-        _audioPlayerHasSource = true;
-        _loadedSongId = song.id;
+        _markSourceLoaded(song);
         _lastPositionUpdate = DateTime.now();
         _unmuteOnPlay();
         _activateAudioSession();

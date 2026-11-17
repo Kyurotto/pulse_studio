@@ -28,6 +28,18 @@ class LocalDatabase {
   /// Real user IDs must never collide with these values.
   static const guestUserIds = {'default_user', '1'};
 
+  /// Playlist id prefixes used by the Explore radio stations.
+  ///
+  /// Explore radios only ever hold a single canonical row per station. A
+  /// Spotify import with the same title (for example "Hev Abi Radio") is a
+  /// separate *library* playlist, so the two must never be collapsed into
+  /// one another: doing that on load hides the import inside Explore and the
+  /// Library card vanishes after a restart.
+  static bool isExploreRadioPlaylistId(String id) =>
+      id.startsWith('radio-') ||
+      id.startsWith('dailymix-') ||
+      id.startsWith('artist-');
+
   Database? _database;
   String? _databaseFilePath;
   String? get databaseFilePath => _databaseFilePath;
@@ -2149,6 +2161,13 @@ class LocalDatabase {
   /// background backfill so no artist playlist or radio stays muted on
   /// LOCATING. Ordered oldest-playlist first for stable resume.
   ///
+  /// Spotify/iTunes rows are returned from any playlist. Catalog rows that
+  /// belong to a user's imported playlist (`playlist-*`) are returned too:
+  /// those rows are visible in the user's own library, so a YouTube bot-check
+  /// must not leave them on LOCATING forever. Seeded `radio-*` stations are
+  /// skipped here because their songs are resolved by the screens that show
+  /// them; including all of them would queue hundreds of lookups at launch.
+  ///
   /// Optional columns are detected at runtime: a database created by an older
   /// build may not have `youtube_video_id`/`is_explicit`/`is_deleted` yet, and
   /// the previous unconditional SELECT made this whole backfill return an
@@ -2184,7 +2203,17 @@ class LocalDatabase {
         INNER JOIN imported_playlist_songs ps ON ps.song_id = s.id
         INNER JOIN imported_playlists p ON p.id = ps.playlist_id
         WHERE (s.audio_url IS NULL OR s.audio_url = '' OR s.is_preview = 1)
-          AND (s.id LIKE 'spotify-%' OR s.id LIKE 'itunes-%')
+          AND (
+            s.id LIKE 'spotify-%' OR s.id LIKE 'itunes-%'
+            OR (
+              p.id LIKE 'playlist-%'
+              AND (
+                s.id LIKE 'radio-%' OR s.id LIKE 'artist-%'
+                OR s.id LIKE 'dm-%' OR s.id LIKE 'dyn-%'
+                OR s.id LIKE 'discovery-%' OR s.id LIKE 'recent-%'
+              )
+            )
+          )
           $notDeleted
         ORDER BY p.created_at ASC, ps.position ASC
         LIMIT ?
@@ -2359,6 +2388,11 @@ class LocalDatabase {
       final playlistId = playlist['id'] as String;
       final rawTitle = playlist['title'] as String? ?? '';
       final titleKey = rawTitle.toLowerCase().trim();
+      // Only collapse duplicate rows of the same kind. A library import titled
+      // "X Radio" is not the Explore radio station "X Radio" even though the
+      // titles match, and keeping the keys apart prevents the import from
+      // being swallowed by the older radio row on every reload.
+      final mergeKey = '${isExploreRadioPlaylistId(playlistId)}|$titleKey';
       final songs = songsByPlaylist[playlistId] ?? <Map<String, dynamic>>[];
 
       List<int>? gradientColors;
@@ -2372,8 +2406,8 @@ class LocalDatabase {
         } catch (_) {}
       }
 
-      if (titleKey.isNotEmpty && titleIndexMap.containsKey(titleKey)) {
-        final existingIdx = titleIndexMap[titleKey]!;
+      if (titleKey.isNotEmpty && titleIndexMap.containsKey(mergeKey)) {
+        final existingIdx = titleIndexMap[mergeKey]!;
         final existingPlaylist = results[existingIdx];
         final existingSongs =
             existingPlaylist['songs'] as List<Map<String, dynamic>>;
@@ -2401,7 +2435,7 @@ class LocalDatabase {
         'songs': songs,
       };
       if (titleKey.isNotEmpty) {
-        titleIndexMap[titleKey] = results.length;
+        titleIndexMap[mergeKey] = results.length;
       }
       results.add(resMap);
     }

@@ -255,6 +255,7 @@ class _TrackListViewState extends State<TrackListView> {
                   showAlbum: showAlbum,
                   showPlays: showPlays,
                   isCompact: isCompact,
+                  locatingExhausted: controller.isLocatingExhausted(song.id),
                   onTap: () {
                     if (onSongTap != null) {
                       onSongTap(song);
@@ -303,6 +304,7 @@ class _TrackRow extends StatefulWidget {
   final bool showAlbum;
   final bool showPlays;
   final bool isCompact;
+  final bool locatingExhausted;
   final VoidCallback onTap;
   final VoidCallback onLikeToggle;
   final VoidCallback onAddToQueue;
@@ -317,6 +319,7 @@ class _TrackRow extends StatefulWidget {
     required this.showAlbum,
     required this.showPlays,
     required this.isCompact,
+    required this.locatingExhausted,
     required this.onTap,
     required this.onLikeToggle,
     required this.onAddToQueue,
@@ -560,36 +563,41 @@ class _TrackRowState extends State<_TrackRow> {
 
   Widget _buildInlineBadge(Song song) {
     if (!song.hasAudio) {
+      final exhausted = widget.locatingExhausted;
+      final color = exhausted
+          ? AppTheme.textMutedOf(context)
+          : AppTheme.accentPink;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
         decoration: BoxDecoration(
-          color: AppTheme.accentPink.withValues(alpha: 0.15),
+          color: color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: AppTheme.accentPink.withValues(alpha: 0.4),
+            color: color.withValues(alpha: 0.4),
             width: 1,
           ),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              width: 7,
-              height: 7,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                color: AppTheme.accentPink,
+            if (!exhausted)
+              const SizedBox(
+                width: 7,
+                height: 7,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.5,
+                  color: AppTheme.accentPink,
+                ),
               ),
-            ),
-            SizedBox(width: 4),
+            if (!exhausted) const SizedBox(width: 4),
             Flexible(
               child: Text(
-                'LOCATING AUDIO',
+                exhausted ? 'NOT FOUND' : 'LOCATING AUDIO',
                 style: TextStyle(
                   fontSize: 8.5,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 0.4,
-                  color: AppTheme.accentPink,
+                  color: color,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

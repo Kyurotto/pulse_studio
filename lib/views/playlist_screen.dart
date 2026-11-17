@@ -1364,35 +1364,40 @@ class _PlaylistSongTile extends StatelessWidget {
 
   Widget _buildTrackBadge(Song song) {
     if (!song.hasAudio) {
+      // Keep retrying in the background, but stop claiming to be "locating"
+      // forever once several full-track lookups have failed.
+      final exhausted = controller.isLocatingExhausted(song.id);
+      final color = exhausted ? AppTheme.textMuted : AppTheme.accentPink;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
         decoration: BoxDecoration(
           color: Colors.black,
           borderRadius: BorderRadius.circular(3),
           border: Border.all(
-            color: AppTheme.accentPink.withValues(alpha: 0.6),
+            color: color.withValues(alpha: 0.6),
             width: 1,
           ),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              width: 6,
-              height: 6,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.2,
-                color: AppTheme.accentPink,
+            if (!exhausted)
+              const SizedBox(
+                width: 6,
+                height: 6,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.2,
+                  color: AppTheme.accentPink,
+                ),
               ),
-            ),
-            SizedBox(width: 3),
+            if (!exhausted) const SizedBox(width: 3),
             Text(
-              'LOCATING',
+              exhausted ? 'NOT FOUND' : 'LOCATING',
               style: TextStyle(
                 fontSize: 8,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.2,
-                color: AppTheme.accentPink,
+                color: color,
               ),
             ),
           ],

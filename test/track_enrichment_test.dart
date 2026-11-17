@@ -646,6 +646,74 @@ void main() {
       service.dispose();
     });
 
+    test('accepts a fragmented-MP4 HLS transcode as a full-length stream', () async {
+      final service = serviceFor((request) async {
+        if (request.url.host.startsWith('saavn.')) {
+          return http.Response('not found', 404);
+        }
+        if (request.url.host == 'soundcloud.com') {
+          return http.Response(
+            '<html><head><script src="https://a-v2.sndcdn.com/assets/55-app.js"></script></head></html>',
+            200,
+          );
+        }
+        if (request.url.host == 'a-v2.sndcdn.com') {
+          return http.Response('window.config={client_id:"mock_sc_client_id_123456789012"};', 200);
+        }
+        if (request.url.host == 'api-v2.soundcloud.com' &&
+            request.url.path == '/search/tracks') {
+          return http.Response(
+            jsonEncode({
+              'collection': [
+                {
+                  'title': 'Burgis',
+                  'duration': 209000,
+                  'user': {'username': 'Flow G'},
+                  'media': {
+                    'transcodings': [
+                      {
+                        'url': 'https://api-v2.soundcloud.com/media/stream/hls-mp4',
+                        'format': {
+                          'protocol': 'hls',
+                          'mime_type': 'audio/mp4; codecs="mp4a.40.2"',
+                        },
+                      }
+                    ]
+                  }
+                }
+              ]
+            }),
+            200,
+          );
+        }
+        if (request.url.host == 'api-v2.soundcloud.com' &&
+            request.url.path == '/media/stream/hls-mp4') {
+          return http.Response(
+            jsonEncode({
+              'url':
+                  'https://playback.media-streaming.soundcloud.cloud/x/aac_160k/y/playlist.m3u8?expires=1&Signature=abc',
+            }),
+            200,
+          );
+        }
+        return http.Response('not found', 404);
+      });
+
+      final enrichment = await service.enrichTrack(
+        title: 'Burgis',
+        artist: 'Flow G & Hev Abi',
+        duration: const Duration(seconds: 209),
+      );
+
+      expect(
+        enrichment.previewUrl,
+        startsWith('https://playback.media-streaming.soundcloud.cloud/'),
+      );
+      expect(enrichment.isFullTrack, isTrue);
+      expect(enrichment.isHlsAudio, isTrue);
+      service.dispose();
+    });
+
     test('rejects SoundCloud HLS m3u8 streams and falls back to iTunes preview', () async {
       final service = serviceFor((request) async {
         if (request.url.host.startsWith('saavn.')) {
@@ -710,6 +778,65 @@ void main() {
       // Must NOT be the SoundCloud HLS stream; must fall back to the playable iTunes preview
       expect(enrichment.previewUrl, 'https://audio-ssl.itunes.apple.com/kathang-isip.m4a');
       expect(enrichment.isFullTrack, isFalse);
+      service.dispose();
+    });
+
+    test('reads the api client from hydration and refreshes it after a 401', () async {
+      var refreshedLookups = 0;
+      final service = serviceFor((request) async {
+        if (request.url.host.startsWith('saavn.')) {
+          return http.Response('not found', 404);
+        }
+        if (request.url.host == 'soundcloud.com') {
+          refreshedLookups++;
+          return http.Response(
+            '<script>window.__sc_hydration = [{"hydratable":"apiClient",'
+            '"data":{"id":"fresh_sc_client_id_1234567890",'
+            '"isExpiring":true}}];</script>',
+            200,
+          );
+        }
+        if (request.url.host == 'api-v2.soundcloud.com' &&
+            request.url.path == '/search/tracks') {
+          final cid = request.url.queryParameters['client_id'];
+          if (cid != 'fresh_sc_client_id_1234567890') {
+            return http.Response('unauthorized', 401);
+          }
+          return jsonOk({
+            'collection': [
+              {
+                'title': 'Mossa Downtown',
+                'duration': 162000,
+                'user': {'username': 'Hev Abi'},
+                'media': {
+                  'transcodings': [
+                    {
+                      'url':
+                          'https://api-v2.soundcloud.com/media/stream/mossa',
+                      'format': {'protocol': 'progressive'},
+                    }
+                  ]
+                }
+              }
+            ]
+          });
+        }
+        if (request.url.host == 'api-v2.soundcloud.com' &&
+            request.url.path == '/media/stream/mossa') {
+          return jsonOk({'url': 'https://cf-media.sndcdn.com/mossa.mp3'});
+        }
+        return http.Response('not found', 404);
+      });
+
+      final enrichment = await service.enrichTrack(
+        title: 'Mossa Downtown',
+        artist: 'Hev Abi, gins&melodies',
+        duration: const Duration(seconds: 162),
+      );
+
+      expect(refreshedLookups, greaterThanOrEqualTo(1));
+      expect(enrichment.previewUrl, 'https://cf-media.sndcdn.com/mossa.mp3');
+      expect(enrichment.isFullTrack, isTrue);
       service.dispose();
     });
   });

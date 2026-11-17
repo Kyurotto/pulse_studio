@@ -146,10 +146,24 @@ void main() {
       MusicPlayerController.requiresStrictYouTubeForTesting(song('radio-opm-1')),
       isTrue,
     );
+    // Dynamic radio rows are merged into imported playlists. They must stay
+    // flexible so a YouTube bot-check cannot leave the user's playlist on
+    // LOCATING while SoundCloud has the same full track.
     expect(
       MusicPlayerController.requiresStrictYouTubeForTesting(
-        song('discovery-opm-1'),
+        song('radio-dyn-1733636732'),
       ),
+      isFalse,
+    );
+    // Flow G station rows are seeded once and merged into imported playlists
+    // too (e.g. "Makasarili Malambing"). A YouTube bot-check must not pin them
+    // to LOCATING while the SoundCloud fallback has the full track.
+    expect(
+      MusicPlayerController.requiresStrictYouTubeForTesting(song('radio-flowg-5')),
+      isFalse,
+    );
+    expect(
+      MusicPlayerController.requiresStrictYouTubeForTesting(song('discovery-opm-1')),
       isTrue,
     );
   });
