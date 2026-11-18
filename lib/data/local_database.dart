@@ -811,6 +811,34 @@ class LocalDatabase {
     _syncToWorkspace();
   }
 
+  /// Replaces only the password hash for [id].
+  ///
+  /// Unlike [updateUserProfile] this never clears `backup_email`/`phone_number`,
+  /// so a password reset cannot silently wipe recovery details.
+  Future<void> updatePasswordHash({
+    required String id,
+    required String newPassword,
+  }) async {
+    final cleanPassword = newPassword.trim();
+    if (cleanPassword.length < 6) {
+      throw ArgumentError('Use a password with at least 6 characters.');
+    }
+    final db = await database;
+    final updated = await db.update(
+      'users',
+      {'password_hash': hashPassword(cleanPassword)},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (updated == 0) {
+      throw StateError('Account not found.');
+    }
+    try {
+      await db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch (_) {}
+    await _syncToWorkspace();
+  }
+
   Future<Map<String, Object?>?> getUserByEmail(String email) async {
     final db = await database;
     final results = await db.query(

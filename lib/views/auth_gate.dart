@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../auth/auth_service.dart';
 import '../data/local_database.dart';
 import '../theme/app_theme.dart';
+import 'forgot_password_dialog.dart';
 import 'music_dashboard_view.dart';
 
 class AuthGate extends StatelessWidget {
@@ -147,6 +148,32 @@ class _AuthViewState extends State<AuthView> {
     try {
       await LocalDatabase.instance.setPersistSession(_rememberMe);
     } catch (_) {}
+  }
+
+  void _openForgotPassword() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ForgotPasswordDialog(
+        initialEmail: _emailController.text.trim(),
+        onPasswordResetSuccess: (email) {
+          if (!mounted) return;
+          setState(() {
+            _isRegistering = false;
+            _emailController.text = email;
+            _passwordController.clear();
+            _confirmPasswordController.clear();
+          });
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Password reset successfully! Please sign in with your new password.',
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   void _showError(String message) {
@@ -360,36 +387,60 @@ class _AuthViewState extends State<AuthView> {
                       ],
                       const SizedBox(height: 12),
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: Checkbox(
-                              value: _rememberMe,
-                              activeColor: AppTheme.primary,
-                              onChanged: _isBusy
-                                  ? null
-                                  : (v) =>
-                                        setState(() => _rememberMe = v ?? true),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: _isBusy
-                                ? null
-                                : () => setState(
-                                    () => _rememberMe = !_rememberMe,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: Checkbox(
+                                  value: _rememberMe,
+                                  activeColor: AppTheme.primary,
+                                  onChanged: _isBusy
+                                      ? null
+                                      : (v) =>
+                                            setState(() => _rememberMe = v ?? true),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: _isBusy
+                                    ? null
+                                    : () => setState(
+                                        () => _rememberMe = !_rememberMe,
+                                      ),
+                                child: const Text(
+                                  'Remember me',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppTheme.textPrimary,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                            child: const Text(
-                              'Remember me',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppTheme.textPrimary,
-                                fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (!_isRegistering)
+                            Flexible(
+                              child: TextButton(
+                                onPressed: _isBusy ? null : _openForgotPassword,
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text(
+                                  'Forgot password?',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: AppTheme.textSecondary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          const Spacer(),
                         ],
                       ),
                       const SizedBox(height: 8),
