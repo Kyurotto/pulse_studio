@@ -786,6 +786,23 @@ class AuthService {
     );
   }
 
+  /// Sends Firebase's built-in password-reset email.
+  ///
+  /// Used only for accounts that exist in Firebase Auth but were never mirrored
+  /// into local SQLite. Accounts created on this device are reset locally by
+  /// the forgot-password dialog, because the Firebase project has email/password
+  /// sign-in disabled and those users only exist in SQLite.
+  Future<void> sendPasswordResetEmail(String email) async {
+    final auth = _auth;
+    if (auth == null) {
+      throw FirebaseAuthException(
+        code: 'configuration-not-found',
+        message: 'Email recovery is not available on this device.',
+      );
+    }
+    await auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
+  }
+
   Future<void> recordActivity({
     required String screen,
     String? trackTitle,
