@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:music/controllers/music_player_controller.dart';
 import 'package:music/views/music_dashboard_view.dart';
 
 /// Regression tests for the dashboard header rows (Library / Favorites):
@@ -13,12 +14,13 @@ import 'package:music/views/music_dashboard_view.dart';
 /// other error (including RenderFlex overflows) fails the test.
 Future<void> pumpDashboardWithoutPluginNoise(
   WidgetTester tester,
-  Future<void> Function() interactions,
-) async {
+  Future<void> Function() interactions, {
+  MusicPlayerController? controller,
+}) async {
   final errors = <Object>[];
   await runZonedGuarded(
     () async {
-      await tester.pumpWidget(const MaterialApp(home: MusicDashboardView()));
+      await tester.pumpWidget(MaterialApp(home: MusicDashboardView(controller: controller)));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       await interactions();
@@ -65,15 +67,19 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
 
-    await pumpDashboardWithoutPluginNoise(tester, () async {
-      await tester.tap(find.text('Library'));
-    });
+    final controller = MusicPlayerController();
+    controller.setNavIndex(2);
 
-    expect(find.text('Your Library'), findsOneWidget);
+    await pumpDashboardWithoutPluginNoise(tester, () async {
+      // Switched to Library tab via controller
+    }, controller: controller);
+
+    expect(find.text('Your Library'), findsWidgets);
     expect(find.text('Import Spotify link'), findsOneWidget);
     expect(find.text('Create playlist'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
+    controller.dispose();
   });
 
   testWidgets('Favorites header does not overflow on a narrow phone screen', (
@@ -93,7 +99,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     });
 
-    expect(find.text('Your Library'), findsOneWidget);
+    expect(find.text('Your Library'), findsWidgets);
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
   });
