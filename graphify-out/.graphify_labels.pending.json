@@ -173,6 +173,7 @@
   "171": "$0",
   "172": "Pulse Studio OTP backend (free Google Apps Script)",
   "173": "dk",
+  "174": "StatelessWidget",
   "175": "E",
   "176": "h1",
   "177": "Emitting a `design.md` from `study`",
@@ -183,5 +184,7 @@
   "182": ".$2$1",
   "183": ".$2$2",
   "184": ".$3$1",
-  "185": ".$3$3"
+  "185": ".$3$3",
+  "186": "profile_view.dart",
+  "187": "../data/local_database.dart"
 }
