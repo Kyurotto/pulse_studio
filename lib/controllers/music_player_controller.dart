@@ -6093,12 +6093,6 @@ class MusicPlayerController extends ChangeNotifier {
     }
     if (_cachingIds.contains(song.id)) return false;
 
-    await _abandonedRemoteLoaded;
-    if (_abandonedRemoteIds.contains(song.id)) {
-      _logDiag('downloadSong skipped: remote stream quarantined', song: song);
-      return false;
-    }
-
     if (!await _mayDownloadNow()) {
       _logDiag('downloadSong skipped: on mobile data', song: song);
       return false;

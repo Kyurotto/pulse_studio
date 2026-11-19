@@ -156,9 +156,9 @@
     "semantic_hash": ""
   },
   "lib/controllers/music_player_controller.dart": {
-    "mtime": 1795087395.655244,
-    "seen": 1795088036.8068342,
-    "ast_hash": "5a1271014c74ab73ab8f346cb767380d",
+    "mtime": 1795090251.8383086,
+    "seen": 1795091682.1556082,
+    "ast_hash": "01c06c077c56c224ca06a4ba55034b1e",
     "semantic_hash": ""
   },
   "lib/data/local_database.dart": {
