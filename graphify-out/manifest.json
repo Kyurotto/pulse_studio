@@ -156,9 +156,9 @@
     "semantic_hash": ""
   },
   "lib/controllers/music_player_controller.dart": {
-    "mtime": 1795065992.7606652,
-    "seen": 1795066314.4506657,
-    "ast_hash": "ec20378a85f42957cfa215411ab45003",
+    "mtime": 1795076615.976298,
+    "seen": 1795077041.6979775,
+    "ast_hash": "8ff6ed0d0bd2129b88cf39589776da67",
     "semantic_hash": ""
   },
   "lib/data/local_database.dart": {
@@ -234,8 +234,8 @@
     "semantic_hash": ""
   },
   "lib/views/music_dashboard_view.dart": {
-    "mtime": 1795062773.5142248,
-    "seen": 1795066314.4543512,
+    "mtime": 1795076213.2393365,
+    "seen": 1795077041.7018461,
     "ast_hash": "e36c3613076d93932589012659e779b8",
     "semantic_hash": ""
   },
@@ -270,14 +270,14 @@
     "semantic_hash": ""
   },
   "lib/widgets/right_panel.dart": {
-    "mtime": 1794723058.5227368,
-    "seen": 1794723927.2830465,
+    "mtime": 1795076213.2408562,
+    "seen": 1795077041.7031913,
     "ast_hash": "5cce36e6ac521b4a27aae50353ed3723",
     "semantic_hash": ""
   },
   "lib/widgets/sidebar_nav.dart": {
-    "mtime": 1794734884.8458228,
-    "seen": 1794735944.176912,
+    "mtime": 1795076213.2428727,
+    "seen": 1795077041.7031944,
     "ast_hash": "2a0a70f36ad35077bbf599b76496a599",
     "semantic_hash": ""
   },
@@ -402,8 +402,8 @@
     "semantic_hash": ""
   },
   "test/dashboard_overflow_test.dart": {
-    "mtime": 1794646007.1532457,
-    "seen": 1794647953.1237805,
+    "mtime": 1795076213.2459044,
+    "seen": 1795077041.7078469,
     "ast_hash": "9281a373f845808724d6cf144cc6beca",
     "semantic_hash": ""
   },
@@ -1722,8 +1722,8 @@
     "semantic_hash": ""
   },
   "test/library_and_discovery_radio_test.dart": {
-    "mtime": 1794723058.5277352,
-    "seen": 1794723927.2893891,
+    "mtime": 1795076213.2489052,
+    "seen": 1795077041.7093422,
     "ast_hash": "68ab0d24923a4622b89756c66657c031",
     "semantic_hash": ""
   },
@@ -1734,8 +1734,8 @@
     "semantic_hash": ""
   },
   "test/explore_radio_playlists_and_overflow_test.dart": {
-    "mtime": 1794723058.526734,
-    "seen": 1794723927.2884598,
+    "mtime": 1795076213.2479076,
+    "seen": 1795077041.7083526,
     "ast_hash": "709bd2d3f9349eaa91c38784cb2d2855",
     "semantic_hash": ""
   },
@@ -1830,8 +1830,8 @@
     "semantic_hash": ""
   },
   "test/bottom_nav_and_settings_drawer_test.dart": {
-    "mtime": 1794646007.1511338,
-    "seen": 1794647953.1237774,
+    "mtime": 1795076213.2438846,
+    "seen": 1795077041.707844,
     "ast_hash": "417326830b678056b4f920c761e6e7e6",
     "semantic_hash": ""
   },
