@@ -9,7 +9,7 @@ import '../data/local_database.dart';
 /// user passwords, and does NOT hold biometric templates.
 class BiometricAuthService {
   BiometricAuthService({LocalAuthentication? localAuth})
-      : _localAuth = localAuth ?? LocalAuthentication();
+    : _localAuth = localAuth ?? LocalAuthentication();
 
   static BiometricAuthService instance = BiometricAuthService();
 
@@ -31,21 +31,29 @@ class BiometricAuthService {
 
   /// Checks whether at least one biometric authentication method (fingerprint,
   /// Face ID, Touch ID, Windows Hello) is enrolled on the device.
-  Future<bool> isBiometricEnrolled() async {
+  ///
+  /// When [strict] is true, platform errors propagate instead of being
+  /// reported as "not enrolled", so security-critical callers can fail closed.
+  Future<bool> isBiometricEnrolled({bool strict = false}) async {
     if (!isPlatformSupported) return false;
     try {
       final available = await _localAuth.getAvailableBiometrics();
       return available.isNotEmpty;
-    } on LocalAuthException {
-      return false;
     } catch (_) {
+      if (strict) rethrow;
       return false;
     }
   }
 
   /// Returns whether Biometric Unlock is enabled for the specified account ID
   /// (Firebase UID or local SQLite user ID) on this device.
-  Future<bool> isBiometricUnlockEnabled(String accountId) async {
+  ///
+  /// When [strict] is true, storage errors propagate instead of being
+  /// reported as "disabled", so security-critical callers can fail closed.
+  Future<bool> isBiometricUnlockEnabled(
+    String accountId, {
+    bool strict = false,
+  }) async {
     if (!isPlatformSupported || accountId.isEmpty) return false;
     try {
       final enabled = await LocalDatabase.instance.getSetting(
@@ -56,6 +64,7 @@ class BiometricAuthService {
       );
       return enabled == 'true' && storedId == accountId;
     } catch (_) {
+      if (strict) rethrow;
       return false;
     }
   }
@@ -67,7 +76,8 @@ class BiometricAuthService {
   Future<bool> authenticateForUnlock({String? customReason}) async {
     if (!isPlatformSupported) return false;
     final isWindows = defaultTargetPlatform == TargetPlatform.windows;
-    final reason = customReason ??
+    final reason =
+        customReason ??
         (isWindows
             ? 'Verify your identity with Windows Hello to unlock Pulse Studio'
             : 'Unlock Pulse Studio');
@@ -93,10 +103,7 @@ class BiometricAuthService {
         keyBiometricUnlockEnabled,
         'true',
       );
-      await LocalDatabase.instance.setSetting(
-        keyBiometricAccountId,
-        accountId,
-      );
+      await LocalDatabase.instance.setSetting(keyBiometricAccountId, accountId);
     } catch (_) {}
   }
 

@@ -53,116 +53,139 @@ void main() {
   });
 
   Widget buildTestWidget() {
-    return MaterialApp(
-      theme: AppTheme.darkTheme,
-      home: const AuthGate(),
-    );
+    return MaterialApp(theme: AppTheme.darkTheme, home: const AuthGate());
   }
 
-  testWidgets('AuthGate shows normal password form (AuthView) when no session exists', (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() => tester.view.resetPhysicalSize());
+  testWidgets(
+    'AuthGate shows normal password form (AuthView) when no session exists',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
 
-    await tester.pumpWidget(buildTestWidget());
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
 
-    expect(find.text('Welcome back'), findsOneWidget);
-    expect(find.text('Sign in to continue to Pulse Studio.'), findsOneWidget);
-    expect(find.widgetWithText(ElevatedButton, 'Sign in'), findsOneWidget);
-    expect(find.byType(BiometricLockView), findsNothing);
-  });
+      expect(find.text('Welcome back'), findsOneWidget);
+      expect(find.text('Sign in to continue to Pulse Studio.'), findsOneWidget);
+      expect(find.widgetWithText(ElevatedButton, 'Sign in'), findsOneWidget);
+      expect(find.byType(BiometricLockView), findsNothing);
+    },
+  );
 
-  testWidgets('BiometricLockView renders lock UI with account info and unlock options', (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() => tester.view.resetPhysicalSize());
+  testWidgets(
+    'BiometricLockView renders lock UI with account info and unlock options',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
 
-    const testUser = LocalUser(
-      id: 'test_user_1',
-      email: 'john@example.com',
-      displayName: 'John Laurence',
-      role: 'user',
-    );
+      const testUser = LocalUser(
+        id: 'test_user_1',
+        email: 'john@example.com',
+        displayName: 'John Laurence',
+        role: 'user',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.darkTheme,
-        home: const BiometricLockView(user: testUser),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const BiometricLockView(user: testUser),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Pulse Studio Locked'), findsOneWidget);
-    expect(find.text('Welcome back, John Laurence'), findsOneWidget);
-    expect(find.text('john@example.com'), findsOneWidget);
-    expect(find.byIcon(Icons.fingerprint_rounded), findsOneWidget);
-    expect(find.text('Use Password Instead'), findsOneWidget);
-  });
+      expect(find.text('Pulse Studio Locked'), findsOneWidget);
+      expect(find.text('Welcome back, John Laurence'), findsOneWidget);
+      expect(find.text('john@example.com'), findsOneWidget);
+      expect(find.byIcon(Icons.fingerprint_rounded), findsOneWidget);
+      expect(find.text('Use Password Instead'), findsOneWidget);
+    },
+  );
 
-  testWidgets('BiometricLockView displays error message when biometric unlock fails', (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() => tester.view.resetPhysicalSize());
+  testWidgets(
+    'BiometricLockView displays error message when biometric unlock fails',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
 
-    // Inject failing biometric service
-    final fakeAuth = FakeLocalAuthentication(authResult: false);
-    BiometricAuthService.instance = BiometricAuthService(localAuth: fakeAuth);
+      // Inject failing biometric service
+      final fakeAuth = FakeLocalAuthentication(authResult: false);
+      BiometricAuthService.instance = BiometricAuthService(localAuth: fakeAuth);
 
-    const testUser = LocalUser(
-      id: 'test_user_2',
-      email: 'user2@example.com',
-      displayName: 'User Two',
-      role: 'user',
-    );
+      const testUser = LocalUser(
+        id: 'test_user_2',
+        email: 'user2@example.com',
+        displayName: 'User Two',
+        role: 'user',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.darkTheme,
-        home: const BiometricLockView(user: testUser),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const BiometricLockView(user: testUser),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    // Tap unlock button
-    final unlockBtn = find.byType(ElevatedButton);
-    expect(unlockBtn, findsOneWidget);
-    await tester.tap(unlockBtn);
-    await tester.pumpAndSettle();
+      // Tap unlock button
+      final unlockBtn = find.byType(ElevatedButton);
+      expect(unlockBtn, findsOneWidget);
+      await tester.tap(unlockBtn);
+      await tester.pumpAndSettle();
 
-    // Verify error message is displayed and view remains locked
-    expect(find.textContaining('Biometric verification was not completed'), findsOneWidget);
-    expect(find.text('Pulse Studio Locked'), findsOneWidget);
-  });
+      // Verify error message is displayed and view remains locked
+      expect(
+        find.textContaining('Biometric verification was not completed'),
+        findsOneWidget,
+      );
+      expect(find.text('Pulse Studio Locked'), findsOneWidget);
+    },
+  );
 
-  testWidgets('BiometricLockView Use Password Instead calls lockToPasswordSignIn and clears session', (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() => tester.view.resetPhysicalSize());
+  testWidgets(
+    'BiometricLockView Use Password Instead calls lockToPasswordSignIn and clears session',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
 
-    const testUser = LocalUser(
-      id: 'test_user_3',
-      email: 'user3@example.com',
-      displayName: 'User Three',
-      role: 'user',
-    );
+      const testUser = LocalUser(
+        id: 'test_user_3',
+        email: 'user3@example.com',
+        displayName: 'User Three',
+        role: 'user',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.darkTheme,
-        home: const BiometricLockView(user: testUser),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const BiometricLockView(user: testUser),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    final usePasswordBtn = find.widgetWithText(TextButton, 'Use Password Instead');
-    expect(usePasswordBtn, findsOneWidget);
+      final usePasswordBtn = find.widgetWithText(
+        TextButton,
+        'Use Password Instead',
+      );
+      expect(usePasswordBtn, findsOneWidget);
 
-    await tester.tap(usePasswordBtn);
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(usePasswordBtn);
+      // The lock is cleared only after clearActiveSession() succeeds, so wait
+      // for the real database cleanup instead of pumping simulated time.
+      expect(AuthService.instance.isAppLocked, isTrue);
+      for (var attempt = 0; attempt < 100; attempt++) {
+        await tester.runAsync(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        });
+        await tester.pump();
+        if (!AuthService.instance.isAppLocked) break;
+      }
 
-    expect(AuthService.instance.currentUser, isNull);
-    expect(AuthService.instance.isAppLocked, isFalse);
-  });
+      expect(AuthService.instance.currentUser, isNull);
+      expect(AuthService.instance.isAppLocked, isFalse);
+    },
+  );
 }

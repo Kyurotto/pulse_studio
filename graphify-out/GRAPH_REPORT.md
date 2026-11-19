@@ -1,7 +1,7 @@
 # Graph Report - music  (2026-11-19)
 
 ## Corpus Check
-- 273 files · ~410,658 words
+- 273 files · ~411,031 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 65 file(s) not represented in the graph (top: (none) 12, .xml 8, .xcconfig 8)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `7bc2835b`
+- Built from commit: `1bb76607`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 

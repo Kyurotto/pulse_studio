@@ -90,22 +90,32 @@ class _AccountsViewState extends State<AccountsView> {
   }
 
   Future<void> _forget(String email) async {
-    await LocalDatabase.instance.removeRememberedAccount(email);
-    await SavedCredentialStore.instance.deletePassword(email);
-
-    // If fingerprint login points at this account, clear it too.
     try {
-      final user = await LocalDatabase.instance.getUserByEmail(email);
-      final accountId = (user?['id'] as String?) ?? '';
-      if (accountId.isNotEmpty &&
-          await BiometricAuthService.instance.isBiometricUnlockEnabled(
-            accountId,
-          )) {
-        await BiometricAuthService.instance.disableBiometricUnlock();
-      }
-    } catch (_) {}
+      // Delete the saved credential first. If secure storage fails, keep the
+      // remembered account so the user can retry instead of reporting
+      // success while the password is still on the device.
+      await SavedCredentialStore.instance.deletePassword(email);
+      await LocalDatabase.instance.removeRememberedAccount(email);
 
-    await _loadAccounts();
+      // If fingerprint login points at this account, clear it too.
+      try {
+        final user = await LocalDatabase.instance.getUserByEmail(email);
+        final accountId = (user?['id'] as String?) ?? '';
+        if (accountId.isNotEmpty &&
+            await BiometricAuthService.instance.isBiometricUnlockEnabled(
+              accountId,
+            )) {
+          await BiometricAuthService.instance.disableBiometricUnlock();
+        }
+      } catch (_) {}
+
+      await _loadAccounts();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not forget account: $e')));
+    }
   }
 
   @override

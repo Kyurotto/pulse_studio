@@ -150,9 +150,9 @@
     "semantic_hash": "0c3e86af131f6a9e547c80b5ed058914"
   },
   "lib/auth/auth_service.dart": {
-    "mtime": 1794993242.0583365,
-    "seen": 1795057887.2594886,
-    "ast_hash": "4144b3a1da9dc97cae4db284463dd073",
+    "mtime": 1795061625.072677,
+    "seen": 1795061738.41652,
+    "ast_hash": "1e31fa300c17922c4beca59cb5ae0333",
     "semantic_hash": ""
   },
   "lib/controllers/music_player_controller.dart": {
@@ -216,9 +216,9 @@
     "semantic_hash": ""
   },
   "lib/views/auth_gate.dart": {
-    "mtime": 1794993355.5054853,
-    "seen": 1795057887.264086,
-    "ast_hash": "e36566b6d58966c1634c987845ddba6b",
+    "mtime": 1795061482.3047512,
+    "seen": 1795061738.4236116,
+    "ast_hash": "b85a3b575239771c3c3297ba4cb73081",
     "semantic_hash": ""
   },
   "lib/views/discovery_playlist_page.dart": {
@@ -1848,9 +1848,9 @@
     "semantic_hash": ""
   },
   "lib/views/accounts_view.dart": {
-    "mtime": 1794987331.2721503,
-    "seen": 1794989676.5139709,
-    "ast_hash": "17b20b923c04bd4867b52e9d5fb570e1",
+    "mtime": 1795061138.6768947,
+    "seen": 1795061738.4236062,
+    "ast_hash": "ae469f99d22c73e32a488ad1de71f280",
     "semantic_hash": ""
   },
   "lib/views/listening_stats_view.dart": {
@@ -1968,15 +1968,15 @@
     "semantic_hash": ""
   },
   "lib/services/biometric_auth_service.dart": {
-    "mtime": 1794983848.2373838,
-    "seen": 1794984826.7689016,
-    "ast_hash": "64cc3a4cb54d65350224175df021e83e",
+    "mtime": 1795061652.3414476,
+    "seen": 1795061738.4199004,
+    "ast_hash": "69e9d596605df346f1b6ea89c25ca275",
     "semantic_hash": ""
   },
   "test/auth_gate_biometric_test.dart": {
-    "mtime": 1794984697.439891,
-    "seen": 1794984826.777368,
-    "ast_hash": "2063ba50622e8933f95e9d4cd1a9fd9f",
+    "mtime": 1795061436.5806835,
+    "seen": 1795061738.4358048,
+    "ast_hash": "8cf6edfa0dda365569f5d341fe33b398",
     "semantic_hash": ""
   },
   "test/biometric_auth_service_test.dart": {
@@ -1986,9 +1986,9 @@
     "semantic_hash": ""
   },
   "lib/auth/saved_credential_store.dart": {
-    "mtime": 1794986022.169705,
-    "seen": 1794989676.5106328,
-    "ast_hash": "7e969c1602988a0b09d090ae76e8cdce",
+    "mtime": 1795061138.6768947,
+    "seen": 1795061738.4168983,
+    "ast_hash": "8d168bf1aa6b9a4bac8f84550a0339cd",
     "semantic_hash": ""
   },
   "test/auth_gate_saved_account_test.dart": {

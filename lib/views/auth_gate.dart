@@ -114,6 +114,13 @@ class _BiometricLockViewState extends State<BiometricLockView> {
     setState(() => _isBusy = true);
     try {
       await AuthService.instance.lockToPasswordSignIn();
+    } catch (_) {
+      // The session is still locked; let the user retry the cleanup.
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Could not clear the session. Please try again.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
@@ -556,8 +563,10 @@ class _AuthViewState extends State<AuthView> {
     try {
       await LocalDatabase.instance.setPersistSession(_rememberMe);
       if (!_rememberMe) {
-        await LocalDatabase.instance.removeRememberedAccount(email);
+        // Credential deletion can fail; only drop the remembered account
+        // once its saved password is gone so a retry is possible.
         await _credentials.deletePassword(email);
+        await LocalDatabase.instance.removeRememberedAccount(email);
         final accountId = AuthService.instance.currentUserId;
         if (accountId.isNotEmpty &&
             await _biometrics.isBiometricUnlockEnabled(accountId)) {

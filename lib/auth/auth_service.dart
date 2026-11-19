@@ -444,6 +444,11 @@ class AuthService {
             }
           });
         }
+        // The fallback restore must honor the biometric lock policy too.
+        // Never publish a restored protected session as unlocked.
+        if (_currentUser != null) {
+          await _checkBiometricLockAtStartup(currentUserId);
+        }
         _authController.add(_currentUser);
       }
     }();
@@ -906,18 +911,27 @@ class AuthService {
   }
 
   Future<void> _checkBiometricLockAtStartup(String accountId) async {
+    if (accountId.isEmpty) return;
     try {
-      if (accountId.isNotEmpty) {
-        final enabled = await BiometricAuthService.instance
-            .isBiometricUnlockEnabled(accountId);
-        final enrolled = await BiometricAuthService.instance
-            .isBiometricEnrolled();
-        if (enabled && enrolled) {
-          _isAppLocked = true;
-          if (!_lockController.isClosed) _lockController.add(true);
-        }
+      final biometrics = BiometricAuthService.instance;
+      if (!biometrics.isPlatformSupported) return;
+      final enabled = await biometrics.isBiometricUnlockEnabled(
+        accountId,
+        strict: true,
+      );
+      if (!enabled) return;
+      final enrolled = await biometrics.isBiometricEnrolled(strict: true);
+      if (enrolled) {
+        _isAppLocked = true;
+        if (!_lockController.isClosed) _lockController.add(true);
       }
-    } catch (_) {}
+    } catch (e) {
+      // Never publish a protected session as unlocked when the policy
+      // cannot be resolved.
+      debugPrint('[AuthService] Biometric lock check failed: $e');
+      _isAppLocked = true;
+      if (!_lockController.isClosed) _lockController.add(true);
+    }
   }
 
   /// Prompts for device biometrics to unlock the existing account session.
@@ -935,10 +949,21 @@ class AuthService {
   }
 
   /// Locks the app and reverts to the password sign-in screen.
+  ///
+  /// The lock stays published until the active session has actually been
+  /// cleared. If cleanup fails, the protected session remains locked.
   Future<void> lockToPasswordSignIn() async {
-    _isAppLocked = false;
-    if (!_lockController.isClosed) _lockController.add(false);
-    await signOut();
+    _isAppLocked = true;
+    if (!_lockController.isClosed) _lockController.add(true);
+    try {
+      await signOut();
+    } catch (e) {
+      // Keep the lock explicitly in case a future change reorders signOut's
+      // cleanup steps.
+      _isAppLocked = true;
+      if (!_lockController.isClosed) _lockController.add(true);
+      rethrow;
+    }
   }
 
   Future<void> signOut() async {
@@ -946,8 +971,6 @@ class AuthService {
     // sign-in screen offers fingerprint login for the remembered account.
     // It is cleared only when the user turns the setting off or forgets the
     // account.
-    _isAppLocked = false;
-    if (!_lockController.isClosed) _lockController.add(false);
     await LocalDatabase.instance.clearActiveSession();
     try {
       // Reset to the default so a stale "do not persist" flag from a
@@ -957,6 +980,10 @@ class AuthService {
     _currentUser = null;
     _isInitialized = true;
     _authController.add(null);
+    // Publish the unlocked state only after the session is cleared and the
+    // signed-out state is out.
+    _isAppLocked = false;
+    if (!_lockController.isClosed) _lockController.add(false);
     try {
       await _auth?.signOut();
     } catch (e) {

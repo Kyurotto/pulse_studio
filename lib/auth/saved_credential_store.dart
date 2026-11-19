@@ -49,12 +49,13 @@ class SavedCredentialStore {
     }
   }
 
+  /// Deletes the saved password for [email].
+  ///
+  /// Failures from secure storage propagate so callers can keep the
+  /// remembered account entry (and let the user retry) instead of reporting
+  /// success while the password remains on the device.
   Future<void> deletePassword(String email) async {
     if (email.trim().isEmpty) return;
-    try {
-      await _storage.delete(key: _keyFor(email));
-    } catch (error) {
-      debugPrint('[SavedCredentialStore] Could not delete password: $error');
-    }
+    await _storage.delete(key: _keyFor(email));
   }
 }
