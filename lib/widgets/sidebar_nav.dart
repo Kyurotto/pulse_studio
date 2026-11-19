@@ -228,96 +228,12 @@ class SidebarNav extends StatelessWidget {
               ),
       ),
       child: SafeArea(
+        top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Brand Header and Main Nav on desktop sidebar
-              if (!isDrawer) ...[
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          gradient: AppTheme.primaryGradient,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.primary.withValues(alpha: 0.4),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.graphic_eq_rounded,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'PULSE',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 2.0,
-                              color: AppTheme.textPrimaryOf(context),
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              Text(
-                                'STUDIO',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  letterSpacing: 1.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.primaryOf(context)
-                                      .withValues(alpha: 0.9),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                _buildDesktopNavItem(
-                  context: context,
-                  icon: Icons.home_rounded,
-                  label: 'Home',
-                  isSelected: controller.currentNavIndex == 0,
-                  onTap: () => controller.setNavIndex(0),
-                ),
-                _buildDesktopNavItem(
-                  context: context,
-                  icon: Icons.explore_rounded,
-                  label: 'Explore',
-                  isSelected: controller.currentNavIndex == 1,
-                  onTap: () => controller.setNavIndex(1),
-                ),
-                _buildDesktopNavItem(
-                  context: context,
-                  icon: Icons.library_music_rounded,
-                  label: 'Library',
-                  isSelected: controller.currentNavIndex == 2,
-                  badge: controller.libraryPlaylists.isNotEmpty
-                      ? '${controller.libraryPlaylists.length}'
-                      : null,
-                  onTap: () => controller.setNavIndex(2),
-                ),
-                const SizedBox(height: 16),
-              ],
-
               // Top Profile Card (Spotify Style)
               Container(
                 decoration: BoxDecoration(
@@ -487,89 +403,6 @@ class SidebarNav extends StatelessWidget {
                 onTap: () => _openSettings(context),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDesktopNavItem({
-    required BuildContext context,
-    required IconData icon,
-    required String label,
-    required bool isSelected,
-    String? badge,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 3),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              color: isSelected
-                  ? AppTheme.primaryOf(context).withValues(alpha: 0.15)
-                  : Colors.transparent,
-              border: Border.all(
-                color: isSelected
-                    ? AppTheme.primaryOf(context).withValues(alpha: 0.4)
-                    : Colors.transparent,
-                width: 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  size: 20,
-                  color: isSelected
-                      ? AppTheme.primaryOf(context)
-                      : AppTheme.textSecondaryOf(context),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w500,
-                      color: isSelected
-                          ? AppTheme.textPrimaryOf(context)
-                          : AppTheme.textSecondaryOf(context),
-                    ),
-                  ),
-                ),
-                if (badge != null)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppTheme.primaryOf(context).withValues(alpha: 0.3)
-                          : (AppTheme.isDark(context)
-                              ? Colors.white.withValues(alpha: 0.08)
-                              : Colors.black.withValues(alpha: 0.06)),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      badge,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: isSelected
-                            ? AppTheme.primaryOf(context)
-                            : AppTheme.textMutedOf(context),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
           ),
         ),
       ),

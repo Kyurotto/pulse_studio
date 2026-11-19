@@ -9,6 +9,7 @@ import '../services/biometric_auth_service.dart';
 import '../theme/app_theme.dart';
 import '../controllers/music_player_controller.dart';
 import '../widgets/sidebar_nav.dart';
+import '../widgets/desktop_library_sidebar.dart';
 import '../widgets/album_card.dart';
 import '../widgets/track_list_view.dart';
 import '../widgets/right_panel.dart';
@@ -24,7 +25,8 @@ import '../services/discovery_service.dart';
 import '../services/radio_discovery_service.dart';
 
 class MusicDashboardView extends StatefulWidget {
-  const MusicDashboardView({super.key});
+  final MusicPlayerController? controller;
+  const MusicDashboardView({super.key, this.controller});
 
   @override
   State<MusicDashboardView> createState() => _MusicDashboardViewState();
@@ -64,7 +66,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   @override
   void initState() {
     super.initState();
-    _controller = MusicPlayerController();
+    _controller = widget.controller ?? MusicPlayerController();
     _lastSongId = _controller.currentSong?.id;
     _lastIsPlaying = _controller.isPlaying;
     _lastNavIndex = _controller.currentNavIndex;
@@ -324,7 +326,9 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
     _pageScrollController
       ..removeListener(_onPageScroll)
       ..dispose();
-    _controller.dispose();
+    if (widget.controller == null) {
+      _controller.dispose();
+    }
     _searchTextController.dispose();
     super.dispose();
   }
@@ -645,64 +649,67 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth >= 1150;
         final isMobile = constraints.maxWidth < 750;
+        final isPhone = !kIsWeb && isMobile;
 
         return Scaffold(
           key: _scaffoldKey,
           backgroundColor: AppTheme.backgroundOf(context),
-          drawer: isMobile
-              ? Drawer(
-                  backgroundColor: AppTheme.isDark(context)
-                      ? const Color(0xFF121212)
-                      : AppTheme.lightSurface,
-                  child: SafeArea(
-                    child: SidebarNav(
-                      controller: _controller,
-                      isDrawer: true,
-                      selectedPlaylistId: _selectedPlaylistId,
-                      onPlaylistSelected: (id) {
-                        Navigator.of(context).pop();
-                        _openPlaylist(id);
-                      },
-                      onCreatePlaylist: () {
-                        Navigator.of(context).pop();
-                        _showCreatePlaylistDialog();
-                      },
-                      onImportSpotify: () {
-                        Navigator.of(context).pop();
-                        _importFromSpotify();
-                      },
-                    ),
-                  ),
-                )
-              : null,
+          drawer: Drawer(
+            backgroundColor: AppTheme.isDark(context)
+                ? const Color(0xFF121212)
+                : AppTheme.lightSurface,
+            child: SafeArea(
+              child: SidebarNav(
+                controller: _controller,
+                isDrawer: true,
+                selectedPlaylistId: _selectedPlaylistId,
+                onPlaylistSelected: (id) {
+                  Navigator.of(context).pop();
+                  _openPlaylist(id);
+                },
+                onCreatePlaylist: () {
+                  Navigator.of(context).pop();
+                  _showCreatePlaylistDialog();
+                },
+                onImportSpotify: () {
+                  Navigator.of(context).pop();
+                  _importFromSpotify();
+                },
+              ),
+            ),
+          ),
           body: SafeArea(
             child: Column(
               children: [
+                // Top App Bar / Search Header (Hamburger on the left, search bar)
+                _buildTopHeader(isMobile, isDesktop),
+
                 // Main Body Area
                 Expanded(
                   child: Row(
                     children: [
-                      // Persistent Sidebar for Desktop and Tablet
+                      // Spotify-style Library Sidebar directly below the hamburger
                       if (!isMobile)
-                        SidebarNav(
+                        DesktopLibrarySidebar(
                           controller: _controller,
                           selectedPlaylistId: _selectedPlaylistId,
                           onPlaylistSelected: _openPlaylist,
                           onCreatePlaylist: _showCreatePlaylistDialog,
-                          onImportSpotify: _importFromSpotify,
+                          onArtistSelected: (artist) {
+                            _searchTextController.text = artist;
+                            _controller.setSearchQuery(artist);
+                            _controller.setNavIndex(0);
+                          },
+                          onAlbumSelected: (album) {
+                            _searchTextController.text = album;
+                            _controller.setSearchQuery(album);
+                            _controller.setNavIndex(0);
+                          },
                         ),
 
                       // Main Content View
                       Expanded(
-                        child: Column(
-                          children: [
-                            // Top App Bar / Search Header
-                            _buildTopHeader(isMobile, isDesktop),
-
-                            // Scrollable Feed (pull down to refresh +
-                            // re-resolve locating tracks)
-                            Expanded(
-                              child: RefreshIndicator(
+                        child: RefreshIndicator(
                                 onRefresh: _handleRefresh,
                                 color: AppTheme.primaryOf(context),
                                 backgroundColor: AppTheme.cardSurfaceOf(context),
@@ -745,9 +752,6 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
 
                       // Right Activity / Now Playing Panel on Wide Screens
                       if (isDesktop)
@@ -773,7 +777,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                 ),
 
                 // Bottom Navigation Layer (Home with logo, Explore with logo, Library with logo)
-                if (isMobile)
+                if (isPhone)
                   ListenableBuilder(
                     listenable: _controller,
                     builder: (context, _) => _buildBottomNavLayer(),
@@ -924,13 +928,10 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   }
 
   Widget _buildTopHeader(bool isMobile, bool isDesktop) {
-    final isDashboard = _controller.currentNavIndex == 0;
-    if (!isDashboard && !isMobile) {
-      return const SizedBox.shrink();
-    }
+    final isPhone = !kIsWeb && isMobile;
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: isMobile ? 12 : 24,
+        horizontal: isPhone ? 12 : 24,
         vertical: 12,
       ),
       decoration: BoxDecoration(
@@ -939,72 +940,76 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       ),
       child: Row(
         children: [
-          if (isMobile) ...[
-            IconButton(
-              tooltip: 'Open menu',
-              icon: Icon(
-                Icons.menu_rounded,
-                size: 24,
-                color: AppTheme.textPrimaryOf(context),
-              ),
-              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          // Left drawer button (opens profile, stats, recents, updates, settings)
+          IconButton(
+            tooltip: 'Open menu',
+            icon: Icon(
+              Icons.menu_rounded,
+              size: 24,
+              color: AppTheme.textPrimaryOf(context),
             ),
-            const SizedBox(width: 6),
-          ],
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          ),
+          const SizedBox(width: 6),
 
-          // Search Input Bar (only displayed on Dashboard)
-          if (isDashboard)
-            Expanded(
-              child: Container(
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppTheme.cardSurfaceOf(context),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.borderOf(context), width: 1),
+          // Search Input Bar (always visible)
+          Expanded(
+            child: Container(
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppTheme.cardSurfaceOf(context),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.borderOf(context), width: 1),
+              ),
+              child: TextField(
+                controller: _searchTextController,
+                maxLines: 1,
+                textAlignVertical: TextAlignVertical.center,
+                onChanged: (val) {
+                  _controller.setSearchQuery(val);
+                  if (val.trim().isNotEmpty && _controller.currentNavIndex != 0) {
+                    _controller.setNavIndex(0);
+                  }
+                },
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppTheme.textPrimaryOf(context),
                 ),
-                child: TextField(
-                  controller: _searchTextController,
-                  maxLines: 1,
-                  textAlignVertical: TextAlignVertical.center,
-                  onChanged: (val) => _controller.setSearchQuery(val),
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textPrimaryOf(context),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Search songs, artists, albums...',
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textMutedOf(context),
                   ),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: 'Search songs, artists, albums...',
-                    hintStyle: TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.textMutedOf(context),
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      size: 20,
-                      color: AppTheme.textSecondaryOf(context),
-                    ),
-                    suffixIcon: _searchTextController.text.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(
-                              Icons.clear_rounded,
-                              size: 16,
-                              color: AppTheme.textMutedOf(context),
-                            ),
-                            onPressed: () {
-                              _searchTextController.clear();
-                              _controller.setSearchQuery('');
-                            },
-                          )
-                        : null,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    size: 20,
+                    color: AppTheme.textSecondaryOf(context),
+                  ),
+                  suffixIcon: _searchTextController.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.clear_rounded,
+                            size: 16,
+                            color: AppTheme.textMutedOf(context),
+                          ),
+                          onPressed: () {
+                            _searchTextController.clear();
+                            _controller.setSearchQuery('');
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
                   ),
                 ),
               ),
             ),
+          ),
+
         ],
       ),
     );

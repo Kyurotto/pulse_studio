@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music/main.dart';
+import 'package:music/widgets/sidebar_nav.dart';
 
 void main() {
   testWidgets(
@@ -102,4 +103,56 @@ void main() {
     expect(find.text('Your Updates'), findsOneWidget);
     expect(find.text('Settings and privacy'), findsOneWidget);
   });
+
+  testWidgets(
+    'Desktop removes duplicate sidebar from dashboard; left hamburger opens drawer',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(const MusicApp(firebaseEnabled: false));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 1. Verify duplicate sidebar items are removed from the dashboard body
+      expect(find.byType(SidebarNav), findsNothing);
+
+      // 2. No right hamburger / Navigation menu tooltip
+      expect(find.byTooltip('Navigation menu'), findsNothing);
+
+      // 3. Left hamburger exists on desktop and opens drawer with account shortcuts
+      final openMenuBtn = find.byTooltip('Open menu');
+      expect(openMenuBtn, findsOneWidget);
+      await tester.tap(openMenuBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      final drawerFinder = find.byType(Drawer);
+      expect(find.descendant(of: drawerFinder, matching: find.text('View profile')), findsOneWidget);
+      expect(find.descendant(of: drawerFinder, matching: find.text('Listening stats')), findsOneWidget);
+      expect(find.descendant(of: drawerFinder, matching: find.text('Recents')), findsOneWidget);
+      expect(find.descendant(of: drawerFinder, matching: find.text('Your Updates')), findsOneWidget);
+      expect(find.descendant(of: drawerFinder, matching: find.text('Settings and privacy')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Phone view does not include right hamburger menu button',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 740);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(const MusicApp(firebaseEnabled: false));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Phone must NOT have the right navigation menu hamburger
+      expect(find.byTooltip('Navigation menu'), findsNothing);
+
+      // Phone still has the left drawer menu
+      expect(find.byTooltip('Open menu'), findsOneWidget);
+    },
+  );
 }

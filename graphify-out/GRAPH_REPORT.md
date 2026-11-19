@@ -1,17 +1,17 @@
 # Graph Report - music  (2026-11-19)
 
 ## Corpus Check
-- 274 files · ~428,131 words
+- 276 files · ~429,133 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 66 file(s) not represented in the graph (top: (none) 12, .xml 8, .xcconfig 8)
 
 ## Summary
-- 4273 nodes · 6248 edges · 183 communities (143 shown, 40 thin omitted)
+- 4296 nodes · 6286 edges · 188 communities (148 shown, 40 thin omitted)
 - Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 308 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `13356683`
+- Built from commit: `f4ab9f29`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -46,7 +46,7 @@
 - FlutterWindow
 - sidebar_nav.dart
 - component-cookbook.md
-- biometric_auth_service.dart
+- desktop_library_sidebar.dart
 - windows/flutter/generated_plugin_registrant.cc
 - main.dart
 - win32_window.cpp
@@ -94,7 +94,7 @@
 - display_rate_service.dart
 - Minor (small taste issues)
 - Imagery kit — curated abstract assets, hosted, ready
-- Size
+- radio_playlist_offline_download_test.dart
 - Genre — atmospheric
 - Genre — modern-minimal
 - Genre — playful
@@ -141,8 +141,8 @@
 - spotify_export_service.dart
 - accounts_view.dart
 - biometric_auth_service_test.dart
-- radio_playlist_offline_download_test.dart
-- saved_credential_store.dart
+- biometric_auth_service.dart
+- Size
 - recents_view.dart
 - r
 - t
@@ -168,13 +168,15 @@
 - _PlaybackEventMessageExtension
 - _ValueStreamExtension
 - m
-- SavedCredentialStore
+- package:flutter/foundation.dart
+- album_card.dart
+- Point
 - .$1
-- BiometricLockView
+- CustomPainter
 - Output contract & scope
 - forgot_password_test.dart
-- Point
-- CustomPainter
+- SavedCredentialStore
+- BiometricLockView
 - ForgotPasswordAccountStore
 - ForgotPasswordDialog
 - h
@@ -182,11 +184,14 @@
 - $0
 - Pulse Studio OTP backend (free Google Apps Script)
 - dk
+- StatelessWidget
 - E
 - h1
 - Emitting a `design.md` from `study`
 - The five-step protocol
 - The font catalog
+- profile_view.dart
+- ../data/local_database.dart
 
 ## God Nodes (most connected - your core abstractions)
 1. `h()` - 96 edges
@@ -215,7 +220,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (183 total, 40 thin omitted)
+## Communities (188 total, 40 thin omitted)
 
 ### Community 0 - "music_player_controller.dart"
 Cohesion: 0.00
@@ -235,7 +240,7 @@ Nodes (64): album, artist, artworkUrl, _boolFlag, _browserUserAgent, _cleanArtis
 
 ### Community 4 - "music_dashboard_view.dart"
 Cohesion: 0.02
-Nodes (83): PlaybackRepeatMode, DiscoverySections, DiscoverySectionsState, ListeningStatsView, _ListeningStatsViewState, _albumGridDelegate, _authSub, _autoLyricsSheetOpen (+75 more)
+Nodes (81): PlaybackRepeatMode, AccountsView, _AccountsViewState, _albumGridDelegate, _authSub, _autoLyricsSheetOpen, build, _buildAvatarCircle (+73 more)
 
 ### Community 5 - "discovery_service.dart"
 Cohesion: 0.04
@@ -246,7 +251,7 @@ Cohesion: 0.14
 Nodes (13): audio_service, audio_session, cloud_firestore, connectivity_plus, file_picker_darwin, firebase_auth, firebase_core, flutter_secure_storage_darwin (+5 more)
 
 ### Community 7 - "spotify_import_dialog.dart"
-Cohesion: 0.08
+Cohesion: 0.09
 Nodes (20): SpotifyImportResult, build, _confirmImport, controller, createState, dispose, _error, _formKey (+12 more)
 
 ### Community 8 - "auth_service.dart"
@@ -258,8 +263,8 @@ Cohesion: 0.05
 Nodes (38): album, artist, audioUrl, bundledTracks, duration, formatTime, genre, genres (+30 more)
 
 ### Community 10 - "animated_visualizer.dart"
-Cohesion: 0.10
-Nodes (17): AnimatedVisualizer, _AnimatedVisualizerState, barCount, barWidth, build, _controller, createState, didUpdateWidget (+9 more)
+Cohesion: 0.09
+Nodes (19): AnimatedVisualizer, _AnimatedVisualizerState, barCount, barWidth, build, _controller, createState, didUpdateWidget (+11 more)
 
 ### Community 11 - "settings_view.dart"
 Cohesion: 0.03
@@ -271,14 +276,14 @@ Nodes (27): artist, border, borderRadius, build, _buildImageWithFallback, _build
 
 ### Community 13 - "discovery_sections.dart"
 Cohesion: 0.06
-Nodes (28): _applySection, _autoRefresher, build, _computeSignature, controller, createState, dispose, _fastLocateTracks (+20 more)
+Nodes (30): _applySection, _autoRefresher, build, _computeSignature, controller, createState, DiscoverySections, DiscoverySectionsState (+22 more)
 
 ### Community 14 - "my_application.cc"
 Cohesion: 0.08
 Nodes (14): fl_register_plugins(), main(), first_frame_cb(), my_application_activate(), my_application_class_init(), my_application_dispose(), my_application_init(), my_application_local_command_line() (+6 more)
 
 ### Community 15 - "spotify_lyrics_sheet.dart"
-Cohesion: 0.07
+Cohesion: 0.08
 Nodes (24): build, _buildActionButton, controller, createState, dispose, _fetchingForId, _highlightedLineIndex, initState (+16 more)
 
 ### Community 16 - "utils.cpp"
@@ -287,15 +292,15 @@ Nodes (4): wWinMain(), CreateAndAttachConsole(), GetCommandLineArguments(), Utf8
 
 ### Community 17 - "discovery_playlist_page.dart"
 Cohesion: 0.08
-Nodes (21): DiscoverySection, build, _clock, controller, cover, duration, _Header, isCurrent (+13 more)
+Nodes (21): DiscoverySection, build, _clock, controller, cover, DiscoveryPlaylistPage, duration, isCurrent (+13 more)
 
 ### Community 18 - "radio_discovery_service.dart"
 Cohesion: 0.04
 Nodes (44): accentColor, artistName, ArtistProfile, avatarUrls, backgroundColor, buildArtistRadio, _cachedGlobalRadios, _cachedOpmRadios (+36 more)
 
 ### Community 19 - "right_panel.dart"
-Cohesion: 0.04
-Nodes (41): MusicPlayerController, MusicPlaylist, Song, instance, loadImportedPlaylists, persistPlaylist, PlaylistPersistenceService, AlbumCard (+33 more)
+Cohesion: 0.07
+Nodes (26): MusicPlayerController, Song, BottomPlayerBar, build, _buildCompactPlayer, _buildDesktopPlayer, controller, onOpenLyrics (+18 more)
 
 ### Community 20 - "app_theme.dart"
 Cohesion: 0.03
@@ -322,16 +327,16 @@ Cohesion: 0.11
 Nodes (4): FlutterWindow, flutter_controller_, FlutterWindow::FlutterWindow(), project_
 
 ### Community 28 - "sidebar_nav.dart"
-Cohesion: 0.07
-Nodes (21): build, _buildDesktopNavItem, _buildMenuItem, _buildUpdateTile, color, controller, _getUserDisplayName, _getUserInitial (+13 more)
+Cohesion: 0.08
+Nodes (20): build, _buildMenuItem, _buildUpdateTile, color, controller, _getUserDisplayName, _getUserInitial, isDrawer (+12 more)
 
 ### Community 29 - "component-cookbook.md"
 Cohesion: 0.02
 Nodes (48): C1 · Outlined chip, C2 · Inline form-as-CTA, C3 · Typographic link, C4 · Sticky bottom bar, F1 · Bento grid, F2 · Sticky-scroll stack, F3 · Tabular spec sheet, F4 · Step sequence (+40 more)
 
-### Community 30 - "biometric_auth_service.dart"
-Cohesion: 0.12
-Nodes (11): authenticateForUnlock, BiometricAuthService, disableBiometricUnlock, enableBiometricUnlock, instance, isBiometricEnrolled, isBiometricUnlockEnabled, keyBiometricAccountId (+3 more)
+### Community 30 - "desktop_library_sidebar.dart"
+Cohesion: 0.10
+Nodes (19): build, _buildFilterChips, _buildHeader, _buildSearchAndSortRow, controller, createState, DesktopLibrarySidebar, _DesktopLibrarySidebarState (+11 more)
 
 ### Community 32 - "main.dart"
 Cohesion: 0.13
@@ -347,7 +352,7 @@ Nodes (10): background_color, description, display, icons, name, orientation, pr
 
 ### Community 35 - "artist_import_test.dart"
 Cohesion: 0.07
-Nodes (21): artistLookupJson, artistSearchJson, artistService, brunoMarsId, jsonOk, main, album, artist (+13 more)
+Nodes (23): artistLookupJson, artistSearchJson, artistService, brunoMarsId, jsonOk, main, album, artist (+15 more)
 
 ### Community 36 - "db_sync_daemon.py"
 Cohesion: 0.31
@@ -358,8 +363,8 @@ Cohesion: 0.03
 Nodes (56): _accounts, accountStore, _api, _backToEmail, build, _buildAlertBox, _buildCurrentStepContent, _buildEmailStep (+48 more)
 
 ### Community 38 - "skeleton_loader.dart"
-Cohesion: 0.05
-Nodes (42): AuthGate, DiscoveryPlaylistPage, _DiscoveryRail, _LibraryPlaylistTile, _CoverCollage2x2, _PlaylistSongTile, _StorageLegend, _AlbumCardSkeleton (+34 more)
+Cohesion: 0.07
+Nodes (22): baseColor, borderRadius, build, cardWidth, child, color, _controller, createState (+14 more)
 
 ### Community 39 - "playlist_screen.dart"
 Cohesion: 0.05
@@ -493,9 +498,9 @@ Nodes (11): 100vw widths, Anti-patterns — the named tells, Double-hyphen dashe
 Cohesion: 0.18
 Nodes (11): Anti-patterns, Categories, Decoration, Empty state, Generation pipeline (out-of-band, one-time), Imagery kit — curated abstract assets, hosted, ready, Layered hero composition (the masterclass move), Manifest (placeholder until generation pass ships) (+3 more)
 
-### Community 83 - "Size"
-Cohesion: 0.50
-Nodes (3): Size, height, width
+### Community 83 - "radio_playlist_offline_download_test.dart"
+Cohesion: 0.08
+Nodes (17): SpotifyImportService, db, main, db, main, db, main, main (+9 more)
 
 ### Community 84 - "Genre — atmospheric"
 Cohesion: 0.18
@@ -650,12 +655,12 @@ Cohesion: 0.07
 Nodes (66): a1(), a2(), a3(), a4(), a5(), az(), b4(), bB() (+58 more)
 
 ### Community 123 - "listening_stats_view.dart"
-Cohesion: 0.05
-Nodes (33): build, _buildSummary, _buildTopArtists, _buildTopSongs, _clearHistory, controller, createState, _formatDuration (+25 more)
+Cohesion: 0.08
+Nodes (25): build, _buildSummary, _buildTopArtists, _buildTopSongs, _clearHistory, controller, createState, _formatDuration (+17 more)
 
 ### Community 124 - "dart:async"
 Cohesion: 0.13
-Nodes (10): errors, main, pumpDashboardWithoutPluginNoise, runZonedGuarded, main, errors, main, pumpDashboard (+2 more)
+Nodes (9): errors, main, pumpDashboardWithoutPluginNoise, runZonedGuarded, main, errors, main, pumpDashboard (+1 more)
 
 ### Community 125 - "package:flutter/material.dart"
 Cohesion: 0.11
@@ -670,20 +675,20 @@ Cohesion: 0.04
 Nodes (43): _albumOf, _artistOf, _asList, _asMap, _asString, bytes, _decodeObject, _dedupeKey (+35 more)
 
 ### Community 128 - "accounts_view.dart"
-Cohesion: 0.07
-Nodes (24): _AccountCard, AccountsView, _AccountsViewState, _addAccount, build, createState, email, _forget (+16 more)
+Cohesion: 0.08
+Nodes (22): _AccountCard, _addAccount, build, createState, email, _forget, initials, _initialsFor (+14 more)
 
 ### Community 129 - "biometric_auth_service_test.dart"
 Cohesion: 0.11
 Nodes (16): PasswordRecoveryException, SpotifyExportException, SpotifyImportException, async, authenticate, authException, authResult, availableBiometrics (+8 more)
 
-### Community 130 - "radio_playlist_offline_download_test.dart"
-Cohesion: 0.07
-Nodes (18): SpotifyImportService, db, main, db, main, main, db, main (+10 more)
+### Community 130 - "biometric_auth_service.dart"
+Cohesion: 0.12
+Nodes (11): authenticateForUnlock, BiometricAuthService, disableBiometricUnlock, enableBiometricUnlock, instance, isBiometricEnrolled, isBiometricUnlockEnabled, keyBiometricAccountId (+3 more)
 
-### Community 131 - "saved_credential_store.dart"
-Cohesion: 0.15
-Nodes (7): deletePassword, instance, _keyFor, _keyPrefix, readPassword, savePassword, _storage
+### Community 131 - "Size"
+Cohesion: 0.50
+Nodes (3): Size, height, width
 
 ### Community 132 - "recents_view.dart"
 Cohesion: 0.10
@@ -703,7 +708,7 @@ Nodes (34): SpotifyExportBundle, _applyBundle, build, _buildActions, _buildIntro
 
 ### Community 136 - "package:flutter_test/flutter_test.dart"
 Cohesion: 0.09
-Nodes (14): main, main, jsonOk, main, saavnOk, _importedSong, main, main (+6 more)
+Nodes (15): main, main, main, main, _importedSong, main, main, testSong (+7 more)
 
 ### Community 137 - "b"
 Cohesion: 0.06
@@ -733,6 +738,18 @@ Nodes (4): Cocoa, FlutterMacOS, RunnerTests, XCTest
 Cohesion: 0.10
 Nodes (37): $1(), aH(), aJ(), aN(), bv(), c3(), c7(), ce() (+29 more)
 
+### Community 158 - "package:flutter/foundation.dart"
+Cohesion: 0.15
+Nodes (7): deletePassword, instance, _keyFor, _keyPrefix, readPassword, savePassword, _storage
+
+### Community 159 - "album_card.dart"
+Cohesion: 0.17
+Nodes (11): MusicPlaylist, AlbumCard, _AlbumCardState, build, createState, _isHovered, isSelected, onDelete (+3 more)
+
+### Community 160 - "Point"
+Cohesion: 0.50
+Nodes (3): Point, x, y
+
 ### Community 161 - ".$1"
 Cohesion: 0.08
 Nodes (31): aI(), aL(), ar(), bS(), bu(), e4(), f0(), fA() (+23 more)
@@ -744,10 +761,6 @@ Nodes (3): Output contract, Output contract & scope, Scope and limits
 ### Community 164 - "forgot_password_test.dart"
 Cohesion: 0.05
 Nodes (35): accounts, completedPassword, completedRequestId, completedToken, completeError, completeReset, email, emailField (+27 more)
-
-### Community 165 - "Point"
-Cohesion: 0.50
-Nodes (3): Point, x, y
 
 ### Community 169 - "h"
 Cohesion: 0.08
@@ -769,6 +782,10 @@ Nodes (5): Limits and notes, One-time deployment (about 3 minutes), Pulse Studio
 Cohesion: 0.21
 Nodes (12): bo(), bp(), c0(), c1(), d1(), d8(), dk(), fJ() (+4 more)
 
+### Community 174 - "StatelessWidget"
+Cohesion: 0.09
+Nodes (21): AuthGate, _Header, _DiscoveryRail, _SectionHeader, _StatTile, _TopSongRow, _LibraryPlaylistTile, _CoverCollage2x2 (+13 more)
+
 ### Community 175 - "E"
 Cohesion: 0.31
 Nodes (10): a7(), aG(), E(), gds(), jb(), ma(), mj(), mo() (+2 more)
@@ -789,24 +806,32 @@ Nodes (5): Step 1 — Surface, Step 3 — Structure, Step 4 — Motion, Step 5 �
 Cohesion: 0.40
 Nodes (5): Free body faces, Free display faces, Free mono / outlier faces, The font catalog, Tone-based pairing patterns
 
+### Community 186 - "profile_view.dart"
+Cohesion: 0.15
+Nodes (7): build, icon, label, _ProfileInfoRow, ProfileView, route, value
+
+### Community 187 - "../data/local_database.dart"
+Cohesion: 0.25
+Nodes (4): instance, loadImportedPlaylists, persistPlaylist, PlaylistPersistenceService
+
 ## Knowledge Gaps
-- **1990 isolated node(s):** `C:\Python314\python.exe`, `C:\Python314\python.exe`, `C:\Python314\python.exe`, `AuthService`, `id` (+1985 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3078 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **2007 isolated node(s):** `C:\Python314\python.exe`, `C:\Python314\python.exe`, `C:\Python314\python.exe`, `AuthService`, `id` (+2002 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3097 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **40 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Slop test — 58 gates + pre-emit self-critique` connect `Slop test — 58 gates + pre-emit self-critique` to `h1`, `hallmark/SKILL.md`?**
-  _High betweenness centrality (0.031) - this node is a cross-community bridge._
+  _High betweenness centrality (0.027) - this node is a cross-community bridge._
 - **Are the 8 inferred relationships involving `h()` (e.g. with `c5()` and `cS()`) actually correct?**
   _`h()` has 8 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `C:\Python314\python.exe`, `C:\Python314\python.exe`, `C:\Python314\python.exe` to the rest of the system?**
-  _1990 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _2007 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `music_player_controller.dart` be split into smaller, more focused modules?**
   _Cohesion score 0.004914004914004914 - nodes in this community are weakly interconnected._
 - **Why does `h1()` connect `h1` to `Typography`, `$0`, `sqflite_sw.js`?**
-  _High betweenness centrality (0.019) - this node is a cross-community bridge._
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **Are the 50 inferred relationships involving `b()` (e.g. with `aa()` and `ad()`) actually correct?**
   _`b()` has 50 INFERRED edges - model-reasoned connections that need verification._
 - **Should `track_enrichment_service.dart` be split into smaller, more focused modules?**

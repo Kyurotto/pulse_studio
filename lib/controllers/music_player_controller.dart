@@ -1968,21 +1968,30 @@ class MusicPlayerController extends ChangeNotifier {
               !resolvedAudio.startsWith('https://') &&
               !resolvedAudio.startsWith('assets/') &&
               !resolvedAudio.startsWith('asset:/')) {
-            final f = File(resolvedAudio);
-            final length = f.existsSync() ? f.lengthSync() : 0;
-            final isPreviewFile =
-                isPreview && length < _previewFileSizeThreshold;
-            if (!f.existsSync() ||
-                length < _minimumAudioFileBytes ||
-                isPreviewFile) {
-              try {
-                if (f.existsSync()) f.deleteSync();
-              } catch (_) {}
+            if (kIsWeb) {
+              // Browsers cannot probe native file paths persisted by another
+              // platform. Treat them as unresolved so playback re-resolves the
+              // track and the rest of the playlists still restore.
               resolvedAudio = '';
               isPreview = false;
               isYouTubeAudio = true;
             } else {
-              _downloadedSongIds.add(songId);
+              final f = File(resolvedAudio);
+              final length = f.existsSync() ? f.lengthSync() : 0;
+              final isPreviewFile =
+                  isPreview && length < _previewFileSizeThreshold;
+              if (!f.existsSync() ||
+                  length < _minimumAudioFileBytes ||
+                  isPreviewFile) {
+                try {
+                  if (f.existsSync()) f.deleteSync();
+                } catch (_) {}
+                resolvedAudio = '';
+                isPreview = false;
+                isYouTubeAudio = true;
+              } else {
+                _downloadedSongIds.add(songId);
+              }
             }
           }
 
@@ -7579,16 +7588,23 @@ class MusicPlayerController extends ChangeNotifier {
         (song.audioUrl.startsWith('assets/') ||
             song.audioUrl.startsWith('asset:/'))) {
       final clean = _cleanAssetUri(song.audioUrl);
-      if (kIsWeb && clean.isNotEmpty) {
+      if (kIsWeb) {
         // Browser playback streams the asset over HTTP; native extraction and
         // file probes are unavailable here.
-        return AudioSource.uri(_webAssetUri(clean), tag: mediaItem);
+        if (clean.isNotEmpty) {
+          return AudioSource.uri(_webAssetUri(clean), tag: mediaItem);
+        }
+        // Nothing playable in this row: fall through to the later branches.
+        song.audioUrl = '';
+        song.isYouTubeAudio = true;
+      } else {
+        final extracted = await _extractAssetToFile(clean);
+        if (File(extracted).existsSync() &&
+            File(extracted).lengthSync() > 1024) {
+          return AudioSource.file(extracted, tag: mediaItem);
+        }
+        return AudioSource.uri(Uri.parse('asset:///$clean'), tag: mediaItem);
       }
-      final extracted = await _extractAssetToFile(clean);
-      if (File(extracted).existsSync() && File(extracted).lengthSync() > 1024) {
-        return AudioSource.file(extracted, tag: mediaItem);
-      }
-      return AudioSource.uri(Uri.parse('asset:///$clean'), tag: mediaItem);
     }
 
     // 4. Remote HTTP stream or opportunistic online enrichment

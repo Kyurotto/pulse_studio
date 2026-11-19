@@ -80,39 +80,40 @@ class _RightActivityPanelState extends State<RightActivityPanel>
             final isPlaying = widget.controller.isPlaying;
 
             return Container(
-          width: 320,
-          decoration: const BoxDecoration(
-            color: AppTheme.surface,
-            border: Border(left: BorderSide(color: AppTheme.border, width: 1)),
+          width: 300,
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceOf(context),
+            border: Border(left: BorderSide(color: AppTheme.borderOf(context), width: 1)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 20,
+              // Header aligned with top bar
+              Container(
+                height: 66,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: AppTheme.borderOf(context), width: 1)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'NOW PLAYING',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.4,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textPrimaryOf(context),
                       ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
-                        vertical: 3,
+                        vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.15),
+                        color: AppTheme.primaryOf(context).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -125,7 +126,7 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                               shape: BoxShape.circle,
                               color: isPlaying
                                   ? AppTheme.accentGreen
-                                  : AppTheme.textMuted,
+                                  : AppTheme.textMutedOf(context),
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -136,7 +137,7 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                               fontWeight: FontWeight.bold,
                               color: isPlaying
                                   ? AppTheme.accentGreen
-                                  : AppTheme.textMuted,
+                                  : AppTheme.textMutedOf(context),
                             ),
                           ),
                         ],
@@ -220,10 +221,10 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                       // Track Info
                       Text(
                         currentSong?.title ?? 'No Track Playing',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.textPrimaryOf(context),
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 1,
@@ -233,10 +234,10 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                       Text(
                         currentSong != null
                             ? '${currentSong.artist} • ${currentSong.album}'
-                            : 'Player is currently idle',
-                        style: const TextStyle(
+                            : 'Select any track to start playing',
+                        style: TextStyle(
                           fontSize: 13,
-                          color: AppTheme.textSecondary,
+                          color: AppTheme.textSecondaryOf(context),
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 1,
@@ -253,6 +254,7 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                           children: [
                             // Lyrics Button
                             _buildActionButton(
+                              context: context,
                               icon: Icons.lyrics_rounded,
                               label: 'Lyrics',
                               onTap: widget.onOpenLyrics,
@@ -260,6 +262,7 @@ class _RightActivityPanelState extends State<RightActivityPanel>
 
                             // Save Button
                             _buildActionButton(
+                              context: context,
                               icon: currentSong.isLiked
                                   ? Icons.bookmark_rounded
                                   : Icons.bookmark_border_rounded,
@@ -270,10 +273,11 @@ class _RightActivityPanelState extends State<RightActivityPanel>
 
                             // Download Button
                             Builder(
-                              builder: (context) {
+                              builder: (btnCtx) {
                                 final isDownloaded = widget.controller.isSongDownloaded(currentSong.id);
                                 final isDownloading = widget.controller.isSongDownloading(currentSong.id);
                                 return _buildActionButton(
+                                  context: btnCtx,
                                   icon: isDownloaded
                                       ? Icons.download_done_rounded
                                       : (isDownloading
@@ -306,10 +310,10 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                             vertical: 12,
                           ),
                           decoration: BoxDecoration(
-                            color: AppTheme.cardSurface,
+                            color: AppTheme.cardSurfaceOf(context),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: AppTheme.border,
+                              color: AppTheme.borderOf(context),
                               width: 1,
                             ),
                           ),
@@ -319,7 +323,7 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Flexible(
+                                  Flexible(
                                     child: Text(
                                       'AUDIO FREQUENCY',
                                       maxLines: 1,
@@ -328,7 +332,7 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                         letterSpacing: 1.0,
-                                        color: AppTheme.textMuted,
+                                        color: AppTheme.textMutedOf(context),
                                       ),
                                     ),
                                   ),
@@ -342,14 +346,14 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                                           vertical: 2,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: AppTheme.primary.withValues(
+                                          color: AppTheme.primaryOf(context).withValues(
                                             alpha: 0.15,
                                           ),
                                           borderRadius: BorderRadius.circular(
                                             6,
                                           ),
                                           border: Border.all(
-                                            color: AppTheme.primary.withValues(
+                                            color: AppTheme.primaryOf(context).withValues(
                                               alpha: 0.3,
                                             ),
                                             width: 0.8,
@@ -357,9 +361,9 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                                         ),
                                         child: Text(
                                           widget.controller.equalizerPreset,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 9.5,
-                                            color: AppTheme.primary,
+                                            color: AppTheme.primaryOf(context),
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
@@ -367,9 +371,9 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                                       const SizedBox(width: 6),
                                       Text(
                                         '${(widget.controller.volume * 100).toInt()}% Vol',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 10.5,
-                                          color: AppTheme.secondary,
+                                          color: AppTheme.secondaryOf(context),
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -410,31 +414,31 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: AppTheme.cardSurface,
+                              color: AppTheme.cardSurfaceOf(context),
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: AppTheme.border,
+                                color: AppTheme.borderOf(context),
                                 width: 1,
                               ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Row(
+                                Row(
                                   children: [
                                     Icon(
                                       Icons.lyrics_rounded,
                                       size: 16,
-                                      color: AppTheme.primary,
+                                      color: AppTheme.primaryOf(context),
                                     ),
-                                    SizedBox(width: 8),
+                                    const SizedBox(width: 8),
                                     Text(
                                       'LYRICS PREVIEW',
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
                                         letterSpacing: 1.0,
-                                        color: AppTheme.textMuted,
+                                        color: AppTheme.textMutedOf(context),
                                       ),
                                     ),
                                   ],
@@ -505,7 +509,7 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                                     },
                                   ),
                                 ] else if (currentSong != null)
-                                  const Row(
+                                  Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       SizedBox(
@@ -513,27 +517,27 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                                         height: 14,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Colors.white70,
+                                          color: AppTheme.textPrimaryOf(context),
                                         ),
                                       ),
-                                      SizedBox(width: 8),
+                                      const SizedBox(width: 8),
                                       Flexible(
                                         child: Text(
-                                          'Loading white lyrics…',
+                                          'Loading lyrics…',
                                           style: TextStyle(
                                             fontSize: 13,
-                                            color: Colors.white70,
+                                            color: AppTheme.textMutedOf(context),
                                           ),
                                         ),
                                       ),
                                     ],
                                   )
                                 else
-                                  const Text(
+                                  Text(
                                     'No lyrics or active track loaded',
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: AppTheme.textMuted,
+                                      color: AppTheme.textMutedOf(context),
                                       fontStyle: FontStyle.italic,
                                     ),
                                   ),
@@ -551,9 +555,9 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                         children: [
                           Text(
                             '${widget.controller.queue.length} Tracks',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
-                              color: AppTheme.textSecondary,
+                              color: AppTheme.textSecondaryOf(context),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -564,7 +568,7 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 0.8,
-                                color: AppTheme.textMuted,
+                                color: AppTheme.textMutedOf(context),
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -578,11 +582,11 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                         Container(
                           padding: const EdgeInsets.symmetric(vertical: 24),
                           alignment: Alignment.center,
-                          child: const Text(
+                          child: Text(
                             'Queue is empty',
                             style: TextStyle(
                               fontSize: 12,
-                              color: AppTheme.textMuted,
+                              color: AppTheme.textMutedOf(context),
                             ),
                           ),
                         )
@@ -650,17 +654,17 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                                                     ? FontWeight.bold
                                                     : FontWeight.w500,
                                                 color: isCurrent
-                                                    ? AppTheme.primary
-                                                    : AppTheme.textPrimary,
+                                                    ? AppTheme.accentGreen
+                                                    : AppTheme.textPrimaryOf(context),
                                               ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                             Text(
                                               song.artist,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 11,
-                                                color: AppTheme.textMuted,
+                                                color: AppTheme.textMutedOf(context),
                                               ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
@@ -670,9 +674,9 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                                       ),
                                       Text(
                                         song.formattedDuration,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 11,
-                                          color: AppTheme.textMuted,
+                                          color: AppTheme.textMutedOf(context),
                                         ),
                                       ),
                                     ],
@@ -697,11 +701,13 @@ class _RightActivityPanelState extends State<RightActivityPanel>
   }
 
   Widget _buildActionButton({
+    required BuildContext context,
     required IconData icon,
     required String label,
     required VoidCallback? onTap,
     bool isActive = false,
   }) {
+    final activeColor = AppTheme.accentGreen;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -711,13 +717,13 @@ class _RightActivityPanelState extends State<RightActivityPanel>
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: isActive
-                ? AppTheme.primary.withValues(alpha: 0.22)
-                : Colors.white.withValues(alpha: 0.08),
+                ? activeColor.withValues(alpha: 0.22)
+                : AppTheme.cardSurfaceOf(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isActive
-                  ? AppTheme.primary.withValues(alpha: 0.6)
-                  : Colors.white.withValues(alpha: 0.15),
+                  ? activeColor.withValues(alpha: 0.6)
+                  : AppTheme.borderOf(context),
               width: 1,
             ),
           ),
@@ -727,7 +733,7 @@ class _RightActivityPanelState extends State<RightActivityPanel>
               Icon(
                 icon,
                 size: 14,
-                color: isActive ? AppTheme.primary : Colors.white,
+                color: isActive ? activeColor : AppTheme.textPrimaryOf(context),
               ),
               const SizedBox(width: 5),
               Text(
@@ -735,7 +741,7 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
-                  color: isActive ? AppTheme.primary : Colors.white,
+                  color: isActive ? activeColor : AppTheme.textPrimaryOf(context),
                   letterSpacing: 0.2,
                 ),
               ),
