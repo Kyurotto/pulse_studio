@@ -979,7 +979,7 @@ class MusicPlayerController extends ChangeNotifier {
     primeStaticOfflineCache();
     unawaited(_equalizer.initialize());
     unawaited(_offlineCandidateDirs());
-    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+    if (!kIsWeb && !Platform.environment.containsKey('FLUTTER_TEST')) {
       unawaited(
         RadioDiscoveryService.instance.loadCachedRadios().catchError((_) {}),
       );
@@ -4678,6 +4678,7 @@ class MusicPlayerController extends ChangeNotifier {
   ];
 
   static void primeStaticOfflineCache() {
+    if (kIsWeb) return;
     final dirs = <Directory>[
       ...?_staticOfflineDirs,
       for (final pth in _knownFallbackDirs) Directory(pth),
@@ -4699,6 +4700,7 @@ class MusicPlayerController extends ChangeNotifier {
   }
 
   static File? findCachedAudioFileSync(String songId) {
+    if (kIsWeb) return null;
     final memo = _staticAudioLookupMemo[songId];
     if (memo != null && memo.existsSync() && memo.lengthSync() > 1024) {
       return memo;
@@ -4730,6 +4732,7 @@ class MusicPlayerController extends ChangeNotifier {
   }
 
   Future<List<Directory>> _offlineCandidateDirs() async {
+    if (kIsWeb) return const [];
     final cached = _offlineDirCache;
     if (cached != null) return cached;
     final dirs = <Directory>[];
@@ -4900,7 +4903,14 @@ class MusicPlayerController extends ChangeNotifier {
   Future<MediaItem> _createSafeMediaItem(Song song) async {
     Uri? safeArtUri;
     if (song.imageUrl.isNotEmpty) {
-      if (song.imageUrl.startsWith('file://') ||
+      if (kIsWeb) {
+        // Browsers cannot read the filesystem or `file:` URIs, so only a
+        // remote artwork URL is usable; anything else is omitted.
+        final lower = song.imageUrl.toLowerCase();
+        if (lower.startsWith('http://') || lower.startsWith('https://')) {
+          safeArtUri = Uri.tryParse(song.imageUrl);
+        }
+      } else if (song.imageUrl.startsWith('file://') ||
           song.imageUrl.startsWith('asset:///')) {
         safeArtUri = Uri.tryParse(song.imageUrl);
       } else if (File(song.imageUrl).existsSync()) {
@@ -4935,6 +4945,16 @@ class MusicPlayerController extends ChangeNotifier {
         .replaceFirst(RegExp(r'^[/\\]+'), '');
     if (clean.isEmpty) return '';
     return clean.startsWith('assets/') ? clean : 'assets/audio/$clean';
+  }
+
+  /// Browser-loadable URL for a bundled asset key.
+  ///
+  /// Browsers cannot read `asset:///` URIs or device files. Flutter web serves
+  /// the asset bundle under the `assets/` URL prefix, so keeping the URL
+  /// relative lets the page's `<base href>` resolve it on any deployment path.
+  static Uri _webAssetUri(String assetKey) {
+    final encoded = assetKey.split('/').map(Uri.encodeComponent).join('/');
+    return Uri.parse('assets/$encoded');
   }
 
   static const Map<String, ({String asset, String artist})> _bundledAssets = {
@@ -5077,6 +5097,7 @@ class MusicPlayerController extends ChangeNotifier {
   }
 
   Future<void> _preExtractBundledAssets() async {
+    if (kIsWeb) return;
     try {
       for (final sample in SampleMusicData.sampleSongs) {
         if (sample.audioUrl.isNotEmpty &&
@@ -7483,6 +7504,15 @@ class MusicPlayerController extends ChangeNotifier {
         song.title.toLowerCase().contains('lips of an angel')) {
       final matching = _cleanAssetUri(_getOfflineAssetFallback(song));
       if (matching.isNotEmpty) {
+        if (kIsWeb) {
+          // Browsers cannot extract the asset to disk: stream the bundled
+          // asset URL instead of probing the filesystem.
+          song.duration = const Duration(minutes: 4, seconds: 21);
+          song.isPreview = false;
+          song.isYouTubeAudio = false;
+          _offlineFallbackIds.remove(song.id);
+          return AudioSource.uri(_webAssetUri(matching), tag: mediaItem);
+        }
         final extracted = await _extractAssetToFile(matching);
         if (File(extracted).existsSync() &&
             File(extracted).lengthSync() > 1024) {
@@ -7549,6 +7579,11 @@ class MusicPlayerController extends ChangeNotifier {
         (song.audioUrl.startsWith('assets/') ||
             song.audioUrl.startsWith('asset:/'))) {
       final clean = _cleanAssetUri(song.audioUrl);
+      if (kIsWeb && clean.isNotEmpty) {
+        // Browser playback streams the asset over HTTP; native extraction and
+        // file probes are unavailable here.
+        return AudioSource.uri(_webAssetUri(clean), tag: mediaItem);
+      }
       final extracted = await _extractAssetToFile(clean);
       if (File(extracted).existsSync() && File(extracted).lengthSync() > 1024) {
         return AudioSource.file(extracted, tag: mediaItem);
@@ -7615,6 +7650,9 @@ class MusicPlayerController extends ChangeNotifier {
       final fallbackAsset = _cleanAssetUri(_getOfflineAssetFallback(song));
       if (fallbackAsset.isNotEmpty) {
         _offlineFallbackIds.add(song.id);
+        if (kIsWeb) {
+          return AudioSource.uri(_webAssetUri(fallbackAsset), tag: mediaItem);
+        }
         final extracted = await _extractAssetToFile(fallbackAsset);
         if (File(extracted).existsSync() &&
             File(extracted).lengthSync() > 1024) {

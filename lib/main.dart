@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'data/local_database.dart';
 import 'services/display_rate_service.dart';
 import 'services/radio_discovery_service.dart';
@@ -41,12 +42,19 @@ Future<void> main() async {
 
   // On desktop platforms, initialise the FFI-based SQLite implementation
   // before any database access so the native library is loaded in time.
+  // On web, use sqflite_common_ffi_web with WebAssembly SQLite.
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+  } else if (kIsWeb) {
+    databaseFactory = databaseFactoryFfiWeb;
   }
 
-  await LocalDatabase.instance.initialize();
+  try {
+    await LocalDatabase.instance.initialize();
+  } catch (e) {
+    debugPrint('[MusicApp] LocalDatabase initialization error: $e');
+  }
   await AppTheme.init();
   DisplayRateService.instance.initialize();
   try {

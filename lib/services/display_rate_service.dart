@@ -23,7 +23,7 @@ class DisplayRateService {
     _initialized = true;
 
     // In unit/widget tests, avoid hardware platform channel lookups
-    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+    if (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST')) {
       return;
     }
 
