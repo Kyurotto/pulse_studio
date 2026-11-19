@@ -4,13 +4,13 @@ import android.os.Build
 import android.os.Bundle
 import android.view.Display
 import android.view.WindowManager
-import com.ryanheise.audioservice.AudioServiceActivity
+import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-class MainActivity : AudioServiceActivity() {
+class MainActivity : AudioServiceFragmentActivity() {
     private val CHANNEL = "com.example.music/display_rate"
     private val EQUALIZER_CHANNEL = "com.example.music/equalizer"
     private val equalizerEffect = DynamicsProcessingEqualizer()

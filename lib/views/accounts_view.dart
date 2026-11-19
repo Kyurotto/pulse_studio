@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../auth/auth_service.dart';
+import '../auth/saved_credential_store.dart';
 import '../data/local_database.dart';
+import '../services/biometric_auth_service.dart';
 import '../theme/app_theme.dart';
 
 /// Shows the signed-in account and accounts remembered on this device.
 ///
 /// Choosing another account signs out and returns to the sign-in screen with
-/// that email prefilled — no password is ever stored.
+/// that account selected, its saved password autofilled, and its fingerprint
+/// button available.
 class AccountsView extends StatefulWidget {
   const AccountsView({super.key});
 
@@ -87,8 +90,32 @@ class _AccountsViewState extends State<AccountsView> {
   }
 
   Future<void> _forget(String email) async {
-    await LocalDatabase.instance.removeRememberedAccount(email);
-    await _loadAccounts();
+    try {
+      // Delete the saved credential first. If secure storage fails, keep the
+      // remembered account so the user can retry instead of reporting
+      // success while the password is still on the device.
+      await SavedCredentialStore.instance.deletePassword(email);
+      await LocalDatabase.instance.removeRememberedAccount(email);
+
+      // If fingerprint login points at this account, clear it too.
+      try {
+        final user = await LocalDatabase.instance.getUserByEmail(email);
+        final accountId = (user?['id'] as String?) ?? '';
+        if (accountId.isNotEmpty &&
+            await BiometricAuthService.instance.isBiometricUnlockEnabled(
+              accountId,
+            )) {
+          await BiometricAuthService.instance.disableBiometricUnlock();
+        }
+      } catch (_) {}
+
+      await _loadAccounts();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not forget account: $e')));
+    }
   }
 
   @override
@@ -154,7 +181,8 @@ class _AccountsViewState extends State<AccountsView> {
               ),
               child: Text(
                 'No other accounts saved yet. Add an account to sign in with a '
-                'different email — only the email and display name are stored.',
+                'different email. Saved passwords stay encrypted on this '
+                'device.',
                 style: TextStyle(
                   fontSize: 13,
                   height: 1.45,
@@ -192,7 +220,9 @@ class _AccountsViewState extends State<AccountsView> {
             label: const Text('+ Add another account'),
             style: FilledButton.styleFrom(
               backgroundColor: AppTheme.primaryOf(context),
-              foregroundColor: AppTheme.isDark(context) ? Colors.black87 : Colors.white,
+              foregroundColor: AppTheme.isDark(context)
+                  ? Colors.black87
+                  : Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
           ),
@@ -220,8 +250,8 @@ class _AccountsViewState extends State<AccountsView> {
           const SizedBox(height: 24),
           Text(
             'Switching accounts signs you out and opens the sign-in screen '
-            'with the selected email filled in. Your password and library '
-            'stay on this device.',
+            'with the selected account filled in. Saved passwords stay '
+            'encrypted on this device, and fingerprint login stays available.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12,

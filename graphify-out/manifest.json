@@ -96,9 +96,9 @@
     "semantic_hash": "92088c40983eec57a035899835f21a25"
   },
   "android/app/src/main/kotlin/com/example/music/MainActivity.kt": {
-    "mtime": 1794331061.4729948,
-    "seen": 1794450219.5276222,
-    "ast_hash": "f6c38192c57e6ffe9e44545fcb66d9f0",
+    "mtime": 1794983810.646608,
+    "seen": 1794984826.76593,
+    "ast_hash": "483e290957e229ca5ec1b43302c1aeba",
     "semantic_hash": ""
   },
   "android/build.gradle.kts": {
@@ -150,9 +150,9 @@
     "semantic_hash": "0c3e86af131f6a9e547c80b5ed058914"
   },
   "lib/auth/auth_service.dart": {
-    "mtime": 1794974116.390339,
-    "seen": 1794974670.1959674,
-    "ast_hash": "f5c401077ba256811edbaae192cd0d10",
+    "mtime": 1795061625.072677,
+    "seen": 1795061738.41652,
+    "ast_hash": "1e31fa300c17922c4beca59cb5ae0333",
     "semantic_hash": ""
   },
   "lib/controllers/music_player_controller.dart": {
@@ -162,8 +162,8 @@
     "semantic_hash": ""
   },
   "lib/data/local_database.dart": {
-    "mtime": 1794973874.26416,
-    "seen": 1794974670.19635,
+    "mtime": 1794981754.987796,
+    "seen": 1794984826.7679274,
     "ast_hash": "9d57e81d7db5870f59065634b96bc6a5",
     "semantic_hash": ""
   },
@@ -216,9 +216,9 @@
     "semantic_hash": ""
   },
   "lib/views/auth_gate.dart": {
-    "mtime": 1794971087.2456386,
-    "seen": 1794971246.5833445,
-    "ast_hash": "4f1c47315dc02db50da88ea7ef539bd1",
+    "mtime": 1795061482.3047512,
+    "seen": 1795061738.4236116,
+    "ast_hash": "b85a3b575239771c3c3297ba4cb73081",
     "semantic_hash": ""
   },
   "lib/views/discovery_playlist_page.dart": {
@@ -234,15 +234,15 @@
     "semantic_hash": ""
   },
   "lib/views/music_dashboard_view.dart": {
-    "mtime": 1794795593.0643587,
-    "seen": 1794798636.1220486,
-    "ast_hash": "d692fe9077e3b616771956869ebbd687",
+    "mtime": 1794984229.5594313,
+    "seen": 1794984826.7715776,
+    "ast_hash": "e36c3613076d93932589012659e779b8",
     "semantic_hash": ""
   },
   "lib/views/settings_view.dart": {
-    "mtime": 1794734884.8407414,
-    "seen": 1794735944.1763215,
-    "ast_hash": "6b7fa51eeb00bed554f52d322c7a1097",
+    "mtime": 1794987534.8801048,
+    "seen": 1794989676.5152934,
+    "ast_hash": "f329049d5885c103db5358cdf45d8daa",
     "semantic_hash": ""
   },
   "lib/widgets/album_card.dart": {
@@ -336,9 +336,9 @@
     "semantic_hash": "ffa1a7c0a2ad45a2c14a921596516ff8"
   },
   "macos/Flutter/GeneratedPluginRegistrant.swift": {
-    "mtime": 1794589112.7527022,
-    "seen": 1794630355.9030623,
-    "ast_hash": "8d5796d2efcc7fb4bb5a29a4a0f6dd6e",
+    "mtime": 1794983797.080231,
+    "seen": 1794984826.7753756,
+    "ast_hash": "2f6d6b8364142b0fcfb3d47335a4cce6",
     "semantic_hash": ""
   },
   "macos/RunnerTests/RunnerTests.swift": {
@@ -462,10 +462,10 @@
     "semantic_hash": "3c5c50588ce1c1e8430ea645e2db73fb"
   },
   "windows/flutter/generated_plugin_registrant.cc": {
-    "mtime": 1791976510.5620697,
-    "seen": 1792830995.6329296,
-    "ast_hash": "0378e07f75add4d8d110a7549a61e2ff",
-    "semantic_hash": "0378e07f75add4d8d110a7549a61e2ff"
+    "mtime": 1794983797.053999,
+    "seen": 1794984826.7846546,
+    "ast_hash": "238de22dda7036864da8692c501cc85a",
+    "semantic_hash": ""
   },
   "windows/flutter/generated_plugin_registrant.h": {
     "mtime": 1789806544.0718045,
@@ -1434,9 +1434,9 @@
     "semantic_hash": ""
   },
   "pubspec.yaml": {
-    "mtime": 1794589106.540318,
-    "seen": 1794630355.9346178,
-    "ast_hash": "1293ddd47b4bbc09b1ceb811f85263e4",
+    "mtime": 1794992391.4315343,
+    "seen": 1795057887.3116117,
+    "ast_hash": "607bfa2a1d68475f6855366e1ef49036",
     "semantic_hash": ""
   },
   "web/index.html": {
@@ -1848,9 +1848,9 @@
     "semantic_hash": ""
   },
   "lib/views/accounts_view.dart": {
-    "mtime": 1794734884.8297603,
-    "seen": 1794735944.1757514,
-    "ast_hash": "4c5d08637b8a96a8616436a99e02984d",
+    "mtime": 1795061138.6768947,
+    "seen": 1795061738.4236062,
+    "ast_hash": "ae469f99d22c73e32a488ad1de71f280",
     "semantic_hash": ""
   },
   "lib/views/listening_stats_view.dart": {
@@ -1938,33 +1938,63 @@
     "semantic_hash": ""
   },
   "lib/auth/password_recovery_api.dart": {
-    "mtime": 1794977798.0434518,
-    "seen": 1794979414.5344179,
-    "ast_hash": "1bc52e4035d5405cff659149d2e56ab4",
+    "mtime": 1794981754.9847841,
+    "seen": 1794984826.7676847,
+    "ast_hash": "38c6360fe7121c09aa59a1bca23df8c0",
     "semantic_hash": ""
   },
   "lib/views/forgot_password_dialog.dart": {
-    "mtime": 1794979102.2728891,
-    "seen": 1794979414.5407245,
-    "ast_hash": "5a07cdc8f579c6567685a1c1545b7f3b",
+    "mtime": 1794986197.7663994,
+    "seen": 1794989676.5143397,
+    "ast_hash": "9e48f7e9f52127c3572579e7d2eee56e",
     "semantic_hash": ""
   },
   "test/forgot_password_test.dart": {
-    "mtime": 1794976206.749553,
-    "seen": 1794979414.5534902,
-    "ast_hash": "d1d0d7b323a6712b91d66448ff57e4c2",
+    "mtime": 1794986939.9791234,
+    "seen": 1794989676.5230744,
+    "ast_hash": "c094f927d3fc7a204d09eae557053ecc",
     "semantic_hash": ""
   },
   "test/password_recovery_api_test.dart": {
-    "mtime": 1794976924.0942194,
-    "seen": 1794979414.557101,
-    "ast_hash": "24f2a0c9b30ea5c17b95b9e9b7c2cfd7",
+    "mtime": 1794981755.0018215,
+    "seen": 1794984826.7811809,
+    "ast_hash": "ff187ee01ca826c1fc79436dac4662a0",
     "semantic_hash": ""
   },
   "apps_script/README.md": {
-    "mtime": 1794976873.3022532,
-    "seen": 1794979414.6145434,
-    "ast_hash": "54ef5af217e89bbf9b89d3b474b6eb92",
+    "mtime": 1794981754.6876009,
+    "seen": 1794984826.8134696,
+    "ast_hash": "925ebcf0c6245e35c1d9470e73beb7bf",
+    "semantic_hash": ""
+  },
+  "lib/services/biometric_auth_service.dart": {
+    "mtime": 1795061652.3414476,
+    "seen": 1795061738.4199004,
+    "ast_hash": "69e9d596605df346f1b6ea89c25ca275",
+    "semantic_hash": ""
+  },
+  "test/auth_gate_biometric_test.dart": {
+    "mtime": 1795061436.5806835,
+    "seen": 1795061738.4358048,
+    "ast_hash": "8cf6edfa0dda365569f5d341fe33b398",
+    "semantic_hash": ""
+  },
+  "test/biometric_auth_service_test.dart": {
+    "mtime": 1794984545.9047089,
+    "seen": 1794984826.7775555,
+    "ast_hash": "b098ec4c887e8fb5a3883a7891f8120f",
+    "semantic_hash": ""
+  },
+  "lib/auth/saved_credential_store.dart": {
+    "mtime": 1795061138.6768947,
+    "seen": 1795061738.4168983,
+    "ast_hash": "8d168bf1aa6b9a4bac8f84550a0339cd",
+    "semantic_hash": ""
+  },
+  "test/auth_gate_saved_account_test.dart": {
+    "mtime": 1794993338.1477256,
+    "seen": 1795057887.2716887,
+    "ast_hash": "69e1931b0db2f2f17266b55e2ad26fff",
     "semantic_hash": ""
   }
 }
