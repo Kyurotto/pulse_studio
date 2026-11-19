@@ -156,9 +156,9 @@
     "semantic_hash": ""
   },
   "lib/controllers/music_player_controller.dart": {
-    "mtime": 1795090251.8383086,
-    "seen": 1795091682.1556082,
-    "ast_hash": "01c06c077c56c224ca06a4ba55034b1e",
+    "mtime": 1795106128.427147,
+    "seen": 1795106186.3326917,
+    "ast_hash": "92a91aa4e680d6dc2d6334bfb2495f26",
     "semantic_hash": ""
   },
   "lib/data/local_database.dart": {
@@ -198,9 +198,9 @@
     "semantic_hash": ""
   },
   "lib/services/spotify_import_service.dart": {
-    "mtime": 1794639007.3606365,
-    "seen": 1794639502.5036898,
-    "ast_hash": "0e66e9433aa4091eb0263426cf59be8d",
+    "mtime": 1795095300.3163424,
+    "seen": 1795095484.4650495,
+    "ast_hash": "34282a4dd075e3c9005545cbf83e5f84",
     "semantic_hash": ""
   },
   "lib/services/track_enrichment_service.dart": {
@@ -234,9 +234,9 @@
     "semantic_hash": ""
   },
   "lib/views/music_dashboard_view.dart": {
-    "mtime": 1795079000.97942,
-    "seen": 1795088036.8151252,
-    "ast_hash": "7b3f22c18c2cb0e9916043f2f5c1d3e3",
+    "mtime": 1795098163.919167,
+    "seen": 1795098324.569209,
+    "ast_hash": "a925eb7b74a457e5a5f2e30b07eb4ba4",
     "semantic_hash": ""
   },
   "lib/views/settings_view.dart": {
@@ -1818,8 +1818,8 @@
     "semantic_hash": ""
   },
   "lib/widgets/spotify_export_import_dialog.dart": {
-    "mtime": 1794632809.5935843,
-    "seen": 1794632891.9732475,
+    "mtime": 1795093094.9341285,
+    "seen": 1795093542.7481847,
     "ast_hash": "92c301e950bdd779196198147adcf7b0",
     "semantic_hash": ""
   },
@@ -2004,15 +2004,15 @@
     "semantic_hash": ""
   },
   "lib/widgets/desktop_library_sidebar.dart": {
-    "mtime": 1795079000.9827373,
-    "seen": 1795088036.817606,
-    "ast_hash": "82a091d45c4f0afb2fc3c856356f4d67",
+    "mtime": 1795098155.736839,
+    "seen": 1795098324.570449,
+    "ast_hash": "79ae962ee8e49b92e28f308b6300a52d",
     "semantic_hash": ""
   },
   "test/desktop_library_sidebar_test.dart": {
-    "mtime": 1795079000.9912677,
-    "seen": 1795088036.8259022,
-    "ast_hash": "9c8df7c116b4540306e105d25f52b490",
+    "mtime": 1795096800.4140723,
+    "seen": 1795097116.3687959,
+    "ast_hash": "8f4ae7bbd91db7b7105e64256ad0a628",
     "semantic_hash": ""
   },
   "lib/services/web_offline_audio.dart": {
@@ -2022,33 +2022,45 @@
     "semantic_hash": ""
   },
   "lib/services/web_offline_audio_api.dart": {
-    "mtime": 1795080242.9592447,
-    "seen": 1795088036.8124435,
-    "ast_hash": "e567766a63799734f36d147662b3c842",
+    "mtime": 1795105654.4884615,
+    "seen": 1795106186.3358946,
+    "ast_hash": "e09fbd8feb5d6cc78c39c30ea25c6843",
     "semantic_hash": ""
   },
   "lib/services/web_offline_audio_stub.dart": {
-    "mtime": 1795080242.9625435,
-    "seen": 1795088036.812448,
-    "ast_hash": "bc47c1e0bc0f4a3a6c33a81e6ee54374",
+    "mtime": 1795105666.101216,
+    "seen": 1795106186.3358982,
+    "ast_hash": "13ea62061da0bb20420ddafcf3826879",
     "semantic_hash": ""
   },
   "lib/services/web_offline_audio_web.dart": {
-    "mtime": 1795080518.5870993,
-    "seen": 1795088036.8124526,
-    "ast_hash": "61b3f2aaa51b43488d84a761caa74a82",
+    "mtime": 1795105715.6121035,
+    "seen": 1795106186.335901,
+    "ast_hash": "cbe6e4af0d7a34e3c37a1a22e4849149",
     "semantic_hash": ""
   },
   "lib/services/web_youtube_audio_resolver.dart": {
-    "mtime": 1795087707.5123024,
-    "seen": 1795088036.812458,
-    "ast_hash": "4e3e7fbe03f258ebca1d80d92fa6d69c",
+    "mtime": 1795105851.875847,
+    "seen": 1795106186.335904,
+    "ast_hash": "db569d2c90a31175d06f642a9234ea5d",
     "semantic_hash": ""
   },
   "test/web_youtube_audio_resolver_test.dart": {
-    "mtime": 1795087782.5528061,
-    "seen": 1795088036.8342175,
-    "ast_hash": "b7606bd3862a98391bb84e6ddb6f2cdc",
+    "mtime": 1795105920.8863091,
+    "seen": 1795106186.3517709,
+    "ast_hash": "8700a9f6685e8c56542cc11df90776ee",
+    "semantic_hash": ""
+  },
+  "lib/widgets/desktop_playlist_detail_view.dart": {
+    "mtime": 1795098163.7909,
+    "seen": 1795098324.5704534,
+    "ast_hash": "3a07409fb032360292b86100382ae52f",
+    "semantic_hash": ""
+  },
+  "test/web_offline_audio_test.dart": {
+    "mtime": 1795106132.2979524,
+    "seen": 1795106186.3517666,
+    "ast_hash": "2d9bc1d37ccbdd0376d34e56432366c6",
     "semantic_hash": ""
   }
 }

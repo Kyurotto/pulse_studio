@@ -981,7 +981,7 @@ class MusicPlayerController extends ChangeNotifier {
     primeStaticOfflineCache();
     unawaited(_equalizer.initialize());
     unawaited(_offlineCandidateDirs());
-    unawaited(_hydrateWebAudioStore());
+    unawaited(_hydrateWebAudioStore().catchError((_) {}));
     if (!kIsWeb && !Platform.environment.containsKey('FLUTTER_TEST')) {
       unawaited(
         RadioDiscoveryService.instance.loadCachedRadios().catchError((_) {}),
@@ -4587,13 +4587,18 @@ class MusicPlayerController extends ChangeNotifier {
       _webAudioHydrated = done;
       return done;
     }
-    final future = store
+    late final Future<void> future;
+    future = store
         .hydrate()
         .then((_) {
           if (!_disposed) notifyListeners();
         })
-        .catchError((Object e) {
+        .catchError((Object e, StackTrace st) {
+          if (identical(_webAudioHydrated, future)) {
+            _webAudioHydrated = null;
+          }
           debugPrint('[MusicPlayerController] web audio hydrate error: $e');
+          Error.throwWithStackTrace(e, st);
         });
     _webAudioHydrated = future;
     return future;
@@ -6087,9 +6092,19 @@ class MusicPlayerController extends ChangeNotifier {
 
     await _hydrateWebAudioStore();
     if (store.has(song.id)) {
-      _downloadedSongIds.add(song.id);
-      notifyListeners();
-      return true;
+      final exists = await store.verifyExists(song.id);
+      if (!exists) {
+        _downloadedSongIds.remove(song.id);
+        _locatingStatusVersion++;
+        notifyListeners();
+      } else {
+        final cachedIsPreview = store.isPreview(song.id);
+        if (!cachedIsPreview || allowPreviewFallback) {
+          _downloadedSongIds.add(song.id);
+          notifyListeners();
+          return true;
+        }
+      }
     }
     if (_cachingIds.contains(song.id)) return false;
 
@@ -6202,33 +6217,85 @@ class MusicPlayerController extends ChangeNotifier {
     }
   }
 
+  /// Checks whether [bytes] match known audio media container signatures.
+  static bool _looksLikeAudioBytes(Uint8List bytes) {
+    if (bytes.length < 12) return false;
+    // ID3v2 (MP3 with ID3 header)
+    if (bytes[0] == 0x49 && bytes[1] == 0x44 && bytes[2] == 0x33) return true;
+    // MP3 frame sync (11 bits set: 0xFF followed by 0xE0..0xFF)
+    if (bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0) return true;
+    // Ogg container (OggS)
+    if (bytes[0] == 0x4F && bytes[1] == 0x67 && bytes[2] == 0x67 && bytes[3] == 0x53) return true;
+    // RIFF (WAV)
+    if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46) {
+      if (bytes[8] == 0x57 && bytes[9] == 0x41 && bytes[10] == 0x56 && bytes[11] == 0x45) return true;
+    }
+    // FLAC (fLaC)
+    if (bytes[0] == 0x66 && bytes[1] == 0x4C && bytes[2] == 0x61 && bytes[3] == 0x43) return true;
+    // MP4/M4A (ftyp box at offset 4)
+    if (bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70) return true;
+    // Matroska / WebM EBML header (0x1A 0x45 0xDF 0xA3)
+    if (bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3) return true;
+    return false;
+  }
+
   /// Fetches a directly downloadable (CORS-readable) audio URL.
   Future<({Uint8List bytes, String contentType})?> _fetchWebAudio(
     Song song,
     String url,
   ) async {
-    final response = await http
-        .get(Uri.parse(url))
-        .timeout(const Duration(seconds: 90));
-    if (response.statusCode != 200 && response.statusCode != 206) {
+    try {
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 90));
+      if (response.statusCode != 200 && response.statusCode != 206) {
+        debugPrint(
+          '[MusicPlayerController] Web download HTTP ${response.statusCode} '
+          'for ${song.title}',
+        );
+        return null;
+      }
+      final rawContentType =
+          (response.headers['content-type'] ?? '').toLowerCase();
+      if (rawContentType.startsWith('text/') ||
+          rawContentType.startsWith('image/') ||
+          rawContentType.contains('html') ||
+          rawContentType.contains('json') ||
+          rawContentType.contains('xml')) {
+        debugPrint(
+          '[MusicPlayerController] Web download rejected non-audio content-type: $rawContentType for ${song.title}',
+        );
+        return null;
+      }
+      final bytes = response.bodyBytes;
+      if (bytes.length < _minimumAudioFileBytes) {
+        _logDiag(
+          'downloadSong skipped: response too small (${bytes.length} bytes)',
+          song: song,
+        );
+        return null;
+      }
+      final isGeneric = rawContentType.isEmpty ||
+          rawContentType == 'application/octet-stream' ||
+          rawContentType == 'binary/octet-stream';
+      if (isGeneric) {
+        if (!_looksLikeAudioBytes(bytes)) {
+          debugPrint(
+            '[MusicPlayerController] Web download rejected unrecognized media container for ${song.title}',
+          );
+          return null;
+        }
+      }
+      return (
+        bytes: bytes,
+        contentType: rawContentType.isNotEmpty ? rawContentType : 'audio/mpeg',
+      );
+    } catch (e) {
       debugPrint(
-        '[MusicPlayerController] Web download HTTP ${response.statusCode} '
-        'for ${song.title}',
+        '[MusicPlayerController] Web download direct-fetch failed for ${song.title}: $e',
       );
       return null;
     }
-    final bytes = response.bodyBytes;
-    if (bytes.length < _minimumAudioFileBytes) {
-      _logDiag(
-        'downloadSong skipped: response too small (${bytes.length} bytes)',
-        song: song,
-      );
-      return null;
-    }
-    return (
-      bytes: bytes,
-      contentType: response.headers['content-type'] ?? 'audio/mpeg',
-    );
   }
 
   /// Stores [bytes] in the browser cache and points the song metadata at the
@@ -6245,7 +6312,12 @@ class MusicPlayerController extends ChangeNotifier {
     final store = _webAudioStore;
     if (store == null) return false;
 
-    final saved = await store.save(song.id, bytes, contentType: contentType);
+    final saved = await store.save(
+      song.id,
+      bytes,
+      contentType: contentType,
+      preview: preview,
+    );
     if (!saved) {
       _logDiag(
         'downloadSong skipped: browser storage rejected the file',
@@ -7842,11 +7914,20 @@ class MusicPlayerController extends ChangeNotifier {
     // 0b. Audio downloaded into the browser Cache API. Native builds never
     // populate this store, so the lookup is web-only.
     if (!forceAsset && kIsWeb) {
-      final blobUrl = await _webAudioStore?.objectUrl(song.id);
-      if (blobUrl != null && blobUrl.isNotEmpty) {
-        _offlineFallbackIds.remove(song.id);
-        song.isYouTubeAudio = false;
-        return AudioSource.uri(Uri.parse(blobUrl), tag: mediaItem);
+      final isCachedPreview = _webAudioStore?.isPreview(song.id) ?? false;
+      final isOnline = await _isDeviceOnline();
+      // When a full source is selected, bypass a cached preview and continue
+      // to the full-source playback path; keep preferring verified full cached
+      // copies and allow a cached preview when it is the only available source
+      // for offline playback.
+      if (!isCachedPreview || !isOnline) {
+        final blobUrl = await _webAudioStore?.objectUrl(song.id);
+        if (blobUrl != null && blobUrl.isNotEmpty) {
+          _offlineFallbackIds.remove(song.id);
+          song.isYouTubeAudio = false;
+          song.isPreview = isCachedPreview;
+          return AudioSource.uri(Uri.parse(blobUrl), tag: mediaItem);
+        }
       }
       // A desktop/Android file path is meaningless in the browser: clear it
       // so the online enrichment branch can resolve a stream.

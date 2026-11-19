@@ -343,6 +343,23 @@ class WebYouTubeAudioResolver {
     return scored.map((entry) => entry.candidate).toList();
   }
 
+  static final RegExp _unicodePunctuationPattern = RegExp(
+    r'[^\p{L}\p{N}\s]+',
+    unicode: true,
+  );
+  static final RegExp _whitespacePattern = RegExp(r'\s+');
+
+  static String _normalizeTitle(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(_unicodePunctuationPattern, ' ')
+        .split(_whitespacePattern)
+        .where((w) => w.isNotEmpty)
+        .join(' ');
+  }
+
+  static bool _hasNonAscii(String s) => s.codeUnits.any((u) => u > 127);
+
   /// Returns a score for [candidate], or -1 when it is clearly a different
   /// song/version. Mirrors the native provider's studio-first policy.
   int _score(
@@ -355,8 +372,8 @@ class WebYouTubeAudioResolver {
     if (seconds > 0 && seconds < 45) return -1;
     if (seconds > 1200) return -1;
 
-    final wantKey = TrackEnrichmentService.normalizeKey(title);
-    final hitKey = TrackEnrichmentService.normalizeKey(candidate.title);
+    final wantKey = _normalizeTitle(title);
+    final hitKey = _normalizeTitle(candidate.title);
     if (wantKey.isEmpty || hitKey.isEmpty) return -1;
 
     final combined = '${candidate.title} ${candidate.author}';
@@ -397,8 +414,14 @@ class WebYouTubeAudioResolver {
       tokens = _allWords(wantKey);
       hitTokens = _allWords(hitKey);
     }
+    if (tokens.isEmpty || hitTokens.isEmpty) {
+      tokens = wantKey.split(' ').where((w) => w.isNotEmpty).toSet();
+      hitTokens = hitKey.split(' ').where((w) => w.isNotEmpty).toSet();
+    }
     if (tokens.isEmpty || hitTokens.isEmpty) return -1;
-    final matched = tokens.intersection(hitTokens).length;
+    final matched = tokens
+        .where((t) => hitTokens.contains(t) || hitKey.contains(t))
+        .length;
     final coverage = matched / tokens.length;
     if (coverage < 0.75) return -1;
 
@@ -407,11 +430,12 @@ class WebYouTubeAudioResolver {
 
     final artistTokens = _artistTokens(artist, title);
     if (artistTokens.isNotEmpty) {
-      final hitWords =
-          '$hitKey ${TrackEnrichmentService.normalizeKey(candidate.author)}';
+      final hitWords = '$hitKey ${_normalizeTitle(candidate.author)}';
       var artistHits = 0;
       for (final token in artistTokens) {
-        if (_containsPhrase(hitWords, token)) artistHits++;
+        if (_containsPhrase(hitWords, token) || hitWords.contains(token)) {
+          artistHits++;
+        }
       }
       if (artistHits == 0) return -1;
       score += 6 + math.min(2, artistHits - 1);
@@ -459,13 +483,13 @@ class WebYouTubeAudioResolver {
     };
     final result = <String>[];
     for (final raw in tokens) {
-      final normalized = TrackEnrichmentService.normalizeKey(
+      final normalized = _normalizeTitle(
         raw.replaceAll(
           RegExp(r'(records|music|topic|official)', caseSensitive: false),
           '',
         ),
       );
-      if (normalized.length < 2) continue;
+      if (normalized.length < 2 && !_hasNonAscii(normalized)) continue;
       if (normalized == 'the' || normalized == 'and') continue;
       if (!result.contains(normalized)) result.add(normalized);
     }

@@ -12,6 +12,15 @@ class _UnsupportedWebOfflineAudioStore implements WebOfflineAudioStore {
   bool has(String songId) => false;
 
   @override
+  bool isPreview(String songId) => false;
+
+  @override
+  Future<bool> verifyExists(String songId) async => false;
+
+  @override
+  void invalidate(String songId) {}
+
+  @override
   Future<String?> objectUrl(String songId) async => null;
 
   @override
@@ -19,6 +28,7 @@ class _UnsupportedWebOfflineAudioStore implements WebOfflineAudioStore {
     String songId,
     List<int> bytes, {
     required String contentType,
+    bool preview = false,
   }) async => false;
 
   @override

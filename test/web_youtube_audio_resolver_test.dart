@@ -198,4 +198,44 @@ void main() {
     expect(downloadAttempts, 0);
     resolver.dispose();
   });
+
+  test('matches and resolves non-Latin titles like 夜に駆ける', () async {
+    final downloadedIds = <String>[];
+    final resolver = resolverWith((request) async {
+      if (request.url.path == '/api/v1/search') {
+        return searchJson([
+          video(
+            id: 'YOASOBI0001',
+            title: 'YOASOBI「夜に駆ける」 Official Music Video',
+            author: 'Ayase / YOASOBI',
+            seconds: 261,
+          ),
+          video(
+            id: 'KARAOKE0002',
+            title: '夜に駆ける (Karaoke)',
+            author: 'Sing King',
+            seconds: 261,
+          ),
+        ]);
+      }
+      if (request.url.path == '/companion/latest_version') {
+        if (request.headers['Range'] == null) {
+          downloadedIds.add(request.url.queryParameters['id'] ?? '');
+        }
+        return audioBytes(65000);
+      }
+      return http.Response('', 404);
+    });
+
+    final hit = await resolver.resolve(
+      title: '夜に駆ける',
+      artist: 'YOASOBI',
+      duration: const Duration(seconds: 261),
+    );
+
+    expect(hit, isNotNull);
+    expect(hit!.videoId, 'YOASOBI0001');
+    expect(downloadedIds, ['YOASOBI0001']);
+    resolver.dispose();
+  });
 }

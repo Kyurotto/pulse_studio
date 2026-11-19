@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../controllers/music_player_controller.dart';
+import '../models/song_model.dart';
 
 /// Desktop left sidebar modeled after the Spotify Web / Desktop Player layout.
 /// Displays "Your Library" with quick "+ Create" action, category filter pills
@@ -12,6 +13,8 @@ class DesktopLibrarySidebar extends StatefulWidget {
   final ValueChanged<String>? onArtistSelected;
   final ValueChanged<String>? onAlbumSelected;
   final VoidCallback? onCreatePlaylist;
+  final VoidCallback? onImportSpotify;
+  final VoidCallback? onLibraryTap;
   final String? selectedPlaylistId;
   final double width;
 
@@ -22,6 +25,8 @@ class DesktopLibrarySidebar extends StatefulWidget {
     this.onArtistSelected,
     this.onAlbumSelected,
     this.onCreatePlaylist,
+    this.onImportSpotify,
+    this.onLibraryTap,
     this.selectedPlaylistId,
     this.width = 280,
   });
@@ -36,7 +41,18 @@ class _DesktopLibrarySidebarState extends State<DesktopLibrarySidebar> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    setState(() {});
+  }
+
+  @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -61,10 +77,7 @@ class _DesktopLibrarySidebarState extends State<DesktopLibrarySidebar> {
           decoration: BoxDecoration(
             color: AppTheme.surfaceOf(context),
             border: Border(
-              right: BorderSide(
-                color: AppTheme.borderOf(context),
-                width: 1,
-              ),
+              right: BorderSide(color: AppTheme.borderOf(context), width: 1),
             ),
           ),
           child: Column(
@@ -81,11 +94,359 @@ class _DesktopLibrarySidebarState extends State<DesktopLibrarySidebar> {
 
               const SizedBox(height: 4),
 
-              // Items area kept empty per user request ("wag muna e balik yung mga music artist, albums, saka playlist")
-              const Expanded(
-                child: SizedBox(),
-              ),
+              // Items area below the search bar
+              Expanded(child: _buildItemsList(context)),
             ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildItemsList(BuildContext context) {
+    final query = _searchController.text.trim().toLowerCase();
+
+    if (_selectedFilter == 'Artists') {
+      return _buildArtistsList(context, query);
+    } else if (_selectedFilter == 'Albums') {
+      return _buildAlbumsList(context, query);
+    } else {
+      return _buildPlaylistsList(context, query);
+    }
+  }
+
+  Widget _buildPlaylistsList(BuildContext context, String query) {
+    var playlists = widget.controller.libraryPlaylists;
+    if (query.isNotEmpty) {
+      playlists = playlists.where((p) {
+        return p.title.toLowerCase().contains(query) ||
+            p.subtitle.toLowerCase().contains(query);
+      }).toList();
+    }
+
+    if (playlists.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+          child: Text(
+            query.isNotEmpty
+                ? 'No playlists match "$query"'
+                : 'No playlists yet',
+            style: TextStyle(
+              fontSize: 12.5,
+              color: AppTheme.textMutedOf(context),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      itemCount: playlists.length,
+      itemBuilder: (context, index) {
+        final playlist = playlists[index];
+        return _buildPlaylistTile(context, playlist);
+      },
+    );
+  }
+
+  Widget _buildPlaylistTile(BuildContext context, MusicPlaylist playlist) {
+    final isSelected = playlist.id == widget.selectedPlaylistId;
+    final cleanSubtitle = playlist.subtitle.isNotEmpty
+        ? playlist.subtitle
+        : (playlist.songIds.isNotEmpty
+              ? '${playlist.songIds.length} ${playlist.songIds.length == 1 ? 'song' : 'songs'}'
+              : 'Playlist');
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => widget.onPlaylistSelected?.call(playlist.id),
+        hoverColor: AppTheme.primaryOf(context).withValues(alpha: 0.08),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: isSelected
+                ? AppTheme.primaryOf(context).withValues(alpha: 0.12)
+                : Colors.transparent,
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: playlist.imageUrl.isNotEmpty
+                      ? Image.network(
+                          playlist.imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (ctx, err, stack) =>
+                              _buildPlaylistArtFallback(context, playlist),
+                        )
+                      : _buildPlaylistArtFallback(context, playlist),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      playlist.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.w600,
+                        color: isSelected
+                            ? AppTheme.primaryOf(context)
+                            : AppTheme.textPrimaryOf(context),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Playlist • $cleanSubtitle',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppTheme.textMutedOf(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isSelected)
+                Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppTheme.primaryOf(context),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaylistArtFallback(
+    BuildContext context,
+    MusicPlaylist playlist,
+  ) {
+    final colors = playlist.gradient.isNotEmpty
+        ? playlist.gradient
+        : [AppTheme.primaryOf(context), AppTheme.secondaryOf(context)];
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
+      ),
+      child: const Center(
+        child: Icon(Icons.music_note_rounded, size: 20, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildArtistsList(BuildContext context, String query) {
+    var artists =
+        widget.controller.allSongs
+            .map((s) => s.artist)
+            .where((a) => a.trim().isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+
+    if (query.isNotEmpty) {
+      artists = artists.where((a) => a.toLowerCase().contains(query)).toList();
+    }
+
+    if (artists.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+          child: Text(
+            query.isNotEmpty
+                ? 'No artists match "$query"'
+                : 'No artists in library',
+            style: TextStyle(
+              fontSize: 12.5,
+              color: AppTheme.textMutedOf(context),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      itemCount: artists.length,
+      itemBuilder: (context, index) {
+        final artist = artists[index];
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => widget.onArtistSelected?.call(artist),
+            hoverColor: AppTheme.primaryOf(context).withValues(alpha: 0.08),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: AppTheme.cardSurfaceOf(context),
+                    child: Text(
+                      artist.isNotEmpty ? artist[0].toUpperCase() : '?',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryOf(context),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimaryOf(context),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Artist',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppTheme.textMutedOf(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAlbumsList(BuildContext context, String query) {
+    var albums =
+        widget.controller.allSongs
+            .map((s) => s.album)
+            .where((a) => a.trim().isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+
+    if (query.isNotEmpty) {
+      albums = albums.where((a) => a.toLowerCase().contains(query)).toList();
+    }
+
+    if (albums.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+          child: Text(
+            query.isNotEmpty
+                ? 'No albums match "$query"'
+                : 'No albums in library',
+            style: TextStyle(
+              fontSize: 12.5,
+              color: AppTheme.textMutedOf(context),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      itemCount: albums.length,
+      itemBuilder: (context, index) {
+        final album = albums[index];
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => widget.onAlbumSelected?.call(album),
+            hoverColor: AppTheme.primaryOf(context).withValues(alpha: 0.08),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      color: AppTheme.cardSurfaceOf(context),
+                      child: Icon(
+                        Icons.album_rounded,
+                        size: 22,
+                        color: AppTheme.textMutedOf(context),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          album,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimaryOf(context),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Album',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppTheme.textMutedOf(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -99,70 +460,126 @@ class _DesktopLibrarySidebarState extends State<DesktopLibrarySidebar> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.library_music_rounded,
-                  size: 20,
-                  color: AppTheme.textSecondaryOf(context),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    'Your Library',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.3,
-                      color: AppTheme.textPrimaryOf(context),
-                    ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: widget.onLibraryTap,
+                hoverColor: AppTheme.primaryOf(context).withValues(alpha: 0.08),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 2,
+                    vertical: 4,
                   ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          // "+ Create" Button
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: widget.onCreatePlaylist,
-              hoverColor: AppTheme.primaryOf(context).withValues(alpha: 0.12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardSurfaceOf(context),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppTheme.borderOf(context),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.add_rounded,
-                      size: 15,
-                      color: AppTheme.textPrimaryOf(context),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Create',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimaryOf(context),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.library_music_rounded,
+                        size: 20,
+                        color: AppTheme.textSecondaryOf(context),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Your Library',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.3,
+                            color: AppTheme.textPrimaryOf(context),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
+          ),
+          const SizedBox(width: 8),
+          // Action Buttons: Import & Create
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // "Import" Icon Button (Spotify link + export ZIP)
+              Tooltip(
+                message: 'Import Spotify link or export ZIP',
+                waitDuration: const Duration(milliseconds: 300),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: widget.onImportSpotify,
+                    hoverColor: AppTheme.primaryOf(
+                      context,
+                    ).withValues(alpha: 0.12),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardSurfaceOf(context),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppTheme.borderOf(context),
+                          width: 1,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.download_rounded,
+                        size: 15,
+                        color: AppTheme.textPrimaryOf(context),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              // "+ Create" Button
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: widget.onCreatePlaylist,
+                  hoverColor: AppTheme.primaryOf(
+                    context,
+                  ).withValues(alpha: 0.12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardSurfaceOf(context),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppTheme.borderOf(context),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.add_rounded,
+                          size: 15,
+                          color: AppTheme.textPrimaryOf(context),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Create',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimaryOf(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -195,8 +612,8 @@ class _DesktopLibrarySidebarState extends State<DesktopLibrarySidebar> {
                     decoration: BoxDecoration(
                       color: isSelected
                           ? (AppTheme.isDark(context)
-                              ? Colors.white
-                              : AppTheme.primaryOf(context))
+                                ? Colors.white
+                                : AppTheme.primaryOf(context))
                           : AppTheme.cardSurfaceOf(context),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
@@ -210,12 +627,13 @@ class _DesktopLibrarySidebarState extends State<DesktopLibrarySidebar> {
                       filter,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                         color: isSelected
                             ? (AppTheme.isDark(context)
-                                ? Colors.black
-                                : Colors.white)
+                                  ? Colors.black
+                                  : Colors.white)
                             : AppTheme.textSecondaryOf(context),
                       ),
                     ),

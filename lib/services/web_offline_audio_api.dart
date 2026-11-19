@@ -7,19 +7,30 @@ abstract class WebOfflineAudioStore {
   /// Reads the list of previously downloaded tracks from browser storage.
   Future<void> hydrate();
 
-  /// True when [songId] has a complete track stored in the browser.
+  /// True when [songId] has a track stored in the browser.
   bool has(String songId);
+
+  /// True when the stored copy for [songId] is a preview.
+  bool isPreview(String songId);
+
+  /// Verifies that [songId] actually exists in underlying storage.
+  /// If missing, purges the ID from the in-memory index.
+  Future<bool> verifyExists(String songId);
+
+  /// Drops [songId] from the in-memory index and revokes any memoized blob URL.
+  void invalidate(String songId);
 
   /// Creates (and memoizes) a `blob:` URL for the stored track.
   ///
   /// Returns null when the browser holds no copy for [songId].
   Future<String?> objectUrl(String songId);
 
-  /// Persists [bytes] as the complete track for [songId].
+  /// Persists [bytes] as the track for [songId].
   Future<bool> save(
     String songId,
     List<int> bytes, {
     required String contentType,
+    bool preview = false,
   });
 
   /// Deletes the stored track and revokes its blob URL.
