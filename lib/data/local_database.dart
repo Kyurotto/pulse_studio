@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 import '../models/listening_history.dart';
 
@@ -125,6 +126,7 @@ class LocalDatabase {
   }
 
   Future<void> _cleanImportedPlaylistsAndPreviews(Database db) async {
+    if (kIsWeb) return;
     try {
       // 1. Delete preview audio files (< 1.6MB) from all offline_audio directories
       const previewSongIds = [
@@ -448,7 +450,34 @@ class LocalDatabase {
     if (existingDatabase != null) return existingDatabase;
 
     if (kIsWeb) {
-      throw UnsupportedError('SQLite is not available on web builds.');
+      try {
+        final factory = databaseFactoryFfiWeb;
+        final openedDatabase = await factory.openDatabase(
+          _databaseName,
+          options: OpenDatabaseOptions(
+            version: _databaseVersion,
+            onCreate: _createDatabase,
+            onUpgrade: _upgradeDatabase,
+          ),
+        );
+        _database = openedDatabase;
+        return openedDatabase;
+      } catch (e) {
+        debugPrint(
+          '[LocalDatabase] Web persistent DB failed, falling back to in-memory: $e',
+        );
+        final factory = databaseFactoryFfiWeb;
+        final openedDatabase = await factory.openDatabase(
+          inMemoryDatabasePath,
+          options: OpenDatabaseOptions(
+            version: _databaseVersion,
+            onCreate: _createDatabase,
+            onUpgrade: _upgradeDatabase,
+          ),
+        );
+        _database = openedDatabase;
+        return openedDatabase;
+      }
     }
 
     try {
@@ -492,6 +521,9 @@ class LocalDatabase {
   }
 
   DatabaseFactory _databaseFactoryForPlatform() {
+    if (kIsWeb) {
+      return databaseFactoryFfiWeb;
+    }
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       return databaseFactoryFfi;
@@ -2375,7 +2407,7 @@ class LocalDatabase {
       if (resolvedAudio.isEmpty ||
           (!resolvedAudio.startsWith('http') &&
               !resolvedAudio.startsWith('asset') &&
-              !File(resolvedAudio).existsSync())) {
+              (!kIsWeb && !File(resolvedAudio).existsSync()))) {
         final cached = cachedAudioIndex[songId];
         if (cached != null) {
           resolvedAudio = cached.path;
@@ -2777,6 +2809,7 @@ class LocalDatabase {
   static List<Directory>? _offlineDirsMemo;
 
   static Future<List<Directory>> getOfflineCandidateDirs() async {
+    if (kIsWeb) return const [];
     if (_offlineDirsMemo != null) return _offlineDirsMemo!;
     final dirs = <Directory>[];
     if (!kIsWeb && Platform.isAndroid) {
@@ -2907,6 +2940,7 @@ class LocalDatabase {
   /// Permanent offline downloads (`offline_downloads`) are untouched: only temporary
   /// streaming cache is removed. [dirs] is injectable for tests.
   static Future<int> clearLocalAudioCache({List<Directory>? dirs}) async {
+    if (kIsWeb) return 0;
     var freedBytes = 0;
     final seen = <String>{};
     final toDelete = <File>[];
@@ -2950,6 +2984,7 @@ class LocalDatabase {
   /// Automatically inspects unlinked imported songs and links any full-length
   /// audio files already cached on disk (>= 1.6MB).
   Future<void> autoHealCachedImportedSongs() async {
+    if (kIsWeb) return;
     try {
       final db = _database;
       if (db == null) return;
@@ -2993,6 +3028,7 @@ class LocalDatabase {
   static Future<Map<String, File>> getOfflineAudioFileIndex({
     bool forceRefresh = false,
   }) async {
+    if (kIsWeb) return {};
     final now = DateTime.now();
     if (!forceRefresh &&
         _cachedAudioIndex != null &&
@@ -3036,6 +3072,7 @@ class LocalDatabase {
   }
 
   static Future<File?> findCachedAudioFile(String songId) async {
+    if (kIsWeb) return null;
     if (_cachedAudioFileMemo.containsKey(songId)) {
       final f = _cachedAudioFileMemo[songId];
       if (f == null) return null;
@@ -3049,6 +3086,7 @@ class LocalDatabase {
   }
 
   Future<void> _deleteCachedAudioFile(String songId) async {
+    if (kIsWeb) return;
     invalidateCachedAudioFileMemo(songId);
     var deleted = false;
     try {

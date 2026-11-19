@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/song_model.dart';
 import '../theme/app_theme.dart';
@@ -181,18 +182,20 @@ class SongArtworkWidget extends StatelessWidget {
 
     // Local file path
     try {
-      final file = File(url);
-      if (file.existsSync()) {
-        return Image.file(
-          file,
-          width: w,
-          height: h,
-          fit: fit,
-          cacheWidth: cacheWidth,
-          cacheHeight: cacheHeight,
-          errorBuilder: (context, error, stackTrace) =>
-              _buildSpotifyProceduralArt(colors, w, h),
-        );
+      if (!kIsWeb) {
+        final file = File(url);
+        if (file.existsSync()) {
+          return Image.file(
+            file,
+            width: w,
+            height: h,
+            fit: fit,
+            cacheWidth: cacheWidth,
+            cacheHeight: cacheHeight,
+            errorBuilder: (context, error, stackTrace) =>
+                _buildSpotifyProceduralArt(colors, w, h),
+          );
+        }
       }
     } catch (_) {}
 

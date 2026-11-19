@@ -2,6 +2,7 @@
 
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/music_player_controller.dart';
@@ -135,7 +136,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       if (liveSong.audioUrl.isEmpty ||
           (!liveSong.audioUrl.startsWith('http') &&
               !liveSong.audioUrl.startsWith('asset') &&
-              !File(liveSong.audioUrl).existsSync())) {
+              (!kIsWeb && !File(liveSong.audioUrl).existsSync()))) {
         final cached =
             MusicPlayerController.findCachedAudioFileSync(liveSong.id);
         if (cached != null &&

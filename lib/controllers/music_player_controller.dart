@@ -979,7 +979,7 @@ class MusicPlayerController extends ChangeNotifier {
     primeStaticOfflineCache();
     unawaited(_equalizer.initialize());
     unawaited(_offlineCandidateDirs());
-    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+    if (!kIsWeb && !Platform.environment.containsKey('FLUTTER_TEST')) {
       unawaited(
         RadioDiscoveryService.instance.loadCachedRadios().catchError((_) {}),
       );
@@ -4678,6 +4678,7 @@ class MusicPlayerController extends ChangeNotifier {
   ];
 
   static void primeStaticOfflineCache() {
+    if (kIsWeb) return;
     final dirs = <Directory>[
       ...?_staticOfflineDirs,
       for (final pth in _knownFallbackDirs) Directory(pth),
@@ -4699,6 +4700,7 @@ class MusicPlayerController extends ChangeNotifier {
   }
 
   static File? findCachedAudioFileSync(String songId) {
+    if (kIsWeb) return null;
     final memo = _staticAudioLookupMemo[songId];
     if (memo != null && memo.existsSync() && memo.lengthSync() > 1024) {
       return memo;
@@ -4730,6 +4732,7 @@ class MusicPlayerController extends ChangeNotifier {
   }
 
   Future<List<Directory>> _offlineCandidateDirs() async {
+    if (kIsWeb) return const [];
     final cached = _offlineDirCache;
     if (cached != null) return cached;
     final dirs = <Directory>[];
