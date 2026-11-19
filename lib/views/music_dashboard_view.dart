@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../auth/auth_service.dart';
+import '../data/local_database.dart';
 import '../models/song_model.dart';
+import '../services/biometric_auth_service.dart';
 import '../theme/app_theme.dart';
 import '../controllers/music_player_controller.dart';
 import '../widgets/sidebar_nav.dart';
@@ -86,6 +88,9 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
     _controller.preLocateExploreRadios(_dynamicPopularRadios);
     final isTest = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
     if (!isTest) {
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) _checkBiometricOffer();
+      });
       Future.delayed(const Duration(milliseconds: 600), () {
         if (mounted) {
           _controller.autoDownloadExploreRadios([
@@ -97,6 +102,55 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       });
       _loadDynamicRadios();
     }
+  }
+
+  Future<void> _checkBiometricOffer() async {
+    try {
+      final bio = BiometricAuthService.instance;
+      if (!bio.isPlatformSupported) return;
+      final enrolled = await bio.isBiometricEnrolled();
+      final uid = AuthService.instance.currentUserId;
+      if (!enrolled || uid.isEmpty) return;
+      final alreadyEnabled = await bio.isBiometricUnlockEnabled(uid);
+      if (alreadyEnabled) return;
+
+      final askedKey = 'biometric_prompt_shown_$uid';
+      final alreadyAsked = await LocalDatabase.instance.getSetting(askedKey);
+      if (alreadyAsked == 'true') return;
+
+      await LocalDatabase.instance.setSetting(askedKey, 'true');
+
+      if (!mounted) return;
+      final isWindows =
+          defaultTargetPlatform == TargetPlatform.windows;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            isWindows
+                ? 'Enable Windows Hello unlock for faster access next time?'
+                : 'Enable Biometric Unlock for faster access next time?',
+          ),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+            label: 'Enable',
+            textColor: AppTheme.primary,
+            onPressed: () async {
+              final ok = await bio.authenticateForUnlock();
+              if (ok) {
+                await bio.enableBiometricUnlock(uid);
+                if (mounted) {
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                    const SnackBar(
+                      content: Text('Biometric Unlock enabled!'),
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ),
+      );
+    } catch (_) {}
   }
 
   Future<void> _loadDynamicRadios({bool clearCurrent = false}) async {

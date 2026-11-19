@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import '../data/local_database.dart';
+import '../services/biometric_auth_service.dart';
 
 class LocalUser {
   final String id;
@@ -76,9 +77,19 @@ class AuthService {
   }
 
   final _authController = StreamController<Object?>.broadcast();
+  final _lockController = StreamController<bool>.broadcast();
+  bool _isAppLocked = false;
   Object? _currentUser;
   bool _listenerStarted = false;
   bool _isInitialized = false;
+
+  bool get isAppLocked => _isAppLocked;
+  Stream<bool> get lockChanges => _lockController.stream;
+
+  void setAppLocked(bool locked) {
+    _isAppLocked = locked;
+    if (!_lockController.isClosed) _lockController.add(locked);
+  }
 
   /// One-shot app setting: the email the sign-in screen should prefill after
   /// the user taps an account in the drawer's "Add Accounts" screen.
@@ -356,6 +367,7 @@ class AuthService {
               backupEmail: (localData['backup_email'] as String? ?? '').trim(),
               phoneNumber: (localData['phone_number'] as String? ?? '').trim(),
             );
+            await _checkBiometricLockAtStartup(savedUserId);
             _isInitialized = true;
             _authController.add(_currentUser);
             return;
@@ -414,6 +426,9 @@ class AuthService {
             }
           });
         }
+        if (_currentUser != null) {
+          await _checkBiometricLockAtStartup(currentUserId);
+        }
         _isInitialized = true;
         _authController.add(_currentUser);
       } catch (e) {
@@ -438,6 +453,8 @@ class AuthService {
     Map<String, Object?> userData, {
     bool persistSession = true,
   }) async {
+    _isAppLocked = false;
+    if (!_lockController.isClosed) _lockController.add(false);
     final userId = userData['id'] as String;
     // Source of truth is employees.user_id -> users.id. Never trust the
     // cached users.role column; an employee row linked to this ID makes
@@ -654,6 +671,8 @@ class AuthService {
     }
 
     try {
+      _isAppLocked = false;
+      if (!_lockController.isClosed) _lockController.add(false);
       final credential = await auth
           .signInWithEmailAndPassword(email: cleanEmail, password: password)
           .timeout(const Duration(seconds: 4));
@@ -769,6 +788,72 @@ class AuthService {
     }
   }
 
+  /// Signs in with the password stored in the device's secure credential
+  /// storage after a successful fingerprint check.
+  ///
+  /// Local-only accounts are verified and restored directly against SQLite so
+  /// fingerprint sign-in stays instant and works offline. Mirrored Firebase
+  /// accounts still go through Firebase so their cloud session stays valid.
+  Future<void> signInWithSavedPassword({
+    required String email,
+    required String password,
+  }) async {
+    final cleanEmail = email.trim().toLowerCase();
+    final local = await LocalDatabase.instance.getUserByEmail(cleanEmail);
+    if (local != null && _isLocalOnlyAccount(local)) {
+      final verified = await LocalDatabase.instance.verifyLocalPassword(
+        cleanEmail,
+        password,
+      );
+      if (verified == null) {
+        throw FirebaseAuthException(
+          code: 'wrong-password',
+          message: 'Incorrect email address or password.',
+        );
+      }
+      await _loginAsLocalUser(verified, persistSession: true);
+      return;
+    }
+    await signInWithEmail(
+      email: cleanEmail,
+      password: password,
+      persistSession: true,
+    );
+  }
+
+  /// Whether [email] is a local-only password account that can be restored
+  /// after a device biometric check even when its plaintext password is not in
+  /// secure storage (for example, an account remembered by an older build).
+  ///
+  /// Firebase-backed accounts always need their saved password so the cloud
+  /// session can be restored; only accounts that live entirely in SQLite are
+  /// eligible for this fallback.
+  Future<bool> canSignInLocallyWithBiometrics(String email) async {
+    try {
+      final row = await LocalDatabase.instance.getUserByEmail(
+        email.trim().toLowerCase(),
+      );
+      if (row == null || !_isLocalOnlyAccount(row)) return false;
+      return (row['password_hash'] as String? ?? '').isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Completes a local-only sign-in after the caller has verified device
+  /// biometrics. Never call this without a successful biometric check.
+  Future<void> signInWithLocalBiometrics(String email) async {
+    final cleanEmail = email.trim().toLowerCase();
+    final row = await LocalDatabase.instance.getUserByEmail(cleanEmail);
+    if (row == null || !_isLocalOnlyAccount(row)) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'This account cannot be signed in with fingerprint.',
+      );
+    }
+    await _loginAsLocalUser(row, persistSession: true);
+  }
+
   /// Signs in WITHOUT touching Firebase at all. Use for the explicit
   /// "Sign in offline" button so it works instantly with Wi-Fi/data off.
   /// Verifies the email + password against the local SQLite hash created
@@ -820,7 +905,49 @@ class AuthService {
     }, SetOptions(merge: true));
   }
 
+  Future<void> _checkBiometricLockAtStartup(String accountId) async {
+    try {
+      if (accountId.isNotEmpty) {
+        final enabled = await BiometricAuthService.instance
+            .isBiometricUnlockEnabled(accountId);
+        final enrolled = await BiometricAuthService.instance
+            .isBiometricEnrolled();
+        if (enabled && enrolled) {
+          _isAppLocked = true;
+          if (!_lockController.isClosed) _lockController.add(true);
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Prompts for device biometrics to unlock the existing account session.
+  /// Does NOT call Firebase signInWithEmail; simply unlocks the local app UI.
+  Future<bool> unlockWithBiometrics() async {
+    if (_currentUser == null) return false;
+    final success = await BiometricAuthService.instance.authenticateForUnlock();
+    if (success) {
+      _isAppLocked = false;
+      if (!_lockController.isClosed) _lockController.add(false);
+      _emitAuth(_currentUser);
+      return true;
+    }
+    return false;
+  }
+
+  /// Locks the app and reverts to the password sign-in screen.
+  Future<void> lockToPasswordSignIn() async {
+    _isAppLocked = false;
+    if (!_lockController.isClosed) _lockController.add(false);
+    await signOut();
+  }
+
   Future<void> signOut() async {
+    // Keep the biometric configuration on purpose: after signing out, the
+    // sign-in screen offers fingerprint login for the remembered account.
+    // It is cleared only when the user turns the setting off or forgets the
+    // account.
+    _isAppLocked = false;
+    if (!_lockController.isClosed) _lockController.add(false);
     await LocalDatabase.instance.clearActiveSession();
     try {
       // Reset to the default so a stale "do not persist" flag from a

@@ -19,6 +19,10 @@ class FakeForgotPasswordAccountStore extends ForgotPasswordAccountStore {
   String? completedPassword;
   String? updatedId;
   String? updatedPassword;
+  String? rememberedEmail;
+  String? rememberedName;
+  String? savedEmail;
+  String? savedPassword;
 
   Object? requestError;
   Object? verifyError;
@@ -78,6 +82,24 @@ class FakeForgotPasswordAccountStore extends ForgotPasswordAccountStore {
   }) async {
     updatedId = id;
     updatedPassword = newPassword;
+  }
+
+  @override
+  Future<void> rememberAccount({
+    required String email,
+    required String displayName,
+  }) async {
+    rememberedEmail = email;
+    rememberedName = displayName;
+  }
+
+  @override
+  Future<void> savePassword({
+    required String email,
+    required String newPassword,
+  }) async {
+    savedEmail = email;
+    savedPassword = newPassword;
   }
 }
 
@@ -191,6 +213,20 @@ void main() {
         final fields = find.byType(TextFormField);
         expect(fields, findsNWidgets(2));
 
+        // The new-password fields participate in system autofill.
+        expect(find.byType(AutofillGroup), findsOneWidget);
+        final textFields = tester
+            .widgetList<TextField>(find.byType(TextField))
+            .toList();
+        expect(
+          textFields.every(
+            (field) =>
+                field.autofillHints?.contains(AutofillHints.newPassword) ??
+                false,
+          ),
+          isTrue,
+        );
+
         // Mismatched confirmation is rejected.
         await tester.enterText(fields.at(0), 'SecretPass123');
         await tester.enterText(fields.at(1), 'DifferentPass');
@@ -210,6 +246,10 @@ void main() {
         expect(store.completedPassword, 'SecretPass123');
         expect(store.updatedId, '2');
         expect(store.updatedPassword, 'SecretPass123');
+        expect(store.rememberedEmail, email);
+        expect(store.rememberedName, 'musicfan');
+        expect(store.savedEmail, email);
+        expect(store.savedPassword, 'SecretPass123');
         expect(find.text('Password Reset Successfully!'), findsOneWidget);
 
         await tester.tap(find.text('Back to Sign in'));

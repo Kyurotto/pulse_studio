@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../auth/password_recovery_api.dart';
+import '../auth/saved_credential_store.dart';
 import '../data/local_database.dart';
 import '../theme/app_theme.dart';
 
@@ -61,6 +62,26 @@ class ForgotPasswordAccountStore {
       newPassword: newPassword,
     );
   }
+
+  /// Keeps the reset account on the sign-in screen so it can autofill the
+  /// password the user just chose.
+  Future<void> rememberAccount({
+    required String email,
+    required String displayName,
+  }) {
+    return LocalDatabase.instance.saveRememberedAccount(
+      email: email,
+      displayName: displayName,
+    );
+  }
+
+  /// Stores the new password in the device's encrypted credential storage.
+  Future<void> savePassword({
+    required String email,
+    required String newPassword,
+  }) {
+    return SavedCredentialStore.instance.savePassword(email, newPassword);
+  }
 }
 
 /// Password recovery for Pulse Studio accounts.
@@ -107,6 +128,7 @@ class _ForgotPasswordDialogState extends State<ForgotPasswordDialog> {
   bool _obscureConfirmPassword = true;
 
   String _confirmedEmail = '';
+  String _confirmedDisplayName = '';
   String _requestId = '';
   String _resetToken = '';
   String _resetUserId = '';
@@ -255,6 +277,7 @@ class _ForgotPasswordDialogState extends State<ForgotPasswordDialog> {
       if (!mounted) return;
 
       _confirmedEmail = email;
+      _confirmedDisplayName = (account['display_name'] as String? ?? '').trim();
       _resetUserId = (account['id'] as String?) ?? '';
       _requestId = result.requestId;
       _startTimers();
@@ -383,6 +406,25 @@ class _ForgotPasswordDialogState extends State<ForgotPasswordDialog> {
         id: _resetUserId,
         newPassword: _passwordController.text,
       );
+
+      // Remember the account and keep the new password in encrypted storage
+      // so the sign-in screen can autofill it immediately. These are
+      // best-effort: the backend token is already consumed and the local
+      // hash is already changed, so a storage hiccup must not turn a
+      // successful reset into an error.
+      try {
+        await _accounts.rememberAccount(
+          email: _confirmedEmail,
+          displayName: _confirmedDisplayName,
+        );
+        await _accounts.savePassword(
+          email: _confirmedEmail,
+          newPassword: _passwordController.text,
+        );
+        // Ask Android/iOS/browser password managers to offer saving the new
+        // credential too, so it also participates in system autofill.
+        TextInput.finishAutofillContext(shouldSave: true);
+      } catch (_) {}
 
       if (!mounted) return;
       setState(() {
@@ -761,89 +803,99 @@ class _ForgotPasswordDialogState extends State<ForgotPasswordDialog> {
   // ---------------------------------------------------------------------------
 
   Widget _buildNewPasswordStep() {
-    return Form(
-      key: _formKeyPassword,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Set a new password for $_confirmedEmail. '
-            'Use at least 6 characters.',
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppTheme.textSecondary,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _passwordController,
-            obscureText: _obscurePassword,
-            decoration: InputDecoration(
-              labelText: 'New password',
-              prefixIcon: const Icon(Icons.lock_outline, size: 20),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscurePassword
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  size: 20,
-                  color: AppTheme.textSecondary,
-                ),
-                onPressed: () =>
-                    setState(() => _obscurePassword = !_obscurePassword),
+    return AutofillGroup(
+      child: Form(
+        key: _formKeyPassword,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Set a new password for $_confirmedEmail. '
+              'Use at least 6 characters.',
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                height: 1.4,
               ),
             ),
-            validator: (value) {
-              if (value == null || value.length < 6) {
-                return 'Use at least 6 characters.';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 14),
-          TextFormField(
-            controller: _confirmPasswordController,
-            obscureText: _obscureConfirmPassword,
-            decoration: InputDecoration(
-              labelText: 'Confirm new password',
-              prefixIcon: const Icon(Icons.lock_reset_outlined, size: 20),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureConfirmPassword
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  size: 20,
-                  color: AppTheme.textSecondary,
-                ),
-                onPressed: () => setState(
-                  () => _obscureConfirmPassword = !_obscureConfirmPassword,
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              autofillHints: const [AutofillHints.newPassword],
+              enableSuggestions: false,
+              autocorrect: false,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: 'New password',
+                prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 20,
+                    color: AppTheme.textSecondary,
+                  ),
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
                 ),
               ),
+              validator: (value) {
+                if (value == null || value.length < 6) {
+                  return 'Use at least 6 characters.';
+                }
+                return null;
+              },
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please confirm your password.';
-              }
-              if (value != _passwordController.text) {
-                return 'Passwords do not match.';
-              }
-              return null;
-            },
-            onFieldSubmitted: (_) => _submitNewPassword(),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: _isBusy ? null : _submitNewPassword,
-            child: _isBusy
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Reset password'),
-          ),
-        ],
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _confirmPasswordController,
+              obscureText: _obscureConfirmPassword,
+              autofillHints: const [AutofillHints.newPassword],
+              enableSuggestions: false,
+              autocorrect: false,
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                labelText: 'Confirm new password',
+                prefixIcon: const Icon(Icons.lock_reset_outlined, size: 20),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureConfirmPassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 20,
+                    color: AppTheme.textSecondary,
+                  ),
+                  onPressed: () => setState(
+                    () => _obscureConfirmPassword = !_obscureConfirmPassword,
+                  ),
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please confirm your password.';
+                }
+                if (value != _passwordController.text) {
+                  return 'Passwords do not match.';
+                }
+                return null;
+              },
+              onFieldSubmitted: (_) => _submitNewPassword(),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _isBusy ? null : _submitNewPassword,
+              child: _isBusy
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Reset password'),
+            ),
+          ],
+        ),
       ),
     );
   }
