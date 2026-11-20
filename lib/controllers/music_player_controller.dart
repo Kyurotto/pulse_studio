@@ -7914,15 +7914,20 @@ class MusicPlayerController extends ChangeNotifier {
       song.isPreview = false;
     }
 
+    // Set when a cached preview is held in reserve while the online enrichment
+    // branch below tries to select a full source.
+    var cachedPreviewFallback = false;
+
     // 0b. Audio downloaded into the browser Cache API. Native builds never
     // populate this store, so the lookup is web-only.
     if (!forceAsset && kIsWeb) {
       final isCachedPreview = _webAudioStore?.isPreview(song.id) ?? false;
       final isOnline = await _isDeviceOnline();
-      // When a full source is selected, bypass a cached preview and continue
-      // to the full-source playback path; keep preferring verified full cached
-      // copies and allow a cached preview when it is the only available source
-      // for offline playback.
+      // Prefer verified full cached copies and play a cached preview when it
+      // is the only available source for offline playback. While online, a
+      // cached preview is kept in reserve instead of being skipped: the
+      // enrichment branch below gets a chance to select a full source, and the
+      // preview is used for playback when it does not.
       if (!isCachedPreview || !isOnline) {
         final blobUrl = await _webAudioStore?.objectUrl(song.id);
         if (blobUrl != null && blobUrl.isNotEmpty) {
@@ -7931,6 +7936,8 @@ class MusicPlayerController extends ChangeNotifier {
           song.isPreview = isCachedPreview;
           return AudioSource.uri(Uri.parse(blobUrl), tag: mediaItem);
         }
+      } else {
+        cachedPreviewFallback = true;
       }
       // A desktop/Android file path is meaningless in the browser: clear it
       // so the online enrichment branch can resolve a stream.
@@ -8082,7 +8089,8 @@ class MusicPlayerController extends ChangeNotifier {
         if (song.audioUrl.isNotEmpty &&
             !song.audioUrl.toLowerCase().contains('.m3u8') &&
             (song.audioUrl.startsWith('http://') ||
-                song.audioUrl.startsWith('https://'))) {
+                song.audioUrl.startsWith('https://')) &&
+            !(cachedPreviewFallback && song.isPreview)) {
           final isGv = song.audioUrl.contains('googlevideo.com');
           return AudioSource.uri(
             Uri.parse(song.audioUrl),
@@ -8094,6 +8102,18 @@ class MusicPlayerController extends ChangeNotifier {
             tag: mediaItem,
           );
         }
+      }
+    }
+
+    // The online enrichment branch did not select a full source: play the
+    // cached preview held in reserve rather than skipping it.
+    if (cachedPreviewFallback) {
+      final blobUrl = await _webAudioStore?.objectUrl(song.id);
+      if (blobUrl != null && blobUrl.isNotEmpty) {
+        _offlineFallbackIds.remove(song.id);
+        song.isYouTubeAudio = false;
+        song.isPreview = _webAudioStore?.isPreview(song.id) ?? true;
+        return AudioSource.uri(Uri.parse(blobUrl), tag: mediaItem);
       }
     }
 

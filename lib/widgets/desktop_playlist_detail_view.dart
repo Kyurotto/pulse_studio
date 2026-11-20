@@ -21,6 +21,7 @@ class DesktopPlaylistDetailView extends StatefulWidget {
   final VoidCallback? onBack;
   final ValueChanged<Song>? onSongTap;
   final ValueChanged<Song>? onAddToPlaylist;
+  final VoidCallback? onDelete;
 
   const DesktopPlaylistDetailView({
     super.key,
@@ -29,6 +30,7 @@ class DesktopPlaylistDetailView extends StatefulWidget {
     this.onBack,
     this.onSongTap,
     this.onAddToPlaylist,
+    this.onDelete,
   });
 
   @override
@@ -119,7 +121,6 @@ class _DesktopPlaylistDetailViewState extends State<DesktopPlaylistDetailView> {
       }
       songs = found;
     }
-
     final seenKeys = <String>{};
     final seenIds = <String>{};
     final deduplicated = <Song>[];
@@ -232,8 +233,12 @@ class _DesktopPlaylistDetailViewState extends State<DesktopPlaylistDetailView> {
     final songs = _resolveSongs();
     final displayedSongs = _filterAndSortSongs(songs);
     final currentSongId = widget.controller.currentSong?.id;
-    final isPlayingCurrent =
-        widget.controller.isPlaying && songs.any((s) => s.id == currentSongId);
+    final isThisPlaylistQueue = _isActiveQueueFor(songs);
+    final canResumeQueue =
+        isThisPlaylistQueue &&
+        currentSongId != null &&
+        songs.any((s) => s.id == currentSongId);
+    final isPlayingThisPlaylist = canResumeQueue && widget.controller.isPlaying;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -242,7 +247,7 @@ class _DesktopPlaylistDetailViewState extends State<DesktopPlaylistDetailView> {
         _buildHeroBanner(context, songs),
 
         // 2. Action Controls Bar (Play button, Shuffle, Download, Search, Sort)
-        _buildActionsBar(context, songs, isPlayingCurrent),
+        _buildActionsBar(context, songs, isPlayingThisPlaylist, canResumeQueue),
 
         // 3. Track Table
         _buildTrackTable(context, displayedSongs),
@@ -252,6 +257,15 @@ class _DesktopPlaylistDetailViewState extends State<DesktopPlaylistDetailView> {
     );
   }
 
+  /// True when the player's active queue contains exactly this playlist's
+  /// songs, regardless of order (a shuffled play still belongs to it).
+  bool _isActiveQueueFor(List<Song> songs) {
+    final queue = widget.controller.queue;
+    if (queue.isEmpty || queue.length != songs.length) return false;
+    final queueIds = queue.map((s) => s.id).toSet();
+    final songIds = songs.map((s) => s.id).toSet();
+    return queueIds.length == songIds.length && queueIds.containsAll(songIds);
+  }
   Widget _buildHeroBanner(BuildContext context, List<Song> songs) {
     final dominantColor = widget.playlist.gradient.isNotEmpty
         ? widget.playlist.gradient.first
@@ -462,6 +476,7 @@ class _DesktopPlaylistDetailViewState extends State<DesktopPlaylistDetailView> {
     BuildContext context,
     List<Song> songs,
     bool isPlayingThisPlaylist,
+    bool canResumeQueue,
   ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 18),
@@ -474,7 +489,9 @@ class _DesktopPlaylistDetailViewState extends State<DesktopPlaylistDetailView> {
               borderRadius: BorderRadius.circular(30),
               onTap: () {
                 if (songs.isEmpty) return;
-                if (isPlayingThisPlaylist) {
+                if (canResumeQueue) {
+                  // The active queue is this playlist: resume the paused
+                  // track instead of restarting at the first one.
                   widget.controller.togglePlayPause();
                 } else {
                   widget.controller.playSongList(songs, startIndex: 0);
@@ -573,6 +590,26 @@ class _DesktopPlaylistDetailViewState extends State<DesktopPlaylistDetailView> {
                   ],
                 ),
               ),
+              if (widget.onDelete != null) ...[
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'delete_playlist',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.delete_outline_rounded,
+                        size: 18,
+                        color: AppTheme.accentPink,
+                      ),
+                      SizedBox(width: 10),
+                      Text(
+                        'Delete playlist',
+                        style: TextStyle(color: AppTheme.accentPink),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
             onSelected: (val) {
               if (val == 'add_to_queue' && songs.isNotEmpty) {
@@ -588,6 +625,8 @@ class _DesktopPlaylistDetailViewState extends State<DesktopPlaylistDetailView> {
                   playlist: widget.playlist,
                   title: widget.playlist.title,
                 );
+              } else if (val == 'delete_playlist') {
+                widget.onDelete?.call();
               }
             },
           ),

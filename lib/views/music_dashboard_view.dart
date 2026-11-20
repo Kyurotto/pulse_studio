@@ -1057,11 +1057,15 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       final playlist = _resolveSelectedPlaylist(_selectedPlaylistId!);
       if (playlist != null) {
         return DesktopPlaylistDetailView(
+          key: ValueKey(playlist.id),
           playlist: playlist,
           controller: _controller,
           onBack: () => setState(() => _selectedPlaylistId = null),
           onSongTap: _playSongWithLyrics,
           onAddToPlaylist: _showAddToPlaylistSheet,
+          onDelete: _controller.playlists.any((p) => p.id == playlist.id)
+              ? () => _confirmDeletePlaylist(playlist)
+              : null,
         );
       }
     }
