@@ -14,6 +14,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 import '../models/listening_history.dart';
+import 'web_database_sync.dart';
 
 /// Stores the music library, playlists, and user accounts on the device.
 ///
@@ -51,7 +52,13 @@ class LocalDatabase {
   }
 
   Future<void> _syncToWorkspace() async {
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      final db = _database;
+      if (db != null) {
+        await syncWebDatabase(db);
+      }
+      return;
+    }
     if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) return;
     try {
       final src = _databaseFilePath;
@@ -122,6 +129,9 @@ class LocalDatabase {
     await removeGenericPlaceholderUsers();
     await seedEmployeeIfNeeded();
     await _cleanImportedPlaylistsAndPreviews(db);
+    if (kIsWeb) {
+      await restoreWebDatabase(db);
+    }
     _syncToWorkspace();
   }
 
@@ -461,6 +471,7 @@ class LocalDatabase {
           ),
         );
         _database = openedDatabase;
+        await restoreWebDatabase(openedDatabase);
         return openedDatabase;
       } catch (e) {
         debugPrint(
@@ -476,6 +487,7 @@ class LocalDatabase {
           ),
         );
         _database = openedDatabase;
+        await restoreWebDatabase(openedDatabase);
         return openedDatabase;
       }
     }
@@ -1751,6 +1763,7 @@ class LocalDatabase {
         'value': value,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
+    await _syncToWorkspace();
   }
 
   Future<void> setSetting(String key, String value) => saveSetting(key, value);
@@ -3119,36 +3132,20 @@ class LocalDatabase {
     if (deleted) notifyAudioCacheChanged();
   }
 
-  /// Reassigns anonymous playlists created during the *current* anonymous
-  /// session to the newly signed-in user. Only playlists created after the
-  /// most recent session-clear are adopted — this prevents Person B from
-  /// inheriting Person A's anonymous playlists on a shared device.
+  /// Reassigns anonymous playlists created during the anonymous session
+  /// to the newly signed-in user so that all imported Spotify playlists
+  /// appear under their account immediately and survive restarts.
   Future<void> claimAnonymousPlaylists(String newUserId) async {
     if (newUserId.isEmpty || guestUserIds.contains(newUserId)) return;
     final db = await database;
 
-    // Determine the boundary: only claim playlists created after the
-    // last time sessions were cleared (i.e. last sign-out). Playlists
-    // from earlier anonymous sessions are left as 'default_user'.
-    int sessionBoundary = 0;
-    try {
-      final sessions = await db.query(
-        'user_sessions',
-        columns: ['saved_at'],
-        orderBy: 'saved_at DESC',
-        limit: 1,
-      );
-      if (sessions.isNotEmpty) {
-        sessionBoundary = sessions.first['saved_at'] as int? ?? 0;
-      }
-    } catch (_) {}
-
     await db.update(
       'imported_playlists',
       {'user_id': newUserId},
-      where: '(user_id = ? OR user_id = ?) AND created_at >= ?',
-      whereArgs: ['1', 'default_user', sessionBoundary],
+      where: 'user_id = ? OR user_id = ?',
+      whereArgs: ['1', 'default_user'],
     );
+    await _syncToWorkspace();
   }
 
   void _syncImportedPlaylistToFirestore({

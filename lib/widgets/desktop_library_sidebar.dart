@@ -51,6 +51,17 @@ class _DesktopLibrarySidebarState extends State<DesktopLibrarySidebar> {
   }
 
   @override
+  void didUpdateWidget(covariant DesktopLibrarySidebar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedPlaylistId != null &&
+        widget.selectedPlaylistId != oldWidget.selectedPlaylistId &&
+        _selectedFilter != null &&
+        _selectedFilter != 'Playlists') {
+      _selectedFilter = null;
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
@@ -511,7 +522,13 @@ class _DesktopLibrarySidebarState extends State<DesktopLibrarySidebar> {
                   color: Colors.transparent,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(16),
-                    onTap: widget.onImportSpotify,
+                    onTap: () {
+                      setState(() {
+                        _selectedFilter = null;
+                        _searchController.clear();
+                      });
+                      widget.onImportSpotify?.call();
+                    },
                     hoverColor: AppTheme.primaryOf(
                       context,
                     ).withValues(alpha: 0.12),
@@ -540,7 +557,13 @@ class _DesktopLibrarySidebarState extends State<DesktopLibrarySidebar> {
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
-                  onTap: widget.onCreatePlaylist,
+                  onTap: () {
+                    setState(() {
+                      _selectedFilter = null;
+                      _searchController.clear();
+                    });
+                    widget.onCreatePlaylist?.call();
+                  },
                   hoverColor: AppTheme.primaryOf(
                     context,
                   ).withValues(alpha: 0.12),
