@@ -1862,6 +1862,9 @@ class MusicPlayerController extends ChangeNotifier {
     _isLoadingPlaylists = true;
     try {
       final uid = userId ?? AuthService.instance.currentUserId;
+      if (_loadedUserId != null && _loadedUserId != uid) {
+        _playlists.clear();
+      }
       _loadedUserId = uid;
 
       // Purge any playlists or songs that were explicitly marked deleted by ID from in-memory state

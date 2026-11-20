@@ -439,6 +439,11 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       }
       _selectedPlaylistId = playlistId;
     });
+    if (!isMobile) {
+      await _controller.loadSavedPlaylists();
+      _controller.notifyListeners();
+    }
+    if (!mounted) return;
     _openPlaylist(playlistId);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

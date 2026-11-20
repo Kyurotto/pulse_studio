@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../auth/auth_service.dart';
@@ -42,6 +45,49 @@ class _DesktopPlaylistDetailViewState extends State<DesktopPlaylistDetailView> {
   void initState() {
     super.initState();
     _searchController.addListener(() => setState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _triggerFastLocateAndAutoDownload();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant DesktopPlaylistDetailView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.playlist.id != oldWidget.playlist.id) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _triggerFastLocateAndAutoDownload();
+      });
+    }
+  }
+
+  void _triggerFastLocateAndAutoDownload() {
+    final songs = _resolveSongs();
+    final locateTargets = songs.take(20).toList(growable: false);
+    final isRadio =
+        widget.playlist.id.startsWith('radio-') ||
+        widget.playlist.id.startsWith('artist-') ||
+        widget.playlist.id.startsWith('dailymix-') ||
+        songs.any((s) =>
+            s.id.startsWith('radio-') ||
+            s.id.startsWith('artist-') ||
+            s.id.startsWith('dm-'));
+    if (isRadio) {
+      widget.controller.fastLocateRadioSongs(locateTargets);
+    } else {
+      widget.controller.fastLocateDiscoverySongs(locateTargets);
+    }
+    if (widget.controller.autoDownloadOnImport && songs.isNotEmpty) {
+      widget.controller.downloadPlaylistSongs(
+        songs,
+        playlist: widget.playlist,
+        title: widget.playlist.title,
+        subtitle: widget.playlist.subtitle,
+        maxConcurrentWorkers: 3,
+      );
+      widget.controller.prioritizePlaylistDownloads(songs);
+    }
   }
 
   @override
@@ -73,7 +119,34 @@ class _DesktopPlaylistDetailViewState extends State<DesktopPlaylistDetailView> {
       }
       songs = found;
     }
-    return songs;
+
+    final seenKeys = <String>{};
+    final seenIds = <String>{};
+    final deduplicated = <Song>[];
+    for (final s in songs) {
+      if (!seenIds.add(s.id)) continue;
+      final key =
+          '${s.title.toLowerCase().trim()}|${s.artist.toLowerCase().trim()}';
+      if (key != '|' && !seenKeys.add(key)) continue;
+
+      final liveSong = widget.controller.songById(s.id) ?? s;
+      if (liveSong.audioUrl.isEmpty ||
+          (!liveSong.audioUrl.startsWith('http') &&
+              !liveSong.audioUrl.startsWith('asset') &&
+              (!kIsWeb && !File(liveSong.audioUrl).existsSync()))) {
+        final cached =
+            MusicPlayerController.findCachedAudioFileSync(liveSong.id);
+        if (cached != null &&
+            cached.existsSync() &&
+            cached.lengthSync() > 1024) {
+          liveSong.audioUrl = cached.path;
+          liveSong.isPreview = false;
+          liveSong.isYouTubeAudio = false;
+        }
+      }
+      deduplicated.add(liveSong);
+    }
+    return deduplicated;
   }
 
   List<Song> _filterAndSortSongs(List<Song> base) {
