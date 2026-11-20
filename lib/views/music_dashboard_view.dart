@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../controllers/music_player_controller.dart';
 import '../widgets/sidebar_nav.dart';
 import '../widgets/desktop_library_sidebar.dart';
+import '../widgets/desktop_playlist_detail_view.dart';
 import '../widgets/album_card.dart';
 import '../widgets/track_list_view.dart';
 import '../widgets/right_panel.dart';
@@ -123,8 +124,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       await LocalDatabase.instance.setSetting(askedKey, 'true');
 
       if (!mounted) return;
-      final isWindows =
-          defaultTargetPlatform == TargetPlatform.windows;
+      final isWindows = defaultTargetPlatform == TargetPlatform.windows;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Text(
@@ -142,9 +142,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                 await bio.enableBiometricUnlock(uid);
                 if (mounted) {
                   ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                    const SnackBar(
-                      content: Text('Biometric Unlock enabled!'),
-                    ),
+                    const SnackBar(content: Text('Biometric Unlock enabled!')),
                   );
                 }
               }
@@ -334,50 +332,60 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   }
 
   void _openPlaylist(String playlistId) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
     setState(() {
       _selectedPlaylistId = playlistId;
     });
 
-    final playlist = _controller.playlistById(playlistId);
-    if (playlist != null) {
-      Navigator.of(
-        context,
-      ).push(PlaylistScreen.route(playlist: playlist, controller: _controller));
-      return;
-    }
+    if (isMobile) {
+      final playlist = _controller.playlistById(playlistId);
+      if (playlist != null) {
+        Navigator.of(context).push(
+          PlaylistScreen.route(playlist: playlist, controller: _controller),
+        );
+        return;
+      }
 
-    final radio = RadioDiscoveryService.instance
-        .getPopularRadios()
-        .where((r) => r.id == playlistId || 'radio-${r.id}' == playlistId)
-        .firstOrNull;
-    if (radio != null) {
-      Navigator.of(context).push(
-        PlaylistScreen.route(
-          playlist: radio.toPlaylist(),
-          songs: radio.songs,
-          controller: _controller,
-        ),
-      );
-      return;
-    }
+      final radio = RadioDiscoveryService.instance
+          .getPopularRadios()
+          .where((r) => r.id == playlistId || 'radio-${r.id}' == playlistId)
+          .firstOrNull;
+      if (radio != null) {
+        Navigator.of(context).push(
+          PlaylistScreen.route(
+            playlist: radio.toPlaylist(),
+            songs: radio.songs,
+            controller: _controller,
+          ),
+        );
+        return;
+      }
 
-    if (playlistId == 'playlist-2000s' || playlistId == '2000s') {
-      final p2000s = MusicPlaylist(
-        id: 'playlist-2000s',
-        title: "2000's",
-        subtitle: 'loser',
-        gradient: const [Color(0xFFF59E0B), Color(0xFFD97706)],
-        imageUrl: '',
-        songIds: [],
-      );
-      Navigator.of(
-        context,
-      ).push(PlaylistScreen.route(playlist: p2000s, controller: _controller));
-      return;
-    }
+      if (playlistId == 'playlist-2000s' || playlistId == '2000s') {
+        final p2000s = MusicPlaylist(
+          id: 'playlist-2000s',
+          title: "2000's",
+          subtitle: 'loser',
+          gradient: const [Color(0xFFF59E0B), Color(0xFFD97706)],
+          imageUrl: '',
+          songIds: [],
+        );
+        Navigator.of(
+          context,
+        ).push(PlaylistScreen.route(playlist: p2000s, controller: _controller));
+        return;
+      }
 
-    // Default fallback to Library navigation
-    _controller.setNavIndex(2);
+      // Default fallback to Library navigation on mobile
+      _controller.setNavIndex(2);
+    } else {
+      // On desktop, keep persistent 3-column layout. Center pane displays DesktopPlaylistDetailView.
+      final songs = _controller.songsForPlaylist(playlistId);
+      if (songs.isNotEmpty) {
+        final locateTargets = songs.take(20).toList(growable: false);
+        _controller.fastLocateDiscoverySongs(locateTargets);
+      }
+    }
   }
 
   void _playSongWithLyrics(Song song) {
@@ -424,10 +432,14 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       controller: _controller,
     );
     if (playlistId == null || !mounted) return;
+    final isMobile = MediaQuery.of(context).size.width < 768;
     setState(() {
-      _controller.setNavIndex(2);
+      if (isMobile) {
+        _controller.setNavIndex(2);
+      }
       _selectedPlaylistId = playlistId;
     });
+    _openPlaylist(playlistId);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
@@ -695,12 +707,23 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                           selectedPlaylistId: _selectedPlaylistId,
                           onPlaylistSelected: _openPlaylist,
                           onCreatePlaylist: _showCreatePlaylistDialog,
+                          onImportSpotify: _importFromSpotify,
+                          onLibraryTap: () {
+                            if (isMobile) {
+                              _controller.setNavIndex(2);
+                            } else {
+                              setState(() => _selectedPlaylistId = null);
+                              _controller.setNavIndex(0);
+                            }
+                          },
                           onArtistSelected: (artist) {
+                            setState(() => _selectedPlaylistId = null);
                             _searchTextController.text = artist;
                             _controller.setSearchQuery(artist);
                             _controller.setNavIndex(0);
                           },
                           onAlbumSelected: (album) {
+                            setState(() => _selectedPlaylistId = null);
                             _searchTextController.text = album;
                             _controller.setSearchQuery(album);
                             _controller.setNavIndex(0);
@@ -710,48 +733,46 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                       // Main Content View
                       Expanded(
                         child: RefreshIndicator(
-                                onRefresh: _handleRefresh,
-                                color: AppTheme.primaryOf(context),
-                                backgroundColor: AppTheme.cardSurfaceOf(context),
-                                notificationPredicate: (notification) {
-                                  // Only the page's own vertical scroll counts. Horizontal
-                                  // discovery carousels (depth > 0, pixels == 0) used to flip
-                                  // the flag on, so scrolling up from below showed the circle.
-                                  if (notification.depth != 0 ||
-                                      notification.metrics.axis !=
-                                          Axis.vertical) {
-                                    return false;
-                                  }
-                                  if (notification is ScrollStartNotification) {
-                                    // Pull-to-refresh only when the drag began at the very top.
-                                    _pullToRefreshActive =
-                                        notification.metrics.pixels <= 0;
-                                  }
-                                  final active = _pullToRefreshActive;
-                                  if (notification is ScrollEndNotification) {
-                                    // The indicator must still see this end event; reset
-                                    // afterwards so a fling that overscrolls the top (started
-                                    // lower down) can never trigger the circle.
-                                    _pullToRefreshActive = false;
-                                  }
-                                  return active;
-                                },
-                                child: SingleChildScrollView(
-                                  controller: _pageScrollController,
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(),
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: isMobile ? 16 : 28,
-                                    vertical: 20,
-                                  ),
-                                  child: ListenableBuilder(
-                                    listenable: _controller,
-                                    builder: (context, _) =>
-                                        _buildCurrentTabContent(isMobile),
-                                  ),
-                                ),
-                              ),
+                          onRefresh: _handleRefresh,
+                          color: AppTheme.primaryOf(context),
+                          backgroundColor: AppTheme.cardSurfaceOf(context),
+                          notificationPredicate: (notification) {
+                            // Only the page's own vertical scroll counts. Horizontal
+                            // discovery carousels (depth > 0, pixels == 0) used to flip
+                            // the flag on, so scrolling up from below showed the circle.
+                            if (notification.depth != 0 ||
+                                notification.metrics.axis != Axis.vertical) {
+                              return false;
+                            }
+                            if (notification is ScrollStartNotification) {
+                              // Pull-to-refresh only when the drag began at the very top.
+                              _pullToRefreshActive =
+                                  notification.metrics.pixels <= 0;
+                            }
+                            final active = _pullToRefreshActive;
+                            if (notification is ScrollEndNotification) {
+                              // The indicator must still see this end event; reset
+                              // afterwards so a fling that overscrolls the top (started
+                              // lower down) can never trigger the circle.
+                              _pullToRefreshActive = false;
+                            }
+                            return active;
+                          },
+                          child: SingleChildScrollView(
+                            controller: _pageScrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 16 : 28,
+                              vertical: 20,
                             ),
+                            child: ListenableBuilder(
+                              listenable: _controller,
+                              builder: (context, _) =>
+                                  _buildCurrentTabContent(isMobile),
+                            ),
+                          ),
+                        ),
+                      ),
 
                       // Right Activity / Now Playing Panel on Wide Screens
                       if (isDesktop)
@@ -796,11 +817,14 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surfaceOf(context),
-        border: Border(top: BorderSide(color: AppTheme.borderOf(context), width: 1)),
+        border: Border(
+          top: BorderSide(color: AppTheme.borderOf(context), width: 1),
+        ),
         boxShadow: [
           BoxShadow(
-            color: (AppTheme.isDark(context) ? Colors.black : Colors.grey.shade400)
-                .withValues(alpha: AppTheme.isDark(context) ? 0.4 : 0.2),
+            color:
+                (AppTheme.isDark(context) ? Colors.black : Colors.grey.shade400)
+                    .withValues(alpha: AppTheme.isDark(context) ? 0.4 : 0.2),
             blurRadius: 12,
             offset: const Offset(0, -2),
           ),
@@ -870,7 +894,9 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                       ),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? AppTheme.primaryOf(context).withValues(alpha: 0.18)
+                            ? AppTheme.primaryOf(
+                                context,
+                              ).withValues(alpha: 0.18)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -936,7 +962,9 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       ),
       decoration: BoxDecoration(
         color: AppTheme.surfaceOf(context),
-        border: Border(bottom: BorderSide(color: AppTheme.borderOf(context), width: 1)),
+        border: Border(
+          bottom: BorderSide(color: AppTheme.borderOf(context), width: 1),
+        ),
       ),
       child: Row(
         children: [
@@ -967,8 +995,13 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                 textAlignVertical: TextAlignVertical.center,
                 onChanged: (val) {
                   _controller.setSearchQuery(val);
-                  if (val.trim().isNotEmpty && _controller.currentNavIndex != 0) {
-                    _controller.setNavIndex(0);
+                  if (val.trim().isNotEmpty) {
+                    if (_selectedPlaylistId != null) {
+                      setState(() => _selectedPlaylistId = null);
+                    }
+                    if (_controller.currentNavIndex != 0) {
+                      _controller.setNavIndex(0);
+                    }
                   }
                 },
                 style: TextStyle(
@@ -1009,17 +1042,36 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
               ),
             ),
           ),
-
         ],
       ),
     );
   }
 
   Widget _buildCurrentTabContent(bool isMobile) {
+    if (!isMobile && _selectedPlaylistId != null) {
+      final playlist = _resolveSelectedPlaylist(_selectedPlaylistId!);
+      if (playlist != null) {
+        return DesktopPlaylistDetailView(
+          key: ValueKey(playlist.id),
+          playlist: playlist,
+          controller: _controller,
+          onBack: () => setState(() => _selectedPlaylistId = null),
+          onSongTap: _playSongWithLyrics,
+          onAddToPlaylist: _showAddToPlaylistSheet,
+          onDelete: _controller.playlists.any((p) => p.id == playlist.id)
+              ? () => _confirmDeletePlaylist(playlist)
+              : null,
+        );
+      }
+    }
+
     switch (_controller.currentNavIndex) {
       case 1:
         return _buildExploreTab();
       case 2:
+        if (!isMobile) {
+          return _buildHomeFeed(isMobile);
+        }
         return _buildLibraryTab();
       case 3:
         return _buildFavoritesTab();
@@ -1027,6 +1079,29 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       default:
         return _buildHomeFeed(isMobile);
     }
+  }
+
+  MusicPlaylist? _resolveSelectedPlaylist(String playlistId) {
+    final direct = _controller.playlistById(playlistId);
+    if (direct != null) return direct;
+
+    final radio = RadioDiscoveryService.instance
+        .getPopularRadios()
+        .where((r) => r.id == playlistId || 'radio-${r.id}' == playlistId)
+        .firstOrNull;
+    if (radio != null) return radio.toPlaylist();
+
+    if (playlistId == 'playlist-2000s' || playlistId == '2000s') {
+      return MusicPlaylist(
+        id: 'playlist-2000s',
+        title: "2000's",
+        subtitle: 'loser',
+        gradient: const [Color(0xFFF59E0B), Color(0xFFD97706)],
+        imageUrl: '',
+        songIds: [],
+      );
+    }
+    return null;
   }
 
   Widget _buildHomeFeed(bool isMobile) {
@@ -1400,6 +1475,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   }
 
   Widget _buildLibraryTab() {
+    final isMobile = MediaQuery.of(context).size.width < 768;
     final allPlaylists = _controller.libraryPlaylists;
 
     final q = _librarySearchQuery.trim().toLowerCase();
@@ -1429,27 +1505,30 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
           subtitle:
               '${allPlaylists.length} ${allPlaylists.length == 1 ? 'playlist' : 'playlists'}',
           actions: [
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.cardSurfaceOf(context),
-                foregroundColor: AppTheme.textPrimaryOf(context),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
+            if (isMobile)
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.cardSurfaceOf(context),
+                  foregroundColor: AppTheme.textPrimaryOf(context),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: AppTheme.borderOf(context)),
+                  ),
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: AppTheme.borderOf(context)),
-                ),
+                onPressed: _importFromSpotify,
+                icon: const Icon(Icons.download_rounded, size: 18),
+                label: const Text('Import Spotify link'),
               ),
-              onPressed: _importFromSpotify,
-              icon: const Icon(Icons.download_rounded, size: 18),
-              label: const Text('Import Spotify link'),
-            ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryOf(context),
-                foregroundColor: AppTheme.isDark(context) ? Colors.black : Colors.white,
+                foregroundColor: AppTheme.isDark(context)
+                    ? Colors.black
+                    : Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 12,
@@ -1484,15 +1563,16 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                   }),
                   backgroundColor: AppTheme.cardSurfaceOf(context),
                   selectedColor: AppTheme.primaryOf(context),
-                  checkmarkColor:
-                      AppTheme.isDark(context) ? Colors.black : Colors.white,
+                  checkmarkColor: AppTheme.isDark(context)
+                      ? Colors.black
+                      : Colors.white,
                   labelStyle: TextStyle(
                     fontSize: 13,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                     color: isSelected
                         ? (AppTheme.isDark(context)
-                            ? Colors.black
-                            : Colors.white)
+                              ? Colors.black
+                              : Colors.white)
                         : AppTheme.textSecondaryOf(context),
                   ),
                   shape: RoundedRectangleBorder(
@@ -1513,9 +1593,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
 
         // The Library Items
         if (_controller.isLoadingPlaylists && filteredPlaylists.isEmpty)
-          LibrarySkeletonGrid(
-            reduceAnimations: _controller.reduceAnimations,
-          )
+          LibrarySkeletonGrid(reduceAnimations: _controller.reduceAnimations)
         else if (filteredPlaylists.isEmpty)
           Container(
             width: double.infinity,

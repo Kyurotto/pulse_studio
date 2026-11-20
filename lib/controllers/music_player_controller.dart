@@ -24,6 +24,8 @@ import '../services/radio_discovery_service.dart';
 import '../services/spotify_import_service.dart';
 import '../services/soundcloud_hls_downloader.dart';
 import '../services/track_enrichment_service.dart';
+import '../services/web_offline_audio.dart';
+import '../services/web_youtube_audio_resolver.dart';
 
 enum PlaybackRepeatMode { off, all, one }
 
@@ -979,6 +981,7 @@ class MusicPlayerController extends ChangeNotifier {
     primeStaticOfflineCache();
     unawaited(_equalizer.initialize());
     unawaited(_offlineCandidateDirs());
+    unawaited(_hydrateWebAudioStore().catchError((_) {}));
     if (!kIsWeb && !Platform.environment.containsKey('FLUTTER_TEST')) {
       unawaited(
         RadioDiscoveryService.instance.loadCachedRadios().catchError((_) {}),
@@ -2068,8 +2071,7 @@ class MusicPlayerController extends ChangeNotifier {
                 existing.audioUrl.contains('dzcdn.net');
             if (resolvedAudio.isEmpty &&
                 existingIsRemote &&
-                (existingIsEphemeral ||
-                    _abandonedRemoteIds.contains(songId))) {
+                (existingIsEphemeral || _abandonedRemoteIds.contains(songId))) {
               existing.audioUrl = '';
               existing.isPreview = false;
               existing.isYouTubeAudio = false;
@@ -3210,8 +3212,7 @@ class MusicPlayerController extends ChangeNotifier {
   final Set<String> _abandonedRemoteIds = {};
   static const String _abandonedRemoteKeyPrefix = 'abandoned_remote_';
   static const Duration _abandonedRemoteTtl = Duration(hours: 6);
-  late final Future<void> _abandonedRemoteLoaded =
-      _loadPersistedRetryState();
+  late final Future<void> _abandonedRemoteLoaded = _loadPersistedRetryState();
 
   /// Songs that already used up their full-track attempts. Persisted (with the
   /// same TTL) so reopening the app does not show them as LOCATING again while
@@ -3324,9 +3325,7 @@ class MusicPlayerController extends ChangeNotifier {
         }
       }
       for (final key in expired) {
-        unawaited(
-          LocalDatabase.instance.removeSetting(key).catchError((_) {}),
-        );
+        unawaited(LocalDatabase.instance.removeSetting(key).catchError((_) {}));
       }
     } catch (_) {}
   }
@@ -3888,7 +3887,8 @@ class MusicPlayerController extends ChangeNotifier {
     // The first failure already clears song.audioUrl before re-resolving, so an
     // empty URL here still means "this was a remote stream": local files and
     // bundled assets are never cleared on that path.
-    final isLocalFile = song.audioUrl.isNotEmpty &&
+    final isLocalFile =
+        song.audioUrl.isNotEmpty &&
         !song.audioUrl.startsWith('http://') &&
         !song.audioUrl.startsWith('https://') &&
         !song.audioUrl.startsWith('assets/') &&
@@ -3898,7 +3898,8 @@ class MusicPlayerController extends ChangeNotifier {
     // failed earns the dead-stream marker. The refresh marker survives the
     // first failure's URL clearing, so an empty URL here still identifies a
     // previously remote track.
-    final wasRemoteStream = !isLocalFile &&
+    final wasRemoteStream =
+        !isLocalFile &&
         (song.audioUrl.isNotEmpty ||
             _ytRefreshAttemptedIds.contains(song.id) ||
             song.isYouTubeAudio);
@@ -4361,6 +4362,7 @@ class MusicPlayerController extends ChangeNotifier {
     // works without a connection and queued a hot-swap reload on every
     // background enrichment pass (audible restarts at the start of playback).
     final hasCompleteLocalAudio =
+        !kIsWeb &&
         !song.isPreview &&
         _isLocalAudioPath(song.audioUrl) &&
         File(song.audioUrl).existsSync();
@@ -4381,8 +4383,9 @@ class MusicPlayerController extends ChangeNotifier {
     // Attaching another remote signature would flip NOT FOUND back to FULL
     // TRACK even though playback is guaranteed to fail. A manual retry clears
     // the marker first, so user-initiated recovery still works.
-    final attachesRemoteStream =
-        (enrichment.previewUrl ?? '').startsWith('http');
+    final attachesRemoteStream = (enrichment.previewUrl ?? '').startsWith(
+      'http',
+    );
     if (shouldAttachAudio &&
         !(attachesRemoteStream && _abandonedRemoteIds.contains(song.id))) {
       final previousAudioUrl = song.audioUrl;
@@ -4443,17 +4446,18 @@ class MusicPlayerController extends ChangeNotifier {
       final referenceAudioUrl = loadedUrlMatches
           ? (_loadedAudioUrl ?? '')
           : (isSameInstance
-              ? previousAudioUrl
-              : (currentSong?.audioUrl ?? previousAudioUrl));
+                ? previousAudioUrl
+                : (currentSong?.audioUrl ?? previousAudioUrl));
       final referenceWasPreview = loadedUrlMatches
           ? _loadedWasPreview
           : (isSameInstance
-              ? previousWasPreview
-              : (currentSong?.isPreview ?? previousWasPreview));
+                ? previousWasPreview
+                : (currentSong?.isPreview ?? previousWasPreview));
       // There is nothing to swap away from when no source is attached yet:
       // the in-flight load (or the next play) already resolves the updated
       // song, so queuing a reload here only restarted playback.
-      final audioSourceChanged = referenceAudioUrl.isNotEmpty &&
+      final audioSourceChanged =
+          referenceAudioUrl.isNotEmpty &&
           _audioSourceChanged(
             referenceAudioUrl,
             referenceWasPreview,
@@ -4559,8 +4563,51 @@ class MusicPlayerController extends ChangeNotifier {
   final Set<String> _cachingIds = {};
   final Set<String> _downloadedSongIds = {};
 
+  /// Browser-only persistent audio store (Cache API). Null on native builds,
+  /// where downloads continue to be written to the offline directory.
+  final WebOfflineAudioStore? _webAudioStore = kIsWeb
+      ? createWebOfflineAudioStore()
+      : null;
+  Future<void>? _webAudioHydrated;
+
+  /// Resolves full YouTube tracks through a CORS-enabled Invidious proxy for
+  /// browser downloads. Null on native builds, which have their own provider.
+  final WebYouTubeAudioResolver? _webYouTubeResolver = kIsWeb
+      ? WebYouTubeAudioResolver()
+      : null;
+
+  /// Reads the ids already stored in the browser cache. Called once at startup
+  /// so download badges are correct before the user opens a playlist.
+  Future<void> _hydrateWebAudioStore() {
+    final existing = _webAudioHydrated;
+    if (existing != null) return existing;
+    final store = _webAudioStore;
+    if (store == null) {
+      final done = Future<void>.value();
+      _webAudioHydrated = done;
+      return done;
+    }
+    late final Future<void> future;
+    future = store
+        .hydrate()
+        .then((_) {
+          if (!_disposed) notifyListeners();
+        })
+        .catchError((Object e, StackTrace st) {
+          if (identical(_webAudioHydrated, future)) {
+            _webAudioHydrated = null;
+          }
+          debugPrint('[MusicPlayerController] web audio hydrate error: $e');
+          Error.throwWithStackTrace(e, st);
+        });
+    _webAudioHydrated = future;
+    return future;
+  }
+
   /// Synchronously checks if a song is downloaded and available offline.
   bool isSongDownloaded(String songId) {
+    // Web downloads live in the browser Cache API, not on disk.
+    if (kIsWeb) return _webAudioStore?.has(songId) ?? false;
     if (_downloadedSongIds.contains(songId)) {
       if (findCachedAudioFileSync(songId) != null) return true;
       // The file was deleted outside the app (e.g. cache clear); drop the
@@ -5189,7 +5236,8 @@ class MusicPlayerController extends ChangeNotifier {
         p.basename(previousAudioUrl) == p.basename(newAudioUrl)) {
       return false;
     }
-    return previousAudioUrl != newAudioUrl || previousWasPreview != newIsPreview;
+    return previousAudioUrl != newAudioUrl ||
+        previousWasPreview != newIsPreview;
   }
 
   static bool _isGoogleVideoExpired(String url) {
@@ -5249,6 +5297,26 @@ class MusicPlayerController extends ChangeNotifier {
   /// bounded to roughly 2.5s.
   Future<bool> _probeReachability() async {
     final now = DateTime.now();
+    if (kIsWeb) {
+      // `InternetAddress.lookup` is unavailable on the web and the native
+      // HTTP probes (Google/Spotify) do not send CORS headers, so every probe
+      // failed and downloads were skipped as "offline". `navigator.onLine`
+      // (exposed through connectivity_plus) is the only reliable signal.
+      var ok = true;
+      try {
+        final results = await Connectivity().checkConnectivity();
+        ok =
+            results.isNotEmpty &&
+            results.any((r) => r != ConnectivityResult.none);
+      } catch (_) {
+        // Never report offline because the probe itself failed.
+        ok = true;
+      }
+      _cachedOnline = ok;
+      _lastOnlineCheck = now;
+      debugPrint('[MusicDiag] web connectivity probe: online=$ok');
+      return ok;
+    }
     var ok = false;
     try {
       // Start every probe eagerly instead of wrapping each one in
@@ -5287,21 +5355,21 @@ class MusicPlayerController extends ChangeNotifier {
   static Future<bool> _probeHttp(Uri uri, {bool useHead = true}) async {
     final res = useHead
         ? await http
-            .head(
-              uri,
-              headers: {
-                'User-Agent': TrackEnrichmentService.browserUserAgent,
-              },
-            )
-            .timeout(const Duration(milliseconds: 2500))
+              .head(
+                uri,
+                headers: {
+                  'User-Agent': TrackEnrichmentService.browserUserAgent,
+                },
+              )
+              .timeout(const Duration(milliseconds: 2500))
         : await http
-            .get(
-              uri,
-              headers: {
-                'User-Agent': TrackEnrichmentService.browserUserAgent,
-              },
-            )
-            .timeout(const Duration(milliseconds: 2500));
+              .get(
+                uri,
+                headers: {
+                  'User-Agent': TrackEnrichmentService.browserUserAgent,
+                },
+              )
+              .timeout(const Duration(milliseconds: 2500));
     return res.statusCode > 0 && res.statusCode < 500;
   }
 
@@ -5428,18 +5496,20 @@ class MusicPlayerController extends ChangeNotifier {
     required bool previousWasPreview,
     required String newAudioUrl,
     required bool newIsPreview,
-  }) =>
-      _audioSourceChanged(
-        previousAudioUrl,
-        previousWasPreview,
-        newAudioUrl,
-        newIsPreview,
-      );
+  }) => _audioSourceChanged(
+    previousAudioUrl,
+    previousWasPreview,
+    newAudioUrl,
+    newIsPreview,
+  );
 
   Future<void> _cacheAudioOffline(Song song) async {
     // Automatic caching is playback-only. Imports and background enrichment
     // never write audio unless the user explicitly downloads it.
     if (!_autoCachePlayedSongs) return;
+    // Web downloads are explicit: the Cache API copy is created by
+    // downloadSong, never as a side effect of streaming.
+    if (kIsWeb) return;
     // Data Saver pauses automatic caching so playback does not quietly pull
     // full tracks over a metered connection.
     if (_dataSaverMode) return;
@@ -5699,6 +5769,15 @@ class MusicPlayerController extends ChangeNotifier {
     Song song, {
     bool allowPreviewFallback = false,
   }) async {
+    // Browsers have no writable app directory: store the track in the Cache
+    // API so it can be replayed from a `blob:` URL while offline.
+    if (kIsWeb) {
+      return _downloadSongOnWeb(
+        song,
+        allowPreviewFallback: allowPreviewFallback,
+      );
+    }
+
     // 1. Check if a valid local offline file already exists.
     final cached = await _findCachedAudioFile(song.id);
     if (cached != null && cached.existsSync()) {
@@ -5994,6 +6073,312 @@ class MusicPlayerController extends ChangeNotifier {
       _cachingIds.remove(song.id);
       notifyListeners();
     }
+  }
+
+  /// Web implementation of [downloadSong].
+  ///
+  /// Fetches the resolved stream with a normal cross-origin request and stores
+  /// the bytes in the browser Cache API. Only sources that send
+  /// `Access-Control-Allow-Origin` can be stored directly (JioSaavn CDN,
+  /// Archive.org, iTunes previews). YouTube's media CDN is not CORS-readable,
+  /// so those tracks fall back to the Invidious proxy in
+  /// [WebYouTubeAudioResolver].
+  Future<bool> _downloadSongOnWeb(
+    Song song, {
+    bool allowPreviewFallback = false,
+  }) async {
+    final store = _webAudioStore;
+    if (store == null) return false;
+
+    await _hydrateWebAudioStore();
+    if (store.has(song.id)) {
+      final exists = await store.verifyExists(song.id);
+      if (!exists) {
+        _downloadedSongIds.remove(song.id);
+        _locatingStatusVersion++;
+        notifyListeners();
+      } else {
+        final cachedIsPreview = store.isPreview(song.id);
+        if (!cachedIsPreview || allowPreviewFallback) {
+          _downloadedSongIds.add(song.id);
+          notifyListeners();
+          return true;
+        }
+      }
+    }
+    if (_cachingIds.contains(song.id)) return false;
+
+    if (!await _mayDownloadNow()) {
+      _logDiag('downloadSong skipped: on mobile data', song: song);
+      return false;
+    }
+    if (!await _isDeviceOnline()) {
+      _logDiag('downloadSong skipped: offline', song: song);
+      return false;
+    }
+
+    _cachingIds.add(song.id);
+    notifyListeners();
+
+    try {
+      final urlToDownload = song.audioUrl;
+      final previewOnly = song.isPreview;
+
+      final lowerUrl = urlToDownload.toLowerCase();
+      final isHttpUrl =
+          urlToDownload.startsWith('http://') ||
+          urlToDownload.startsWith('https://');
+      final isGoogleVideo = lowerUrl.contains('googlevideo.com');
+      final isHls = lowerUrl.contains('.m3u8');
+
+      // 1. A full-length stream from a CORS-enabled source can be stored
+      // directly. YouTube, HLS playlists and 30-second previews cannot.
+      var directAttempted = false;
+      if (isHttpUrl && !isGoogleVideo && !isHls && !previewOnly) {
+        directAttempted = true;
+        final fetched = await _fetchWebAudio(song, urlToDownload);
+        if (fetched != null &&
+            await _storeWebDownload(
+              song,
+              fetched.bytes,
+              contentType: fetched.contentType,
+              preview: false,
+              persistedUrl: urlToDownload,
+            )) {
+          return true;
+        }
+      }
+
+      // 2. Fall back to a full YouTube track through Invidious. Its media CDN
+      // is the only full-length source for many catalog/radio tracks, and the
+      // proxy endpoint is the one YouTube route a browser may read.
+      final needsYouTube =
+          isGoogleVideo ||
+          isHls ||
+          previewOnly ||
+          !isHttpUrl ||
+          directAttempted ||
+          song.isYouTubeAudio;
+      if (needsYouTube) {
+        final resolved = await _webYouTubeResolver?.resolve(
+          title: song.title,
+          artist: song.artist,
+          duration: song.duration,
+          videoId: song.youtubeVideoId,
+          audioUrl: urlToDownload,
+        );
+        if (resolved != null &&
+            resolved.bytes.length >= _minimumAudioFileBytes &&
+            await _storeWebDownload(
+              song,
+              resolved.bytes,
+              contentType: resolved.contentType,
+              preview: false,
+              persistedUrl: resolved.streamUrl,
+              youtubeVideoId: resolved.videoId,
+              duration: resolved.duration,
+            )) {
+          return true;
+        }
+      }
+
+      // 3. No full track is available. Previews are stored only when the
+      // caller explicitly opted in.
+      if (previewOnly && !allowPreviewFallback) {
+        _logDiag(
+          'downloadSong skipped: only a preview stream is available',
+          song: song,
+        );
+        return false;
+      }
+      if (!isHttpUrl || isGoogleVideo || isHls) {
+        _logDiag('downloadSong skipped: no downloadable stream', song: song);
+        return false;
+      }
+      if (directAttempted) return false;
+
+      final fetched = await _fetchWebAudio(song, urlToDownload);
+      if (fetched == null) return false;
+      return _storeWebDownload(
+        song,
+        fetched.bytes,
+        contentType: fetched.contentType,
+        preview: previewOnly,
+        persistedUrl: urlToDownload,
+      );
+    } catch (e) {
+      debugPrint(
+        '[MusicPlayerController] Web download error for ${song.title}: $e',
+      );
+      return false;
+    } finally {
+      _cachingIds.remove(song.id);
+      notifyListeners();
+    }
+  }
+
+  /// Checks whether [bytes] match known audio media container signatures.
+  static bool _looksLikeAudioBytes(Uint8List bytes) {
+    if (bytes.length < 12) return false;
+    // ID3v2 (MP3 with ID3 header)
+    if (bytes[0] == 0x49 && bytes[1] == 0x44 && bytes[2] == 0x33) return true;
+    // MP3 frame sync (11 bits set: 0xFF followed by 0xE0..0xFF)
+    if (bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0) return true;
+    // Ogg container (OggS)
+    if (bytes[0] == 0x4F && bytes[1] == 0x67 && bytes[2] == 0x67 && bytes[3] == 0x53) return true;
+    // RIFF (WAV)
+    if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46) {
+      if (bytes[8] == 0x57 && bytes[9] == 0x41 && bytes[10] == 0x56 && bytes[11] == 0x45) return true;
+    }
+    // FLAC (fLaC)
+    if (bytes[0] == 0x66 && bytes[1] == 0x4C && bytes[2] == 0x61 && bytes[3] == 0x43) return true;
+    // MP4/M4A (ftyp box at offset 4)
+    if (bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70) return true;
+    // Matroska / WebM EBML header (0x1A 0x45 0xDF 0xA3)
+    if (bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3) return true;
+    return false;
+  }
+
+  /// Fetches a directly downloadable (CORS-readable) audio URL.
+  Future<({Uint8List bytes, String contentType})?> _fetchWebAudio(
+    Song song,
+    String url,
+  ) async {
+    try {
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 90));
+      if (response.statusCode != 200 && response.statusCode != 206) {
+        debugPrint(
+          '[MusicPlayerController] Web download HTTP ${response.statusCode} '
+          'for ${song.title}',
+        );
+        return null;
+      }
+      final rawContentType =
+          (response.headers['content-type'] ?? '').toLowerCase();
+      if (rawContentType.startsWith('text/') ||
+          rawContentType.startsWith('image/') ||
+          rawContentType.contains('html') ||
+          rawContentType.contains('json') ||
+          rawContentType.contains('xml')) {
+        debugPrint(
+          '[MusicPlayerController] Web download rejected non-audio content-type: $rawContentType for ${song.title}',
+        );
+        return null;
+      }
+      final bytes = response.bodyBytes;
+      if (bytes.length < _minimumAudioFileBytes) {
+        _logDiag(
+          'downloadSong skipped: response too small (${bytes.length} bytes)',
+          song: song,
+        );
+        return null;
+      }
+      final isGeneric = rawContentType.isEmpty ||
+          rawContentType == 'application/octet-stream' ||
+          rawContentType == 'binary/octet-stream';
+      if (isGeneric) {
+        if (!_looksLikeAudioBytes(bytes)) {
+          debugPrint(
+            '[MusicPlayerController] Web download rejected unrecognized media container for ${song.title}',
+          );
+          return null;
+        }
+      }
+      return (
+        bytes: bytes,
+        contentType: rawContentType.isNotEmpty ? rawContentType : 'audio/mpeg',
+      );
+    } catch (e) {
+      debugPrint(
+        '[MusicPlayerController] Web download direct-fetch failed for ${song.title}: $e',
+      );
+      return null;
+    }
+  }
+
+  /// Stores [bytes] in the browser cache and points the song metadata at the
+  /// cached copy. Never persists a `blob:` URL: those die with the page.
+  Future<bool> _storeWebDownload(
+    Song song,
+    List<int> bytes, {
+    required String contentType,
+    required bool preview,
+    required String persistedUrl,
+    String? youtubeVideoId,
+    Duration? duration,
+  }) async {
+    final store = _webAudioStore;
+    if (store == null) return false;
+
+    final saved = await store.save(
+      song.id,
+      bytes,
+      contentType: contentType,
+      preview: preview,
+    );
+    if (!saved) {
+      _logDiag(
+        'downloadSong skipped: browser storage rejected the file',
+        song: song,
+      );
+      return false;
+    }
+
+    final videoId = (youtubeVideoId ?? '').trim();
+    _downloadedSongIds.add(song.id);
+    song.audioUrl = persistedUrl;
+    song.isPreview = preview;
+    song.isYouTubeAudio = false;
+    if (videoId.isNotEmpty) song.youtubeVideoId = videoId;
+    if (duration != null && duration > Duration.zero) {
+      song.duration = duration;
+    }
+    LocalDatabase.notifyAudioCacheChanged();
+
+    // Persist metadata only. Playback re-resolves the stored bytes from the
+    // Cache API before it ever consults [Song.audioUrl].
+    try {
+      final db = LocalDatabase.instance;
+      await db.ensureImportedSong(
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        durationMs: song.duration.inMilliseconds,
+        imageUrl: song.imageUrl,
+        audioUrl: persistedUrl,
+        lyrics: song.lyrics,
+        genre: song.genre,
+        isPreview: song.isPreview,
+        isYouTubeAudio: false,
+        youtubeVideoId: song.youtubeVideoId,
+        isExplicit: song.isExplicit,
+      );
+      await db.updateImportedSong(
+        id: song.id,
+        audioUrl: persistedUrl,
+        isPreview: song.isPreview,
+        isYouTubeAudio: false,
+        youtubeVideoId: song.youtubeVideoId.isNotEmpty
+            ? song.youtubeVideoId
+            : null,
+        durationMs: song.duration.inMilliseconds,
+        imageUrl: song.imageUrl,
+        lyrics: song.lyrics,
+      );
+    } catch (e) {
+      debugPrint('[MusicPlayerController] persist web download error: $e');
+    }
+
+    _locatingStatusVersion++;
+    notifyListeners();
+    debugPrint(
+      '[MusicPlayerController] Stored ${song.title} in browser cache '
+      '(${bytes.length} bytes)',
+    );
+    return true;
   }
 
   Completer<void>? _persistDownloadLock;
@@ -6433,6 +6818,26 @@ class MusicPlayerController extends ChangeNotifier {
   /// updating the local database and notifying listeners.
   Future<bool> removeDownloadedSong(Song song) async {
     try {
+      if (kIsWeb) {
+        await _webAudioStore?.remove(song.id);
+        _downloadedSongIds.remove(song.id);
+        LocalDatabase.notifyAudioCacheChanged();
+        song.audioUrl = '';
+        _syncSongPathToQueueAndDb(song);
+        _locatingStatusVersion++;
+        notifyListeners();
+        unawaited(
+          LocalDatabase.instance
+              .updateImportedSong(
+                id: song.id,
+                audioUrl: '',
+                isPreview: false,
+                isYouTubeAudio: true,
+              )
+              .catchError((_) {}),
+        );
+        return true;
+      }
       _downloadedSongIds.remove(song.id);
       final cached = await _findCachedAudioFile(song.id);
       if (cached != null && await cached.exists()) {
@@ -7506,6 +7911,40 @@ class MusicPlayerController extends ChangeNotifier {
       song.isPreview = false;
     }
 
+    // Set when a cached preview is held in reserve while the online enrichment
+    // branch below tries to select a full source.
+    var cachedPreviewFallback = false;
+
+    // 0b. Audio downloaded into the browser Cache API. Native builds never
+    // populate this store, so the lookup is web-only.
+    if (!forceAsset && kIsWeb) {
+      final isCachedPreview = _webAudioStore?.isPreview(song.id) ?? false;
+      final isOnline = await _isDeviceOnline();
+      // Prefer verified full cached copies and play a cached preview when it
+      // is the only available source for offline playback. While online, a
+      // cached preview is kept in reserve instead of being skipped: the
+      // enrichment branch below gets a chance to select a full source, and the
+      // preview is used for playback when it does not.
+      if (!isCachedPreview || !isOnline) {
+        final blobUrl = await _webAudioStore?.objectUrl(song.id);
+        if (blobUrl != null && blobUrl.isNotEmpty) {
+          _offlineFallbackIds.remove(song.id);
+          song.isYouTubeAudio = false;
+          song.isPreview = isCachedPreview;
+          return AudioSource.uri(Uri.parse(blobUrl), tag: mediaItem);
+        }
+      } else {
+        cachedPreviewFallback = true;
+      }
+      // A desktop/Android file path is meaningless in the browser: clear it
+      // so the online enrichment branch can resolve a stream.
+      if (_isLocalAudioPath(song.audioUrl)) {
+        song.audioUrl = '';
+        song.isYouTubeAudio = true;
+        song.isPreview = false;
+      }
+    }
+
     // 0. Dedicated check for Lips of an Angel: use bundled high-fidelity asset (4:21 full track)
     if (!forceAsset &&
         !song.id.startsWith('spotify-') &&
@@ -7552,6 +7991,7 @@ class MusicPlayerController extends ChangeNotifier {
 
     // 2. Local audio file on disk
     if (!forceAsset &&
+        !kIsWeb &&
         song.audioUrl.isNotEmpty &&
         !song.audioUrl.startsWith('http://') &&
         !song.audioUrl.startsWith('https://') &&
@@ -7646,7 +8086,8 @@ class MusicPlayerController extends ChangeNotifier {
         if (song.audioUrl.isNotEmpty &&
             !song.audioUrl.toLowerCase().contains('.m3u8') &&
             (song.audioUrl.startsWith('http://') ||
-                song.audioUrl.startsWith('https://'))) {
+                song.audioUrl.startsWith('https://')) &&
+            !(cachedPreviewFallback && song.isPreview)) {
           final isGv = song.audioUrl.contains('googlevideo.com');
           return AudioSource.uri(
             Uri.parse(song.audioUrl),
@@ -7658,6 +8099,18 @@ class MusicPlayerController extends ChangeNotifier {
             tag: mediaItem,
           );
         }
+      }
+    }
+
+    // The online enrichment branch did not select a full source: play the
+    // cached preview held in reserve rather than skipping it.
+    if (cachedPreviewFallback) {
+      final blobUrl = await _webAudioStore?.objectUrl(song.id);
+      if (blobUrl != null && blobUrl.isNotEmpty) {
+        _offlineFallbackIds.remove(song.id);
+        song.isYouTubeAudio = false;
+        song.isPreview = _webAudioStore?.isPreview(song.id) ?? true;
+        return AudioSource.uri(Uri.parse(blobUrl), tag: mediaItem);
       }
     }
 
@@ -8702,6 +9155,8 @@ class MusicPlayerController extends ChangeNotifier {
     _audioSessionSub?.cancel();
     _equalizer.dispose();
     _enrichment.dispose();
+    _webYouTubeResolver?.dispose();
+    unawaited(_webAudioStore?.dispose() ?? Future<void>.value());
     _positionNotifier.dispose();
     // Only unbind if the notification still points at this controller; a
     // newer instance may already have replaced these handlers.

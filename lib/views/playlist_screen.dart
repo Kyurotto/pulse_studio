@@ -97,8 +97,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       } else {
         widget.controller.fastLocateDiscoverySongs(locateTargets);
       }
-      if (!kIsWeb &&
-          widget.controller.autoDownloadOnImport &&
+      if (widget.controller.autoDownloadOnImport &&
           songs.isNotEmpty) {
         widget.controller.downloadPlaylistSongs(
           songs,
@@ -555,8 +554,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                               // Download
                               Builder(
                                 builder: (ctx) {
-                                  // Offline downloads need native storage.
-                                  if (kIsWeb) return const SizedBox.shrink();
                                   final isDownloading = widget.controller
                                       .isPlaylistDownloading(songs);
                                   final isDownloaded = widget.controller
@@ -942,7 +939,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                 Navigator.pop(ctx);
               },
             ),
-            if (!kIsWeb && !widget.controller.isSongDownloaded(song.id))
+            if (!widget.controller.isSongDownloaded(song.id))
               ListTile(
                 leading: const Icon(
                   Icons.download_rounded,
@@ -973,7 +970,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                   );
                 },
               )
-            else if (!kIsWeb)
+            else
               ListTile(
                 leading: const Icon(
                   Icons.delete_outline_rounded,
@@ -1292,8 +1289,6 @@ class _PlaylistSongTile extends StatelessWidget {
   }
 
   Widget _buildDownloadButton(BuildContext context) {
-    // Offline downloads need native storage.
-    if (kIsWeb) return const SizedBox.shrink();
     final isDownloading = controller.isSongDownloading(song.id);
     final isDownloaded = controller.isSongDownloaded(song.id);
 

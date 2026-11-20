@@ -69,7 +69,8 @@ class SpotifyImportException implements Exception {
 /// embed URL, and spotify: URI forms) and reads track metadata from Spotify's
 /// public embed page — no API credentials required.
 class SpotifyImportService {
-  SpotifyImportService({http.Client? client}) : _client = client ?? http.Client();
+  SpotifyImportService({http.Client? client})
+    : _client = client ?? http.Client();
 
   final http.Client _client;
 
@@ -108,7 +109,8 @@ class SpotifyImportService {
     if (uri == null || !uri.hasAuthority) return null;
 
     final host = uri.host.toLowerCase();
-    final isSpotifyHost = host == 'open.spotify.com' || host.endsWith('.open.spotify.com');
+    final isSpotifyHost =
+        host == 'open.spotify.com' || host.endsWith('.open.spotify.com');
     if (!isSpotifyHost) return null;
 
     final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
@@ -180,12 +182,6 @@ class SpotifyImportService {
   static const Duration _requestTimeout = Duration(seconds: 12);
 
   Future<SpotifyImportResult> _importFromLinkImpl(String input) async {
-    if (kIsWeb) {
-      throw const SpotifyImportException(
-        'Spotify import is not supported on web builds. Use the desktop or mobile app.',
-      );
-    }
-
     final trimmed = input.trim();
     if (trimmed.isEmpty) {
       throw const SpotifyImportException('Paste a Spotify link first.');
@@ -280,12 +276,15 @@ class SpotifyImportService {
     if (tracks.isEmpty) {
       throw SpotifyImportException('No top songs found for "$name".');
     }
-    final displayName =
-        tracks.first.artist.isNotEmpty ? tracks.first.artist : name;
+    final displayName = tracks.first.artist.isNotEmpty
+        ? tracks.first.artist
+        : name;
     var artistArtwork = '';
     if (spotifyId != null && spotifyId.isNotEmpty) {
       try {
-        final thumb = await fetchSpotifyThumbnail('https://open.spotify.com/artist/$spotifyId');
+        final thumb = await fetchSpotifyThumbnail(
+          'https://open.spotify.com/artist/$spotifyId',
+        );
         if (thumb != null && thumb.isNotEmpty) {
           artistArtwork = thumb;
         }
@@ -308,12 +307,11 @@ class SpotifyImportService {
   /// asking the user to type the name.
   Future<String?> _resolveArtistNameViaOEmbed(String spotifyId) async {
     final pageUrl = 'https://open.spotify.com/artist/$spotifyId';
-    final uri = Uri.https('embed.spotify.com', '/oembed', {'url': pageUrl});
+    final uri = Uri.https('open.spotify.com', '/oembed', {'url': pageUrl});
     try {
       final response = await _client
-          .get(uri, headers: {'User-Agent': _browserUserAgent}).timeout(
-                const Duration(seconds: 8),
-              );
+          .get(uri, headers: {if (!kIsWeb) 'User-Agent': _browserUserAgent})
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
       final decoded = jsonDecode(
         utf8.decode(response.bodyBytes, allowMalformed: true),
@@ -441,16 +439,20 @@ class SpotifyImportService {
 
       final trackId = item['trackId'];
       final preview = item['previewUrl'];
-      tracks.add(SpotifyImportedTrack(
-        spotifyId: trackId is int ? 'itunes-$trackId' : _fallbackTrackId(title, artistName),
-        title: title,
-        artist: trackArtist,
-        album: (item['collectionName']?.toString() ?? '').trim(),
-        duration: _durationFromTrackMillis(item['trackTimeMillis']),
-        previewUrl: preview is String ? preview : '',
-        artworkUrl: _hiResArtwork(item['artworkUrl100']),
-        isExplicit: _isExplicitRating(item['trackExplicitness']),
-      ));
+      tracks.add(
+        SpotifyImportedTrack(
+          spotifyId: trackId is int
+              ? 'itunes-$trackId'
+              : _fallbackTrackId(title, artistName),
+          title: title,
+          artist: trackArtist,
+          album: (item['collectionName']?.toString() ?? '').trim(),
+          duration: _durationFromTrackMillis(item['trackTimeMillis']),
+          previewUrl: preview is String ? preview : '',
+          artworkUrl: _hiResArtwork(item['artworkUrl100']),
+          isExplicit: _isExplicitRating(item['trackExplicitness']),
+        ),
+      );
       if (tracks.length >= clamped) break;
     }
     return tracks;
@@ -465,7 +467,12 @@ class SpotifyImportService {
     if (normTrack == normTarget) return true;
 
     final parts = trackArtist
-        .split(RegExp(r'[,&/]|(\b(and|feat|ft|with|featuring)\b)', caseSensitive: false))
+        .split(
+          RegExp(
+            r'[,&/]|(\b(and|feat|ft|with|featuring)\b)',
+            caseSensitive: false,
+          ),
+        )
         .map((p) => _normalizeName(p))
         .where((p) => p.isNotEmpty);
 
@@ -485,9 +492,8 @@ class SpotifyImportService {
   Future<Map<String, dynamic>?> _getJson(Uri uri) async {
     try {
       final response = await _client
-          .get(uri, headers: {'User-Agent': _browserUserAgent}).timeout(
-                const Duration(seconds: 12),
-              );
+          .get(uri, headers: {if (!kIsWeb) 'User-Agent': _browserUserAgent})
+          .timeout(const Duration(seconds: 12));
       if (response.statusCode != 200) return null;
       final decoded = jsonDecode(
         utf8.decode(response.bodyBytes, allowMalformed: true),
@@ -555,7 +561,7 @@ class SpotifyImportService {
       final http.Response response;
       try {
         response = await _client
-            .get(uri, headers: {'User-Agent': _browserUserAgent})
+            .get(uri, headers: {if (!kIsWeb) 'User-Agent': _browserUserAgent})
             .timeout(const Duration(seconds: 8));
       } on Exception {
         // Includes TimeoutException and SocketException.
@@ -578,22 +584,50 @@ class SpotifyImportService {
   }
 
   Future<Map<String, dynamic>> _fetchEmbedEntity(SpotifyLink link) async {
-    final embedUrl = Uri.https('open.spotify.com', '/embed/${link.type.name}/${link.id}');
+    final embedUrl = Uri.https(
+      'open.spotify.com',
+      '/embed/${link.type.name}/${link.id}',
+    );
 
-    // Mobile data often drops the first request, so try twice with a bounded
-    // wait each time instead of hanging on a dead socket.
+    // Candidate URLs:
+    // On native platforms (mobile & desktop), direct fetch to open.spotify.com works.
+    // On web builds, direct cross-origin fetches to open.spotify.com are blocked by browser CORS,
+    // so we use r.jina.ai as the CORS proxy with direct embed as a fallback.
+    final candidateUrls = <Uri>[
+      if (!kIsWeb) embedUrl,
+      if (kIsWeb) ...[
+        Uri.parse('https://r.jina.ai/${embedUrl.toString()}'),
+        embedUrl,
+      ],
+    ];
+
     http.Response? fetched;
-    for (var attempt = 0; attempt < 2 && fetched == null; attempt++) {
-      try {
-        fetched = await _client.get(embedUrl, headers: {
-          'User-Agent': _browserUserAgent,
-          'Accept': 'text/html,application/xhtml+xml',
-        }).timeout(_requestTimeout);
-      } on Exception {
-        // Includes TimeoutException and SocketException.
-        if (attempt == 0) {
-          await Future<void>.delayed(const Duration(seconds: 1));
+    for (final targetUrl in candidateUrls) {
+      for (var attempt = 0; attempt < 2 && fetched == null; attempt++) {
+        try {
+          final isJina = targetUrl.host.contains('jina.ai');
+          final response = await _client
+              .get(
+                targetUrl,
+                headers: {
+                  if (!kIsWeb) 'User-Agent': _browserUserAgent,
+                  'Accept': 'text/html,application/xhtml+xml',
+                  if (isJina) 'X-Return-Format': 'html',
+                },
+              )
+              .timeout(_requestTimeout);
+          if (response.statusCode == 200 || response.statusCode == 404) {
+            fetched = response;
+            break;
+          }
+        } on Exception {
+          if (attempt == 0) {
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+          }
         }
+      }
+      if (fetched != null && fetched.statusCode == 200) {
+        break;
       }
     }
     if (fetched == null) {
@@ -711,7 +745,11 @@ class SpotifyImportService {
     return current is Map<String, dynamic> ? current : null;
   }
 
-  Map<String, dynamic>? _deepFindMap(Map<String, dynamic> node, String key, {int maxDepth = 8}) {
+  Map<String, dynamic>? _deepFindMap(
+    Map<String, dynamic> node,
+    String key, {
+    int maxDepth = 8,
+  }) {
     if (node.containsKey(key) && node[key] is Map<String, dynamic>) {
       return node[key] as Map<String, dynamic>;
     }
@@ -725,9 +763,14 @@ class SpotifyImportService {
     return null;
   }
 
-  Map<String, dynamic>? _deepFindTypedEntity(Map<String, dynamic> node, {int maxDepth = 8}) {
+  Map<String, dynamic>? _deepFindTypedEntity(
+    Map<String, dynamic> node, {
+    int maxDepth = 8,
+  }) {
     final type = node['type'];
-    if (type is String && const {'track', 'playlist', 'album', 'artist'}.contains(type) && _looksLikeEntity(node)) {
+    if (type is String &&
+        const {'track', 'playlist', 'album', 'artist'}.contains(type) &&
+        _looksLikeEntity(node)) {
       return node;
     }
     if (maxDepth <= 0) return null;
@@ -740,7 +783,10 @@ class SpotifyImportService {
     return null;
   }
 
-  SpotifyImportResult _resultFromEntity(SpotifyLink link, Map<String, dynamic> entity) {
+  SpotifyImportResult _resultFromEntity(
+    SpotifyLink link,
+    Map<String, dynamic> entity,
+  ) {
     final name = _stringValue(entity, 'name', 'title');
     final subtitle = _stringValue(entity, 'subtitle');
 
@@ -750,7 +796,9 @@ class SpotifyImportService {
       final sources = coverArt['sources'];
       if (sources is List && sources.isNotEmpty) {
         for (final src in sources) {
-          if (src is Map && src['url'] is String && (src['url'] as String).trim().isNotEmpty) {
+          if (src is Map &&
+              src['url'] is String &&
+              (src['url'] as String).trim().isNotEmpty) {
             imageUrl = (src['url'] as String).trim();
             break;
           }
@@ -762,7 +810,9 @@ class SpotifyImportService {
       if (visualIdentity is Map && visualIdentity['image'] is List) {
         final images = visualIdentity['image'] as List;
         for (final img in images) {
-          if (img is Map && img['url'] is String && (img['url'] as String).trim().isNotEmpty) {
+          if (img is Map &&
+              img['url'] is String &&
+              (img['url'] as String).trim().isNotEmpty) {
             imageUrl = (img['url'] as String).trim();
             break;
           }
@@ -781,7 +831,9 @@ class SpotifyImportService {
           fallbackArtworkUrl: imageUrl,
         );
         if (track == null) {
-          throw const SpotifyImportException('This track could not be read from Spotify.');
+          throw const SpotifyImportException(
+            'This track could not be read from Spotify.',
+          );
         }
         return SpotifyImportResult(
           type: SpotifyLinkType.track,
@@ -800,7 +852,9 @@ class SpotifyImportService {
             if (item is! Map<String, dynamic>) continue;
             final track = _trackFromListEntry(
               item,
-              fallbackArtist: subtitle.isNotEmpty && subtitle != 'Top tracks' ? subtitle : name,
+              fallbackArtist: subtitle.isNotEmpty && subtitle != 'Top tracks'
+                  ? subtitle
+                  : name,
               fallbackAlbum: name,
             );
             if (track != null) {
@@ -819,19 +873,23 @@ class SpotifyImportService {
             link.type == SpotifyLinkType.artist
                 ? 'No tracks found for "$name" on Spotify.'
                 : (link.type == SpotifyLinkType.playlist
-                    ? 'No tracks were found in this Spotify playlist.'
-                    : 'No tracks were found in this Spotify album.'),
+                      ? 'No tracks were found in this Spotify playlist.'
+                      : 'No tracks were found in this Spotify album.'),
           );
         }
-        if (imageUrl.isEmpty && tracks.isNotEmpty && tracks.first.artworkUrl.isNotEmpty) {
+        if (imageUrl.isEmpty &&
+            tracks.isNotEmpty &&
+            tracks.first.artworkUrl.isNotEmpty) {
           imageUrl = tracks.first.artworkUrl;
         }
         return SpotifyImportResult(
           type: link.type,
           title: name.isEmpty
               ? (link.type == SpotifyLinkType.artist
-                  ? 'Artist'
-                  : (link.type == SpotifyLinkType.playlist ? 'Spotify Playlist' : 'Spotify Album'))
+                    ? 'Artist'
+                    : (link.type == SpotifyLinkType.playlist
+                          ? 'Spotify Playlist'
+                          : 'Spotify Album'))
               : name,
           subtitle: link.type == SpotifyLinkType.artist
               ? 'Top songs · ${tracks.length} tracks'
@@ -878,7 +936,11 @@ class SpotifyImportService {
         if (u.isNotEmpty) return u;
       }
     }
-    final direct = map['artworkUrl'] ?? map['thumbnail'] ?? map['image'] ?? map['artworkUrl100'];
+    final direct =
+        map['artworkUrl'] ??
+        map['thumbnail'] ??
+        map['image'] ??
+        map['artworkUrl100'];
     if (direct is String && direct.trim().isNotEmpty) {
       return direct.trim();
     }
@@ -967,9 +1029,15 @@ class SpotifyImportService {
     return names.join(', ');
   }
 
-  String _stringValue(Map<String, dynamic> map, String primary, [String? secondary]) {
+  String _stringValue(
+    Map<String, dynamic> map,
+    String primary, [
+    String? secondary,
+  ]) {
     final primaryValue = map[primary];
-    if (primaryValue is String && primaryValue.trim().isNotEmpty) return primaryValue.trim();
+    if (primaryValue is String && primaryValue.trim().isNotEmpty) {
+      return primaryValue.trim();
+    }
     if (secondary != null) {
       final secondaryValue = map[secondary];
       if (secondaryValue is String && secondaryValue.trim().isNotEmpty) {
@@ -994,7 +1062,9 @@ class SpotifyImportService {
   String _spotifyIdFromUri(String uri) {
     if (uri.isEmpty) return '';
     final parts = uri.split(':');
-    if (parts.length != 3 || parts[0] != 'spotify' || parts[1] != 'track') return '';
+    if (parts.length != 3 || parts[0] != 'spotify' || parts[1] != 'track') {
+      return '';
+    }
     final id = parts[2];
     return _idPattern.hasMatch(id) ? id : '';
   }
@@ -1023,12 +1093,13 @@ class SpotifyImportService {
       final uri = Uri.https('open.spotify.com', '/oembed', {'url': fullUrl});
       final client = http.Client();
       try {
-        final res = await client.get(
-          uri,
-          headers: {'User-Agent': _browserUserAgent},
-        ).timeout(const Duration(seconds: 5));
+        final res = await client
+            .get(uri, headers: {if (!kIsWeb) 'User-Agent': _browserUserAgent})
+            .timeout(const Duration(seconds: 5));
         if (res.statusCode == 200) {
-          final decoded = jsonDecode(utf8.decode(res.bodyBytes, allowMalformed: true));
+          final decoded = jsonDecode(
+            utf8.decode(res.bodyBytes, allowMalformed: true),
+          );
           if (decoded is Map && decoded['thumbnail_url'] is String) {
             final thumb = (decoded['thumbnail_url'] as String).trim();
             if (thumb.isNotEmpty) return thumb;
