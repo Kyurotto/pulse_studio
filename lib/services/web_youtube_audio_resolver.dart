@@ -420,7 +420,14 @@ class WebYouTubeAudioResolver {
     }
     if (tokens.isEmpty || hitTokens.isEmpty) return -1;
     final matched = tokens
-        .where((t) => hitTokens.contains(t) || hitKey.contains(t))
+        .where(
+          (t) =>
+              hitTokens.contains(t) ||
+              // Latin words must match a whole token, but non-Latin titles
+              // (e.g. Japanese, which has no word spaces) still rely on
+              // substring matching against the normalized hit key.
+              (_hasNonAscii(t) && hitKey.contains(t)),
+        )
         .length;
     final coverage = matched / tokens.length;
     if (coverage < 0.75) return -1;

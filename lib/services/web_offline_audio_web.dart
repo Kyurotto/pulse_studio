@@ -27,6 +27,7 @@ class _CacheApiAudioStore implements WebOfflineAudioStore {
   final Set<String> _previewIds = <String>{};
   final Map<String, String> _objectUrls = <String, String>{};
   Future<web.Cache>? _cacheFuture;
+  Future<void>? _hydrationFuture;
   bool _hydrated = false;
   bool _persistenceRequested = false;
 
@@ -79,9 +80,21 @@ class _CacheApiAudioStore implements WebOfflineAudioStore {
     } catch (_) {}
   }
 
-  @override
-  Future<void> hydrate() async {
-    if (_hydrated) return;
+  /// Rebuilds the cached ID sets from the Cache API exactly once. The in-flight
+  /// future is shared so save/verify/objectUrl cannot mutate the sets while the
+  /// snapshot is being applied.
+  Future<void> _ensureHydrated() {
+    if (_hydrated) return Future<void>.value();
+    final existing = _hydrationFuture;
+    if (existing != null) return existing;
+    final future = _hydrate();
+    _hydrationFuture = future;
+    return future.whenComplete(() {
+      if (identical(_hydrationFuture, future)) _hydrationFuture = null;
+    });
+  }
+
+  Future<void> _hydrate() async {
     final cache = await _openCache();
     final requests = (await cache.keys().toDart).toDart;
     _ids.clear();
@@ -99,6 +112,9 @@ class _CacheApiAudioStore implements WebOfflineAudioStore {
   }
 
   @override
+  Future<void> hydrate() => _ensureHydrated();
+
+  @override
   bool has(String songId) => _ids.contains(songId);
 
   @override
@@ -107,6 +123,7 @@ class _CacheApiAudioStore implements WebOfflineAudioStore {
   @override
   Future<bool> verifyExists(String songId) async {
     try {
+      await _ensureHydrated();
       final cache = await _openCache();
       final isPrev = _previewIds.contains(songId);
       var response =
@@ -148,9 +165,10 @@ class _CacheApiAudioStore implements WebOfflineAudioStore {
 
   @override
   Future<String?> objectUrl(String songId) async {
-    final memo = _objectUrls[songId];
-    if (memo != null) return memo;
     try {
+      await _ensureHydrated();
+      final memo = _objectUrls[songId];
+      if (memo != null) return memo;
       final cache = await _openCache();
       final isPrev = _previewIds.contains(songId);
       var response =
@@ -189,19 +207,20 @@ class _CacheApiAudioStore implements WebOfflineAudioStore {
   }) async {
     if (songId.isEmpty || bytes.isEmpty) return false;
     try {
+      await _ensureHydrated();
       await _requestPersistence();
       final cache = await _openCache();
       final blob = web.Blob(
         <JSAny>[Uint8List.fromList(bytes).toJS].toJS,
         web.BlobPropertyBag(type: contentType),
       );
-      try {
-        await cache.delete(_keyFor(songId, preview: !preview).toJS).toDart;
-      } catch (_) {}
       await cache.put(
         _keyFor(songId, preview: preview).toJS,
         web.Response(blob),
       ).toDart;
+      try {
+        await cache.delete(_keyFor(songId, preview: !preview).toJS).toDart;
+      } catch (_) {}
       _ids.add(songId);
       if (preview) {
         _previewIds.add(songId);
