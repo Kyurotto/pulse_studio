@@ -6202,7 +6202,7 @@ class MusicPlayerController extends ChangeNotifier {
 
       final fetched = await _fetchWebAudio(song, urlToDownload);
       if (fetched == null) return false;
-      return _storeWebDownload(
+      return await _storeWebDownload(
         song,
         fetched.bytes,
         contentType: fetched.contentType,

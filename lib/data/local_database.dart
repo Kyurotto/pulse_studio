@@ -1253,7 +1253,7 @@ class LocalDatabase {
           saved_at INTEGER NOT NULL
         )
       ''');
-      return db.query('remembered_accounts', orderBy: 'saved_at DESC');
+      return await db.query('remembered_accounts', orderBy: 'saved_at DESC');
     } catch (_) {
       return [];
     }
