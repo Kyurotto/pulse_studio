@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../models/song_model.dart';
 import '../theme/app_theme.dart';
 import 'song_artwork_widget.dart';

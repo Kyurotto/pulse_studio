@@ -6,7 +6,7 @@ import 'dart:math';
 import 'package:audio_session/audio_session.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -18,7 +18,10 @@ import '../auth/auth_service.dart';
 import '../data/local_database.dart';
 import '../models/equalizer_preset.dart';
 import '../models/song_model.dart';
+import '../services/audio_capabilities.dart';
 import '../services/audio_equalizer_service.dart';
+import '../services/media_kit_playback_engine.dart';
+import '../services/playback_engine.dart';
 import '../services/playlist_persistence_service.dart';
 import '../services/radio_discovery_service.dart';
 import '../services/spotify_import_service.dart';
@@ -173,19 +176,39 @@ class MusicPlayerController extends ChangeNotifier {
   // to the same audio session so setting changes modify the actual output.
   final AudioEqualizerService _equalizer = AudioEqualizerService();
   final AndroidLoudnessEnhancer _loudnessEnhancer = AndroidLoudnessEnhancer();
-  late final AudioPlayer _audioPlayer = AudioPlayer(
-    useProxyForRequestHeaders: false,
-    audioPipeline: AudioEqualizerService.isPlatformSupported
-        ? AudioPipeline(
-            androidAudioEffects: [_equalizer.effect, _loudnessEnhancer],
-          )
-        : null,
-  );
+
+  /// The active audio backend. On Windows this is the libmpv engine; tests
+  /// and mobile keep the original `just_audio` player behind the same facade.
+  late final PlaybackEngine _audioPlayer = _createPlaybackEngine();
+
+  PlaybackEngine _createPlaybackEngine() {
+    if (AudioCapabilities.isWindows) {
+      try {
+        return MediaKitPlaybackEngine(initialVolume: _effectiveVolume);
+      } catch (e) {
+        debugPrint(
+          '[MusicPlayerController] MediaKit engine init failed, falling back: $e',
+        );
+      }
+    }
+    return JustAudioPlaybackEngine(
+      AudioPlayer(
+        useProxyForRequestHeaders: false,
+        audioPipeline: AudioEqualizerService.isPlatformSupported
+            ? AudioPipeline(
+                androidAudioEffects: [_equalizer.effect, _loudnessEnhancer],
+              )
+            : null,
+      ),
+    );
+  }
+
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<Duration?>? _durationSub;
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<PlaybackEvent>? _playbackEventSub;
   StreamSubscription<int?>? _audioSessionSub;
+  StreamSubscription<EngineHandoff>? _engineHandoffSub;
   bool _audioPlayerHasSource = false;
 
   /// Id of the song whose audio is actually loaded in [_audioPlayer].
@@ -356,6 +379,24 @@ class MusicPlayerController extends ChangeNotifier {
     // effect has published its band layout.
     // ignore: discarded_futures
     _equalizer.applyBands(currentEqualizer.bands);
+    _applyDesktopDsp();
+  }
+
+  /// Pushes the equalizer, normalizer, and mono downmix to the desktop engine.
+  ///
+  /// The facade makes this a no-op on mobile, where the Android effects own
+  /// the pipeline instead.
+  void _applyDesktopDsp() {
+    if (!_audioPlayer.supportsNativeDsp) return;
+    // ignore: discarded_futures
+    _audioPlayer.applyDsp(
+      DspSettings(
+        equalizerEnabled: AudioCapabilities.supportsEqualizer,
+        bands: currentEqualizer.bands,
+        normalize: _normalizeVolume,
+        mono: _monoAudio,
+      ),
+    );
   }
 
   Future<void> _loadEqualizerPreset() async {
@@ -494,7 +535,9 @@ class MusicPlayerController extends ChangeNotifier {
   /// Whether animations, visualizers, and heavy transitions should be minimized.
   bool get reduceAnimations => _reduceAnimations;
 
-  /// Whether auto-advance should start the next track immediately.
+  /// Whether auto-advance should start the next track immediately instead of
+  /// inserting the artificial 500 ms gap. True gapless playback still depends
+  /// on the source and the native engine.
   bool get gaplessPlayback => _gaplessPlayback;
 
   /// Whether automatic transitions fade out/in using [crossfadeSeconds].
@@ -561,6 +604,7 @@ class MusicPlayerController extends ChangeNotifier {
       _gaplessPlayback = enabled;
       notifyListeners();
     }
+    _syncEngineTransitions();
     if (save) {
       unawaited(
         LocalDatabase.instance.saveSetting(
@@ -577,6 +621,7 @@ class MusicPlayerController extends ChangeNotifier {
       if (!enabled) _cancelAutomixFade();
       notifyListeners();
     }
+    _syncEngineTransitions();
     if (save) {
       unawaited(
         LocalDatabase.instance.saveSetting(
@@ -606,9 +651,9 @@ class MusicPlayerController extends ChangeNotifier {
   void setMonoAudio(bool enabled, {bool save = true}) {
     if (_monoAudio != enabled) {
       _monoAudio = enabled;
-      // just_audio 0.9.x has no mono/channel-mapping API. The preference is
-      // still persisted so a device/engine that supports it can apply it.
-      debugPrint('[MusicPlayerController] Mono audio preference: $enabled');
+      // Android has no channel-mapping stage; Windows downmixes in the
+      // engine's FFmpeg filter chain.
+      _applyDesktopDsp();
       notifyListeners();
     }
     if (save) {
@@ -696,6 +741,7 @@ class MusicPlayerController extends ChangeNotifier {
       _crossfadeSeconds = clamped;
       notifyListeners();
     }
+    _syncEngineTransitions();
     if (save) {
       unawaited(
         LocalDatabase.instance.saveSetting(
@@ -732,12 +778,18 @@ class MusicPlayerController extends ChangeNotifier {
     }
 
     unawaited(_applyLoudnessNormalization());
+    _syncEngineTransitions();
   }
 
   /// The Android loudness enhancer only applies a gain offset; it has no
   /// ReplayGain metadata to normalise against. A small boost is still audible
   /// when the user turns the setting on, while "off" leaves output untouched.
   Future<void> _applyLoudnessNormalization() async {
+    if (AudioCapabilities.isWindows) {
+      // The desktop engine normalizes inside its filter chain.
+      _applyDesktopDsp();
+      return;
+    }
     if (!AudioEqualizerService.isPlatformSupported) return;
     try {
       await _loudnessEnhancer.setEnabled(true);
@@ -838,6 +890,9 @@ class MusicPlayerController extends ChangeNotifier {
   /// Starts ducking the current track when it is within the crossfade window.
   /// Called from the 500 ms playback heartbeat.
   void _maybeStartAutomixFadeOut() {
+    // The desktop engine owns the overlapping crossfade; a controller-side
+    // fade would fight its volume ramp.
+    if (AudioCapabilities.isWindows) return;
     if (!_automix || _automixFadeTimer != null) return;
     if (_crossfadeSeconds <= 0 ||
         _repeatMode == PlaybackRepeatMode.one ||
@@ -903,6 +958,7 @@ class MusicPlayerController extends ChangeNotifier {
   /// Ramps the next track in after an automix crossfade. Safe to call after
   /// every successful source load; it only acts when a fade-out completed.
   void _maybeStartAutomixFadeIn() {
+    if (AudioCapabilities.isWindows) return;
     if (!_automix || !_automixFadeInPending) return;
     _automixFadeInPending = false;
     if (_crossfadeSeconds <= 0) {
@@ -1097,6 +1153,11 @@ class MusicPlayerController extends ChangeNotifier {
       // The effect is attached to the pipeline at construction; push the
       // persisted gain once the player is available.
       unawaited(_applyLoudnessNormalization());
+      _applyDesktopDsp();
+
+      // Desktop engine: the preloaded next track became audible. Adopt its
+      // state instead of reloading it through the normal play path.
+      _engineHandoffSub = _audioPlayer.handoffStream.listen(_onEngineHandoff);
 
       // Listen to position updates from real audio player
       _positionSub = _audioPlayer.positionStream.listen((pos) {
@@ -7785,6 +7846,7 @@ class MusicPlayerController extends ChangeNotifier {
 
   void toggleShuffle() {
     _isShuffle = !_isShuffle;
+    _syncEngineTransitions();
     notifyListeners();
   }
 
@@ -7800,6 +7862,7 @@ class MusicPlayerController extends ChangeNotifier {
         _repeatMode = PlaybackRepeatMode.off;
         break;
     }
+    _syncEngineTransitions();
     notifyListeners();
   }
 
@@ -7860,6 +7923,7 @@ class MusicPlayerController extends ChangeNotifier {
     } else {
       _queue.insert(_currentIndex + 1, song);
     }
+    _preloadNextQueueSong();
     notifyListeners();
   }
 
@@ -7877,6 +7941,7 @@ class MusicPlayerController extends ChangeNotifier {
       if (_currentIndex >= _queue.length) {
         _currentIndex = _queue.length - 1;
       }
+      _preloadNextQueueSong();
       notifyListeners();
     }
   }
@@ -8619,13 +8684,33 @@ class MusicPlayerController extends ChangeNotifier {
     }
   }
 
+  /// Keeps the desktop engine's transition mode in sync with the settings.
+  void _syncEngineTransitions() {
+    _audioPlayer.setTransition(
+      gapless: _gaplessPlayback,
+      crossfadeSeconds: _automix ? _crossfadeSeconds : 0,
+    );
+    _preloadNextQueueSong();
+  }
+
+  /// Resolves and preloads the next track.
+  ///
+  /// On mobile this only warms up enrichment, exactly as before. On Windows it
+  /// also gives the engine the next audio source so it can overlap the
+  /// transition instead of waiting for the completion signal.
   void _preloadNextQueueSong() {
-    if (_queue.isEmpty ||
-        _currentIndex < 0 ||
-        _currentIndex >= _queue.length - 1) {
+    if (_disposed || _queue.isEmpty || _currentIndex < 0) return;
+    // Preloading only makes sense once a track is actually loaded; otherwise
+    // startup/settings changes would resolve a source nobody is going to use.
+    if (!_audioPlayerHasSource) return;
+
+    final nextIndex = _nextQueueIndexForPreload();
+    if (nextIndex == null) {
+      _audioPlayer.cancelPreload();
       return;
     }
-    final nextSong = _queue[_currentIndex + 1];
+    final nextSong = _queue[nextIndex];
+
     if (needsFullTrack(nextSong)) {
       if (!_enrichingIds.contains(nextSong.id) &&
           !_pendingEnrichment.containsKey(nextSong.id)) {
@@ -8633,6 +8718,111 @@ class MusicPlayerController extends ChangeNotifier {
         _ensureEnrichment(nextSong, fastImport: true);
       }
     }
+
+    if (!_audioPlayer.supportsNativeDsp) return;
+    // Gapless off means the user asked for a gap; Automix must not override
+    // that (the settings screen documents the same precedence).
+    if (!_gaplessPlayback ||
+        _repeatMode == PlaybackRepeatMode.one ||
+        needsFullTrack(nextSong) ||
+        isLocatingStatus(nextSong) ||
+        _abandonedRemoteIds.contains(nextSong.id) ||
+        nextSong.audioUrl.isEmpty) {
+      _audioPlayer.cancelPreload();
+      return;
+    }
+
+    final currentId = currentSong?.id;
+    unawaited(_preloadEngineTrack(nextSong, currentId));
+  }
+
+  /// Index the engine should preload. Shuffle picks a candidate here so the
+  /// engine and the eventual automatic advance agree on the same song.
+  int? _nextQueueIndexForPreload() {
+    if (_repeatMode == PlaybackRepeatMode.one) return null;
+    if (_isShuffle) {
+      final candidates = <int>[];
+      for (var i = 0; i < _queue.length; i++) {
+        if (i == _currentIndex) continue;
+        if (!isLocatingStatus(_queue[i]) && !_isExplicitBlocked(_queue[i])) {
+          candidates.add(i);
+        }
+      }
+      if (candidates.isEmpty) return null;
+      return candidates[Random().nextInt(candidates.length)];
+    }
+    return nextPlayableTrackIndex(
+      _queue,
+      _currentIndex,
+      _repeatMode == PlaybackRepeatMode.all,
+      isBlocked: _isExplicitBlocked,
+    );
+  }
+
+  Future<void> _preloadEngineTrack(Song song, String? currentId) async {
+    try {
+      // A lightweight tag is enough here; artwork resolution is only needed
+      // for the media notification on mobile.
+      final mediaItem = MediaItem(
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+      );
+      final source = await _resolveAudioSource(song, mediaItem);
+      if (_disposed || currentSong?.id != currentId || !_queue.contains(song)) {
+        return;
+      }
+      if (source is! UriAudioSource) return;
+      await _audioPlayer.preloadNext(
+        EnginePreload(
+          songId: song.id,
+          uri: source.uri.toString(),
+          headers: source.headers,
+        ),
+      );
+    } catch (error) {
+      debugPrint('[MusicPlayerController] Next-track preload failed: $error');
+    }
+  }
+
+  /// The desktop engine started the preloaded track near the end of the
+  /// previous one. Mirror that in the queue/UI without touching audio.
+  void _onEngineHandoff(EngineHandoff handoff) {
+    if (_disposed) return;
+    final index = _queue.indexWhere((song) => song.id == handoff.songId);
+    if (index < 0) {
+      // The preloaded track was removed from the queue while it was fading
+      // in. There is no queue state to represent it, so stop honestly.
+      _audioPlayerHasSource = false;
+      _loadedSongId = null;
+      _isPlaying = false;
+      unawaited(_audioPlayer.stop().catchError((_) {}));
+      notifyListeners();
+      return;
+    }
+    final song = _queue[index];
+    if (currentSong?.id == song.id) return;
+
+    // The outgoing track reached the transition window, so count it as
+    // completed instead of a skip in listening history.
+    _finishListeningHistory(completed: true);
+    _currentIndex = index;
+    _currentPosition = Duration.zero;
+    _positionNotifier.value = Duration.zero;
+    _audioDuration = _audioPlayer.duration ?? song.duration;
+    _completionHandled = false;
+    _pendingHotSwapReload = false;
+    _isPlaying = true;
+    _markSourceLoaded(song);
+    _unmuteOnPlay();
+    _lastPositionUpdate = DateTime.now();
+    _cancelStallWatchdog();
+    _playbackTimer?.cancel();
+    _startTimer();
+    _startListeningHistory(song);
+    notifyListeners();
+    _preloadNextQueueSong();
   }
 
   /// Shared recovery for sync load errors and async media failures.
@@ -8813,9 +9003,10 @@ class MusicPlayerController extends ChangeNotifier {
       _automixFadeInPending = true;
     }
 
-    if (!_gaplessPlayback && !_automix) {
-      // Gapless is off: leave a short, audible gap between tracks. With
-      // Automix on the crossfade itself provides the transition.
+    if (!_gaplessPlayback) {
+      // Gapless is off: leave a short, audible gap between tracks. This
+      // deliberately takes precedence over Automix so the toggle is never
+      // silently ignored while a fade is enabled.
       Future.delayed(const Duration(milliseconds: 500), () {
         if (_disposed || !_completionHandled || !_isPlaying) return;
         next(fromCompletion: true);
@@ -9156,6 +9347,7 @@ class MusicPlayerController extends ChangeNotifier {
     _playerStateSub?.cancel();
     _playbackEventSub?.cancel();
     _audioSessionSub?.cancel();
+    _engineHandoffSub?.cancel();
     _equalizer.dispose();
     _enrichment.dispose();
     _webYouTubeResolver?.dispose();

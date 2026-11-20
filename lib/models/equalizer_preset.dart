@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Represents a distinct sound equalization curve with 5 frequency bands.
 class EqualizerPreset {
