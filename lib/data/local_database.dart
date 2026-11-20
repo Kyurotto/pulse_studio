@@ -14,6 +14,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 import '../models/listening_history.dart';
+import '../services/web_offline_audio.dart';
 import 'web_database_sync.dart';
 
 /// Stores the music library, playlists, and user accounts on the device.
@@ -25,6 +26,15 @@ class LocalDatabase {
   static final LocalDatabase instance = LocalDatabase._();
   static const _databaseName = 'pulse_music.db';
   static const _databaseVersion = 8;
+
+  static WebOfflineAudioStore? _webAudioStore;
+
+  /// Browser-only persistent audio store for cached/downloaded tracks.
+  static WebOfflineAudioStore get webAudioStore =>
+      _webAudioStore ??= createWebOfflineAudioStore();
+
+  static set webAudioStore(WebOfflineAudioStore? store) =>
+      _webAudioStore = store;
 
   /// Sentinel user IDs that represent anonymous / guest ownership.
   /// Real user IDs must never collide with these values.
@@ -2927,6 +2937,13 @@ class LocalDatabase {
   static Future<int> getLocalAudioCacheSizeBytes({
     List<Directory>? dirs,
   }) async {
+    if (kIsWeb) {
+      try {
+        return await webAudioStore.sizeBytes();
+      } catch (_) {
+        return 0;
+      }
+    }
     var total = 0;
     final seen = <String>{};
     for (final dir in dirs ?? await getLocalAudioCacheDirs()) {
@@ -2953,7 +2970,18 @@ class LocalDatabase {
   /// Permanent offline downloads (`offline_downloads`) are untouched: only temporary
   /// streaming cache is removed. [dirs] is injectable for tests.
   static Future<int> clearLocalAudioCache({List<Directory>? dirs}) async {
-    if (kIsWeb) return 0;
+    if (kIsWeb) {
+      try {
+        final store = webAudioStore;
+        final size = await store.sizeBytes();
+        await store.clear();
+        notifyAudioCacheChanged();
+        return size;
+      } catch (_) {
+        notifyAudioCacheChanged();
+        return 0;
+      }
+    }
     var freedBytes = 0;
     final seen = <String>{};
     final toDelete = <File>[];

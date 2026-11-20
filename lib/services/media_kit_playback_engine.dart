@@ -138,6 +138,20 @@ class MediaKitPlaybackEngine extends PlaybackEngine {
       _subscriptions.add(
         player.stream.error.listen((error) {
           if (_disposed) return;
+          final msg = error.toString().toLowerCase();
+          // Non-fatal DSP filter initialization errors should never abort media playback!
+          if (msg.contains('filter') || msg.contains('af')) {
+            debugPrint(
+              '[MediaKitPlaybackEngine] Non-fatal audio filter error ignored: $error',
+            );
+            final dynamic platform = player.platform;
+            if (platform != null) {
+              unawaited(
+                platform.command(<String>['af', 'clr']).catchError((_) {}),
+              );
+            }
+            return;
+          }
           _errorCtrl.addError(error);
         }),
       );
@@ -531,7 +545,19 @@ class MediaKitPlaybackEngine extends PlaybackEngine {
   }
 
   Future<void> _pushDsp(DspSettings settings) async {
-    final graph = buildDspFilterGraph(settings);
+    // libmpv on desktop reliably supports FFmpeg's lavfi equalizer filters.
+    // Compound filters like dynaudnorm or pan fail in this libmpv audio pipeline,
+    // which causes "Audio filter initialized failed!" and stalls the audio decoder.
+    // Filter to the stable equalizer curve so Bass Boost / EQ presets work perfectly
+    // without stalling playback.
+    final graph = buildDspFilterGraph(
+      DspSettings(
+        equalizerEnabled: settings.equalizerEnabled,
+        bands: settings.bands,
+        normalize: false,
+        mono: false,
+      ),
+    );
     for (final player in _players) {
       final dynamic platform = player.platform;
       if (platform == null) continue;
@@ -543,12 +569,20 @@ class MediaKitPlaybackEngine extends PlaybackEngine {
         }
       } catch (error) {
         debugPrint('[MediaKitPlaybackEngine] DSP update failed: $error');
+        try {
+          await platform.command(<String>['af', 'clr']);
+        } catch (_) {}
       }
     }
   }
 
   String? _sourceUri(AudioSource source) {
-    if (source is UriAudioSource) return source.uri.toString();
+    if (source is UriAudioSource) {
+      if (source.uri.isScheme('file')) {
+        return source.uri.toFilePath();
+      }
+      return source.uri.toString();
+    }
     return null;
   }
 

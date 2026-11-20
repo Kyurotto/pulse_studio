@@ -368,4 +368,63 @@ void main() {
       controller.dispose();
     },
   );
+
+  testWidgets(
+    'SettingsView hides "Cache played songs" on Windows and displays automatic cache info',
+    (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      final controller = MusicPlayerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsView(controller: controller),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Data-saving and offline'));
+      await tester.pumpAndSettle();
+
+      // "Cache played songs" switch tile should be removed on Windows
+      expect(find.text('Cache played songs'), findsNothing);
+      expect(
+        find.text('Played songs are automatically stored in cache for offline listening.'),
+        findsOneWidget,
+      );
+      expect(controller.autoCachePlayedSongs, isTrue);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
+    'SettingsView shows "Cache played songs" switch tile on Android',
+    (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      final controller = MusicPlayerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsView(controller: controller),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Data-saving and offline'));
+      await tester.pumpAndSettle();
+
+      // "Cache played songs" switch tile should be visible on Android
+      expect(find.text('Cache played songs'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      controller.dispose();
+    },
+  );
 }

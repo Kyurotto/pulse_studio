@@ -156,15 +156,15 @@
     "semantic_hash": ""
   },
   "lib/controllers/music_player_controller.dart": {
-    "mtime": 1795162100.2943294,
-    "seen": 1795162186.7961056,
-    "ast_hash": "cab95f5846c379d90e845efe42f2bb76",
+    "mtime": 1795172411.4193907,
+    "seen": 1795172560.3290257,
+    "ast_hash": "55fb52d5b834c4aea9a8ca1e66f1c99a",
     "semantic_hash": ""
   },
   "lib/data/local_database.dart": {
-    "mtime": 1795147744.3251257,
-    "seen": 1795153651.6346211,
-    "ast_hash": "8f4393189879500ad4726872000b954b",
+    "mtime": 1795171657.3988621,
+    "seen": 1795172560.3290324,
+    "ast_hash": "2587f620a912c1a4347162b6a489697e",
     "semantic_hash": ""
   },
   "lib/main.dart": {
@@ -240,9 +240,9 @@
     "semantic_hash": ""
   },
   "lib/views/settings_view.dart": {
-    "mtime": 1795162038.9456997,
-    "seen": 1795162186.8036945,
-    "ast_hash": "152d513c4ffa4f395ce6dedeba8f2522",
+    "mtime": 1795171684.8718483,
+    "seen": 1795172560.3417385,
+    "ast_hash": "23afa475b63c9b71457df0b1b3073678",
     "semantic_hash": ""
   },
   "lib/widgets/album_card.dart": {
@@ -462,9 +462,9 @@
     "semantic_hash": "3c5c50588ce1c1e8430ea645e2db73fb"
   },
   "windows/flutter/generated_plugin_registrant.cc": {
-    "mtime": 1795166501.9655206,
-    "seen": 1795167038.2060504,
-    "ast_hash": "33d15e72b3cc88e8279a4353923f1c80",
+    "mtime": 1795172211.6646795,
+    "seen": 1795172560.3678288,
+    "ast_hash": "e33f54218a7284951128f583f9c40ced",
     "semantic_hash": ""
   },
   "windows/flutter/generated_plugin_registrant.h": {
@@ -1878,9 +1878,9 @@
     "semantic_hash": ""
   },
   "test/settings_categorized_view_test.dart": {
-    "mtime": 1795165001.3484175,
-    "seen": 1795165063.2186282,
-    "ast_hash": "caa9f2e96bb94a8b4cd06f7f506ba527",
+    "mtime": 1795172437.5759573,
+    "seen": 1795172560.3638074,
+    "ast_hash": "2939dbabe5378df6a2e9de3d1878be82",
     "semantic_hash": ""
   },
   "test/no_autoplay_on_enrichment_test.dart": {
@@ -2088,9 +2088,9 @@
     "semantic_hash": ""
   },
   "lib/services/media_kit_playback_engine.dart": {
-    "mtime": 1795159657.1964087,
-    "seen": 1795159708.3399296,
-    "ast_hash": "d76a4f49177c818708465b6a1ea21064",
+    "mtime": 1795170138.8776634,
+    "seen": 1795170296.5012841,
+    "ast_hash": "7d3d9b3afa326b6f80fc0396bb29a4c5",
     "semantic_hash": ""
   },
   "lib/services/playback_engine.dart": {
@@ -2103,6 +2103,18 @@
     "mtime": 1795165000.6979513,
     "seen": 1795165063.2103245,
     "ast_hash": "feaf1377cf4b3b04820a9865adb602f0",
+    "semantic_hash": ""
+  },
+  ".github/copilot-instructions.md": {
+    "mtime": 1795171772.162735,
+    "seen": 1795172560.4140253,
+    "ast_hash": "0dadf99dacfca193fb7d32df1b2204ab",
+    "semantic_hash": ""
+  },
+  ".github/instructions/mermaid.instructions.md": {
+    "mtime": 1795171772.160735,
+    "seen": 1795172560.4140306,
+    "ast_hash": "ab726032d04ea534caeabfa5fce4a103",
     "semantic_hash": ""
   }
 }
