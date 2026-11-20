@@ -4,12 +4,10 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   connectivity_plus
-  firebase_core
-  cloud_firestore
-  firebase_auth
   flutter_secure_storage_windows
   just_audio_windows
   local_auth_windows
+  media_kit_libs_windows_audio
   url_launcher_windows
 )
 

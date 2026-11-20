@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music/controllers/music_player_controller.dart';
+import 'package:music/services/audio_capabilities.dart';
 import 'package:music/theme/app_theme.dart';
 import 'package:music/views/settings_view.dart';
 
@@ -213,12 +215,23 @@ void main() {
       expect(sliderTheme.data.activeTrackColor, AppTheme.lightPrimary);
       expect(sliderTheme.data.thumbColor, AppTheme.lightPrimary);
 
-      // Verify Equalizer logo/icon trailing is black/dark in light mode
-      final eqIcon = tester.widget<Icon>(find.byIcon(Icons.tune_rounded));
-      expect(eqIcon.color, AppTheme.lightPrimary);
+      // Verify Equalizer row reflects what the current platform can actually do.
+      final eqSupported = AudioCapabilities.supportsEqualizer;
+      final eqIcon = tester.widget<Icon>(
+        find.byIcon(
+          eqSupported ? Icons.tune_rounded : Icons.lock_outline_rounded,
+        ),
+      );
+      expect(
+        eqIcon.color,
+        eqSupported ? AppTheme.lightPrimary : AppTheme.lightTextMuted,
+      );
 
       final eqTitle = tester.widget<Text>(find.text('Equalizer'));
-      expect(eqTitle.style?.color, AppTheme.lightTextPrimary);
+      expect(
+        eqTitle.style?.color,
+        eqSupported ? AppTheme.lightTextPrimary : AppTheme.lightTextMuted,
+      );
 
       // Back to main settings
       await tester.tap(find.byIcon(Icons.arrow_back_rounded));
@@ -246,6 +259,110 @@ void main() {
       expect(dlTitle.style?.color, AppTheme.lightTextPrimary);
 
       // Clean up
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
+    'SettingsView marks controls the current audio engine cannot honour',
+    (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      tester.view.physicalSize = const Size(400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final controller = MusicPlayerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsView(controller: controller),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.text('Playback'));
+      await tester.pumpAndSettle();
+
+      if (AudioCapabilities.supportsEqualizer) {
+        final eqTile = tester.widget<ListTile>(
+          find.widgetWithText(ListTile, 'Equalizer'),
+        );
+        expect(eqTile.onTap, isNotNull);
+        expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
+      } else {
+        final eqTile = tester.widget<ListTile>(
+          find.widgetWithText(ListTile, 'Equalizer'),
+        );
+        expect(eqTile.onTap, isNull);
+        expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
+      }
+
+      if (AudioCapabilities.supportsLoudnessNormalization) {
+        final normalize = tester.widget<SwitchListTile>(
+          find.widgetWithText(SwitchListTile, 'Normalize Volume'),
+        );
+        expect(normalize.onChanged, isNotNull);
+      } else {
+        final normalize = tester.widget<SwitchListTile>(
+          find.widgetWithText(SwitchListTile, 'Normalize Volume'),
+        );
+        expect(normalize.onChanged, isNull);
+        expect(normalize.value, isFalse);
+      }
+
+      if (AudioCapabilities.supportsMonoAudio) {
+        final mono = tester.widget<SwitchListTile>(
+          find.widgetWithText(SwitchListTile, 'Mono Audio'),
+        );
+        expect(mono.onChanged, isNotNull);
+      } else {
+        final mono = tester.widget<SwitchListTile>(
+          find.widgetWithText(SwitchListTile, 'Mono Audio'),
+        );
+        expect(mono.onChanged, isNull);
+      }
+
+      // The crossfade slider only works while Automix is enabled; turning
+      // Automix off must visibly disable it instead of silently ignoring it.
+      await tester.tap(find.widgetWithText(SwitchListTile, 'Automix'));
+      await tester.pumpAndSettle();
+
+      final slider = tester.widget<Slider>(find.byType(Slider));
+      expect(slider.onChanged, isNull);
+      expect(find.text('Turn on Automix to use crossfade'), findsOneWidget);
+
+      // Data-saving page: cellular-only controls are disabled on desktop.
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Data-saving and offline'));
+      await tester.pumpAndSettle();
+
+      if (!AudioCapabilities.supportsCellularDataPolicy) {
+        final cellular = tester.widget<SwitchListTile>(
+          find.widgetWithText(SwitchListTile, 'Downloads over cellular'),
+        );
+        expect(cellular.onChanged, isNull);
+        expect(cellular.value, isFalse);
+        expect(
+          find.textContaining('Only applies on mobile devices'),
+          findsOneWidget,
+        );
+      } else {
+        final cellular = tester.widget<SwitchListTile>(
+          find.widgetWithText(SwitchListTile, 'Downloads over cellular'),
+        );
+        expect(cellular.onChanged, isNotNull);
+        expect(
+          find.textContaining('Off: songs are saved for offline use only on Wi-Fi'),
+          findsOneWidget,
+        );
+      }
+
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
       controller.dispose();

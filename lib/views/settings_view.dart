@@ -1,11 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../auth/auth_service.dart';
 import '../controllers/music_player_controller.dart';
 import '../data/local_database.dart';
 import '../models/equalizer_preset.dart';
+import '../services/audio_capabilities.dart';
 import '../services/biometric_auth_service.dart';
 import '../theme/app_theme.dart';
 import 'auth_gate.dart';
@@ -1315,7 +1316,8 @@ class _SettingsViewState extends State<SettingsView> {
           // Canvas (Visualizer)
           _buildSwitchTile(
             title: 'Canvas',
-            subtitle: 'Display audio wave visualizer effect in the player bar',
+            subtitle:
+                'Display the decorative audio-wave animation in the player bar',
             value: _canvasAnimation,
             onChanged: (val) {
               setState(() => _canvasAnimation = val);
@@ -1572,6 +1574,11 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   Widget _buildPlaybackCategory(StateSetter setSubState) {
+    final loudnessSupported = AudioCapabilities.supportsLoudnessNormalization;
+    final monoSupported = AudioCapabilities.supportsMonoAudio;
+    final eqSupported = AudioCapabilities.supportsEqualizer;
+    final crossfadeEnabled = _automix;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1594,7 +1601,9 @@ class _SettingsViewState extends State<SettingsView> {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimaryOf(context),
+                        color: crossfadeEnabled
+                            ? AppTheme.textPrimaryOf(context)
+                            : AppTheme.textMutedOf(context),
                       ),
                     ),
                     Text(
@@ -1604,14 +1613,18 @@ class _SettingsViewState extends State<SettingsView> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryOf(context),
+                        color: crossfadeEnabled
+                            ? AppTheme.primaryOf(context)
+                            : AppTheme.textMutedOf(context),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Allows you to crossfade smoothly between songs',
+                  crossfadeEnabled
+                      ? 'Allows you to crossfade smoothly between songs'
+                      : 'Turn on Automix to use crossfade',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppTheme.textMutedOf(context),
@@ -1622,6 +1635,11 @@ class _SettingsViewState extends State<SettingsView> {
                     activeTrackColor: AppTheme.primaryOf(context),
                     inactiveTrackColor: AppTheme.borderOf(context),
                     thumbColor: AppTheme.primaryOf(context),
+                    disabledActiveTrackColor: AppTheme.borderOf(context),
+                    disabledInactiveTrackColor: AppTheme.borderOf(
+                      context,
+                    ).withValues(alpha: 0.5),
+                    disabledThumbColor: AppTheme.textMutedOf(context),
                     overlayColor: AppTheme.primaryOf(
                       context,
                     ).withValues(alpha: 0.2),
@@ -1631,14 +1649,21 @@ class _SettingsViewState extends State<SettingsView> {
                     min: 0,
                     max: 12,
                     divisions: 12,
-                    onChanged: (val) {
-                      setState(() => _crossfadeSeconds = val);
-                      setSubState(() {});
-                    },
-                    onChangeEnd: (val) {
-                      _saveSetting('crossfade', val.toString());
-                      widget.controller?.setCrossfadeSeconds(val, save: false);
-                    },
+                    onChanged: crossfadeEnabled
+                        ? (val) {
+                            setState(() => _crossfadeSeconds = val);
+                            setSubState(() {});
+                          }
+                        : null,
+                    onChangeEnd: crossfadeEnabled
+                        ? (val) {
+                            _saveSetting('crossfade', val.toString());
+                            widget.controller?.setCrossfadeSeconds(
+                              val,
+                              save: false,
+                            );
+                          }
+                        : null,
                   ),
                 ),
               ],
@@ -1649,7 +1674,8 @@ class _SettingsViewState extends State<SettingsView> {
           // Gapless Playback
           _buildSwitchTile(
             title: 'Gapless Playback',
-            subtitle: 'Seamless playback of songs with no silent gaps',
+            subtitle:
+                'Advance immediately without an added silent gap; network tracks may still buffer',
             value: _gaplessPlayback,
             onChanged: (val) {
               setState(() => _gaplessPlayback = val);
@@ -1677,8 +1703,13 @@ class _SettingsViewState extends State<SettingsView> {
           // Normalize Volume
           _buildSwitchTile(
             title: 'Normalize Volume',
-            subtitle: 'Set the same volume level for all audio tracks',
-            value: _normalizeVolume,
+            subtitle: loudnessSupported
+                ? (AudioCapabilities.isWindows
+                      ? 'Evens out loud and quiet tracks with dynamic normalization'
+                      : 'Applies a fixed loudness boost to playback')
+                : 'Not supported on this platform',
+            value: loudnessSupported && _normalizeVolume,
+            enabled: loudnessSupported,
             onChanged: (val) {
               setState(() => _normalizeVolume = val);
               setSubState(() {});
@@ -1691,22 +1722,16 @@ class _SettingsViewState extends State<SettingsView> {
           // Mono Audio
           _buildSwitchTile(
             title: 'Mono Audio',
-            subtitle: 'Makes the left and right speakers play the same audio',
-            value: _monoAudio,
+            subtitle: monoSupported
+                ? 'Makes the left and right speakers play the same audio'
+                : 'Not supported on this platform',
+            value: monoSupported && _monoAudio,
+            enabled: monoSupported,
             onChanged: (val) {
               setState(() => _monoAudio = val);
               setSubState(() {});
               widget.controller?.setMonoAudio(val, save: false);
               _saveSetting('mono_audio', val.toString());
-              if (val) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Mono Audio is saved. Downmixing depends on the device audio engine.',
-                    ),
-                  ),
-                );
-              }
             },
           ),
           Divider(height: 1, color: AppTheme.borderOf(context)),
@@ -1727,31 +1752,42 @@ class _SettingsViewState extends State<SettingsView> {
 
           // Equalizer Tile
           ListTile(
+            enabled: eqSupported,
             title: Text(
               'Equalizer',
               style: TextStyle(
                 fontSize: 15,
-                color: AppTheme.textPrimaryOf(context),
+                color: eqSupported
+                    ? AppTheme.textPrimaryOf(context)
+                    : AppTheme.textMutedOf(context),
               ),
             ),
             subtitle: Text(
-              _equalizerPreset,
+              eqSupported
+                  ? _equalizerPreset
+                  : '$_equalizerPreset · Not supported on this platform',
               style: TextStyle(
                 fontSize: 13,
-                color: AppTheme.primaryOf(context),
+                color: eqSupported
+                    ? AppTheme.primaryOf(context)
+                    : AppTheme.textMutedOf(context),
               ),
             ),
             trailing: Icon(
-              Icons.tune_rounded,
-              color: AppTheme.primaryOf(context),
+              eqSupported ? Icons.tune_rounded : Icons.lock_outline_rounded,
+              color: eqSupported
+                  ? AppTheme.primaryOf(context)
+                  : AppTheme.textMutedOf(context),
             ),
-            onTap: () async {
-              await _showEqualizerPicker();
-              if (mounted) {
-                setState(() {});
-                setSubState(() {});
-              }
-            },
+            onTap: eqSupported
+                ? () async {
+                    await _showEqualizerPicker();
+                    if (mounted) {
+                      setState(() {});
+                      setSubState(() {});
+                    }
+                  }
+                : null,
           ),
         ]),
       ],
@@ -1759,6 +1795,8 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   Widget _buildDataSavingCategory(StateSetter setSubState) {
+    final cellularSupported = AudioCapabilities.supportsCellularDataPolicy;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1766,8 +1804,9 @@ class _SettingsViewState extends State<SettingsView> {
         _buildCard([
           _buildSwitchTile(
             title: 'Data Saver Mode',
-            subtitle:
-                'Caps new streams and downloads at ~96 kbps, pauses automatic song caching, and blocks cache downloads on mobile data.',
+            subtitle: cellularSupported
+                ? 'Caps new streams and downloads at ~96 kbps, pauses automatic song caching, and blocks cache downloads on mobile data.'
+                : 'Caps new streams where the source supports it and pauses automatic song caching.',
             value: _dataSaverMode,
             onChanged: (val) {
               setState(() => _dataSaverMode = val);
@@ -1779,8 +1818,11 @@ class _SettingsViewState extends State<SettingsView> {
           Divider(height: 1, color: AppTheme.borderOf(context)),
           _buildSwitchTile(
             title: 'Downloads over cellular',
-            subtitle: 'Off: songs are saved for offline use only on Wi-Fi',
-            value: _downloadOnMobile,
+            subtitle: cellularSupported
+                ? 'Off: songs are saved for offline use only on Wi-Fi'
+                : 'Only applies on mobile devices with a cellular connection',
+            value: cellularSupported && _downloadOnMobile,
+            enabled: cellularSupported,
             onChanged: (val) {
               setState(() => _downloadOnMobile = val);
               setSubState(() {});
@@ -1996,6 +2038,17 @@ class _SettingsViewState extends State<SettingsView> {
             },
           ),
         ]),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            'Actual bitrate depends on the source. YouTube streams typically top out around 160 kbps.',
+            style: TextStyle(
+              fontSize: 11,
+              color: AppTheme.textMutedOf(context),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -2067,7 +2120,8 @@ class _SettingsViewState extends State<SettingsView> {
       results.add(
         _buildSwitchTile(
           title: 'Canvas (Visualizer)',
-          subtitle: 'Show audio wave effect in the player bar',
+          subtitle:
+              'Display the decorative audio-wave animation in the player bar',
           value: _canvasAnimation,
           onChanged: (val) {
             setState(() => _canvasAnimation = val);
@@ -2124,7 +2178,8 @@ class _SettingsViewState extends State<SettingsView> {
       results.add(
         _buildSwitchTile(
           title: 'Gapless Playback',
-          subtitle: 'Seamless playback with no silent gaps',
+          subtitle:
+              'Advance immediately without an added silent gap; network tracks may still buffer',
           value: _gaplessPlayback,
           onChanged: (val) {
             setState(() => _gaplessPlayback = val);
@@ -2146,7 +2201,9 @@ class _SettingsViewState extends State<SettingsView> {
             style: TextStyle(color: AppTheme.textPrimaryOf(context)),
           ),
           subtitle: Text(
-            'Current: ${_crossfadeSeconds.toInt()}s',
+            _automix
+                ? 'Current: ${_crossfadeSeconds.toInt()}s'
+                : 'Current: ${_crossfadeSeconds.toInt()}s · Requires Automix',
             style: TextStyle(color: AppTheme.primaryOf(context)),
           ),
           onTap: () => _openCategory(
@@ -2161,21 +2218,35 @@ class _SettingsViewState extends State<SettingsView> {
       if (results.isNotEmpty) {
         results.add(Divider(height: 1, color: AppTheme.borderOf(context)));
       }
+      final eqSupported = AudioCapabilities.supportsEqualizer;
       results.add(
         ListTile(
+          enabled: eqSupported,
           title: Text(
             'Equalizer',
-            style: TextStyle(color: AppTheme.textPrimaryOf(context)),
+            style: TextStyle(
+              color: eqSupported
+                  ? AppTheme.textPrimaryOf(context)
+                  : AppTheme.textMutedOf(context),
+            ),
           ),
           subtitle: Text(
-            _equalizerPreset,
-            style: TextStyle(color: AppTheme.primaryOf(context)),
+            eqSupported
+                ? _equalizerPreset
+                : '$_equalizerPreset · Not supported on this platform',
+            style: TextStyle(
+              color: eqSupported
+                  ? AppTheme.primaryOf(context)
+                  : AppTheme.textMutedOf(context),
+            ),
           ),
           trailing: Icon(
-            Icons.tune_rounded,
-            color: AppTheme.primaryOf(context),
+            eqSupported ? Icons.tune_rounded : Icons.lock_outline_rounded,
+            color: eqSupported
+                ? AppTheme.primaryOf(context)
+                : AppTheme.textMutedOf(context),
           ),
-          onTap: _showEqualizerPicker,
+          onTap: eqSupported ? _showEqualizerPicker : null,
         ),
       );
     }
@@ -2254,7 +2325,9 @@ class _SettingsViewState extends State<SettingsView> {
       results.add(
         _buildSwitchTile(
           title: 'Data Saver Mode',
-          subtitle: 'Caps streams at 96 kbps and saves data',
+          subtitle: AudioCapabilities.supportsCellularDataPolicy
+              ? 'Caps streams at 96 kbps and saves data'
+              : 'Caps streams where supported and pauses automatic caching',
           value: _dataSaverMode,
           onChanged: (val) {
             setState(() => _dataSaverMode = val);
@@ -2970,6 +3043,7 @@ class _SettingsViewState extends State<SettingsView> {
     required String subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
+    bool enabled = true,
   }) {
     return SwitchListTile.adaptive(
       title: Text(
@@ -2977,7 +3051,9 @@ class _SettingsViewState extends State<SettingsView> {
         style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: AppTheme.textPrimaryOf(context),
+          color: enabled
+              ? AppTheme.textPrimaryOf(context)
+              : AppTheme.textMutedOf(context),
         ),
       ),
       subtitle: Text(
@@ -2987,7 +3063,7 @@ class _SettingsViewState extends State<SettingsView> {
       value: value,
       activeTrackColor: AppTheme.primaryOf(context).withValues(alpha: 0.5),
       activeThumbColor: AppTheme.primaryOf(context),
-      onChanged: onChanged,
+      onChanged: enabled ? onChanged : null,
     );
   }
 }

@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
+
+import 'audio_capabilities.dart';
 
 /// Applies the 5-band preset curve to the native audio pipeline.
 ///
@@ -31,8 +32,13 @@ class AudioEqualizerService {
   /// Effect instance that must be passed to [AudioPipeline] on Android.
   AndroidEqualizer get effect => _effect;
 
-  /// Whether a real equalizer can be applied on the current platform.
-  static bool get isPlatformSupported => !kIsWeb && Platform.isAndroid;
+  /// Whether the Android equalizer effect can be applied on this platform.
+  ///
+  /// Windows has its own DSP path in `MediaKitPlaybackEngine`; this service
+  /// must stay Android-only so it never touches the Android MethodChannel
+  /// from a desktop build.
+  static bool get isPlatformSupported =>
+      AudioCapabilities.supportsAndroidEqualizer;
 
   /// Frequencies represented by [EqualizerPreset.bands], lowest first.
   static const List<double> anchorFrequencies = <double>[

@@ -30,7 +30,7 @@ set(CMAKE_C_FLAGS_PROFILE "${CMAKE_C_FLAGS_RELEASE}")
 set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 # Use Unicode for all projects.
-add_definitions(-DUNICODE -D_UNICODE)
+add_definitions(-DUNICODE -D_UNICODE -D_CRT_SECURE_NO_WARNINGS)
 
 # Compilation settings that should be applied to most targets.
 #
@@ -39,11 +39,28 @@ add_definitions(-DUNICODE -D_UNICODE)
 # of modifying this function.
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
-  target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")
+  target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100" /wd"4996")
   target_compile_options(${TARGET} PRIVATE /EHsc)
-  target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
+  target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0" "_CRT_SECURE_NO_WARNINGS")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
 endfunction()
+
+# If Firebase C++ SDK was extracted and specifies CMake 3.22+, patch it to 3.20 for VS 2019 compatibility.
+set(_FIREBASE_SDK_DIR "${CMAKE_BINARY_DIR}/extracted/firebase_cpp_sdk_windows")
+set(_FIREBASE_SDK_CMAKELISTS "${_FIREBASE_SDK_DIR}/CMakeLists.txt")
+if(EXISTS "${_FIREBASE_SDK_CMAKELISTS}")
+  file(READ "${_FIREBASE_SDK_CMAKELISTS}" _sdk_cmake)
+  string(REPLACE "cmake_minimum_required(VERSION 3.22)" "cmake_minimum_required(VERSION 3.20)" _sdk_cmake "${_sdk_cmake}")
+  string(REPLACE "set(FIREBASE_SDK_LIBDIR" "if(NOT EXISTS \"\${FIREBASE_CPP_SDK_DIR}/libs/windows/\${MSVC_VS_VERSION}/\${MSVC_RUNTIME_MODE}\")\n    set(MSVC_RUNTIME_MODE MT)\n  endif()\n  set(FIREBASE_SDK_LIBDIR" _sdk_cmake "${_sdk_cmake}")
+  file(WRITE "${_FIREBASE_SDK_CMAKELISTS}" "${_sdk_cmake}")
+  file(GLOB _REL_LIBS "${_FIREBASE_SDK_DIR}/libs/windows/VS2019/MT/x64/Release/*.lib")
+  file(MAKE_DIRECTORY "${_FIREBASE_SDK_DIR}/libs/windows/VS2019/MT/x64/Debug")
+  file(COPY ${_REL_LIBS} DESTINATION "${_FIREBASE_SDK_DIR}/libs/windows/VS2019/MT/x64/Debug")
+  file(MAKE_DIRECTORY "${_FIREBASE_SDK_DIR}/libs/windows/VS2019/MD/x64/Debug")
+  file(COPY ${_REL_LIBS} DESTINATION "${_FIREBASE_SDK_DIR}/libs/windows/VS2019/MD/x64/Debug")
+  file(MAKE_DIRECTORY "${_FIREBASE_SDK_DIR}/libs/windows/VS2019/MD/x64/Release")
+  file(COPY ${_REL_LIBS} DESTINATION "${_FIREBASE_SDK_DIR}/libs/windows/VS2019/MD/x64/Release")
+endif()
 
 # Flutter library and tool build rules.
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
@@ -55,6 +72,19 @@ add_subdirectory("runner")
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
+# Google Firebase C++ SDK requires VS 2022 toolset; strip firebase plugins on Windows
+# when building with VS 2019 to avoid MSVC CRT ABI conflicts.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/flutter/generated_plugins.cmake")
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/flutter/generated_plugins.cmake" _gen_plugins)
+  string(REGEX REPLACE "([ \t\r\n]+)(firebase_core|cloud_firestore|firebase_auth)" "" _gen_plugins "${_gen_plugins}")
+  file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/flutter/generated_plugins.cmake" "${_gen_plugins}")
+endif()
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/flutter/generated_plugin_registrant.cc")
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/flutter/generated_plugin_registrant.cc" _reg_content)
+  string(REGEX REPLACE "[ \t]*#include <(firebase_core|cloud_firestore|firebase_auth)/[^\n]*\n" "" _reg_content "${_reg_content}")
+  string(REGEX REPLACE "[ \t]*(FirebaseCore|CloudFirestore|FirebaseAuth)PluginCApiRegisterWithRegistrar\\([^\n]*\n[ \t]*[^\n]*\\);\n" "" _reg_content "${_reg_content}")
+  file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/flutter/generated_plugin_registrant.cc" "${_reg_content}")
+endif()
 include(flutter/generated_plugins.cmake)
 
 
@@ -65,9 +95,7 @@ include(flutter/generated_plugins.cmake)
 set(BUILD_BUNDLE_DIR "$<TARGET_FILE_DIR:${BINARY_NAME}>")
 # Make the "install" step default, as it's required to run.
 set(CMAKE_VS_INCLUDE_INSTALL_TO_DEFAULT_BUILD 1)
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
-endif()
+set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "Install path" FORCE)
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")

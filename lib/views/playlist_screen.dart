@@ -3,7 +3,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../controllers/music_player_controller.dart';
 import '../models/song_model.dart';
