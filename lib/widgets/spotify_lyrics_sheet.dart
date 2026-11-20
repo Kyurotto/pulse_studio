@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import '../models/song_model.dart';
 import '../theme/app_theme.dart';
 import '../controllers/music_player_controller.dart';
+import '../services/audio_capabilities.dart';
 import 'song_artwork_widget.dart';
 
 class SpotifyLyricsSheet extends StatefulWidget {
@@ -19,6 +20,11 @@ class SpotifyLyricsSheet extends StatefulWidget {
     required Song song,
     required MusicPlayerController controller,
   }) {
+    // Strictly prevent modal bottom sheet popup on desktop.
+    // Desktop displays full lyrics in the dashboard center pane and right panel.
+    if (AudioCapabilities.isDesktopUi(context)) {
+      return Future.value();
+    }
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,

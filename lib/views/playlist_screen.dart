@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../controllers/music_player_controller.dart';
 import '../models/song_model.dart';
+import '../services/audio_capabilities.dart';
 import '../services/radio_discovery_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_player_bar.dart';
@@ -232,14 +233,18 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   void _playSongAt(List<Song> songs, int index) {
     widget.controller.playSongList(songs, startIndex: index);
-    final song = songs[index];
-    SpotifyLyricsSheet.show(context, song: song, controller: widget.controller);
+    if (!AudioCapabilities.isDesktopUi(context)) {
+      final song = songs[index];
+      SpotifyLyricsSheet.show(context, song: song, controller: widget.controller);
+    }
   }
 
   void _openLyrics(BuildContext context) {
     final song = widget.controller.currentSong;
     if (song == null) return;
-    SpotifyLyricsSheet.show(context, song: song, controller: widget.controller);
+    if (!AudioCapabilities.isDesktopUi(context)) {
+      SpotifyLyricsSheet.show(context, song: song, controller: widget.controller);
+    }
   }
 
   @override
@@ -792,17 +797,19 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           ),
 
           // Bottom Sheet / Persistent widgets:
-          // Sticky mini-player bar above the bottom navigation
-          bottomSheet: Container(
-            color: Colors.black,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                BottomPlayerBar(
-                  controller: widget.controller,
-                  onOpenLyrics: () => _openLyrics(context),
-                ),
-                BottomNavigationBar(
+          // Sticky mini-player bar above the bottom navigation (Phone / Mobile only)
+          bottomSheet: AudioCapabilities.isDesktopUi(context)
+              ? null
+              : Container(
+                  color: Colors.black,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      BottomPlayerBar(
+                        controller: widget.controller,
+                        onOpenLyrics: () => _openLyrics(context),
+                      ),
+                      BottomNavigationBar(
                   currentIndex: _selectedBottomNav,
                   backgroundColor: Colors.black,
                   selectedItemColor: Colors.white,
@@ -925,11 +932,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
               ),
               onTap: () {
                 Navigator.pop(ctx);
-                SpotifyLyricsSheet.show(
-                  context,
-                  song: song,
-                  controller: widget.controller,
-                );
+                if (!AudioCapabilities.isDesktopUi(context)) {
+                  SpotifyLyricsSheet.show(
+                    context,
+                    song: song,
+                    controller: widget.controller,
+                  );
+                }
               },
             ),
             ListTile(

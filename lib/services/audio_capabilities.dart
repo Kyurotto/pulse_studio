@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 /// Central place for audio features that depend on the native audio stack.
 ///
@@ -31,6 +32,18 @@ class AudioCapabilities {
   static bool get isDesktop => isWindows || isLinux || isMacOS;
 
   static bool get isMobile => isAndroid || isIOS;
+
+  /// Returns whether the UI should behave as desktop (e.g. desktop OS or wide screen)
+  /// rather than a phone.
+  static bool isDesktopUi([BuildContext? context]) {
+    if (isDesktop) return true;
+    if (isMobile) return false;
+    if (context != null) {
+      final width = MediaQuery.maybeOf(context)?.size.width;
+      if (width != null) return width >= 750;
+    }
+    return false;
+  }
 
   /// True when the app is running on Windows with the libmpv engine active.
   /// Used for DSP push logic — NOT for UI lock/unlock decisions.

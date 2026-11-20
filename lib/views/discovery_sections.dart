@@ -6,6 +6,7 @@ import '../models/song_model.dart';
 import '../services/discovery_auto_refresh.dart';
 import '../services/discovery_service.dart';
 import '../theme/app_theme.dart';
+import '../services/audio_capabilities.dart';
 import '../widgets/song_artwork_widget.dart';
 import '../widgets/spotify_lyrics_sheet.dart';
 import '../widgets/skeleton_loader.dart';
@@ -183,11 +184,13 @@ class DiscoverySectionsState extends State<DiscoverySections> {
 
   void _playFrom(DiscoverySection section, int index) {
     widget.controller.playSongList(section.songs, startIndex: index);
-    SpotifyLyricsSheet.show(
-      context,
-      song: section.songs[index],
-      controller: widget.controller,
-    );
+    if (!AudioCapabilities.isDesktopUi(context)) {
+      SpotifyLyricsSheet.show(
+        context,
+        song: section.songs[index],
+        controller: widget.controller,
+      );
+    }
   }
 
   void _openSection(DiscoverySection section) {

@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../controllers/music_player_controller.dart';
 import '../models/song_model.dart';
 import '../services/discovery_service.dart';
+import '../services/audio_capabilities.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_player_bar.dart';
 import '../widgets/song_artwork_widget.dart';
@@ -44,7 +45,9 @@ class DiscoveryPlaylistPage extends StatelessWidget {
   void _openLyrics(BuildContext context) {
     final song = controller.currentSong ?? section.songs.firstOrNull;
     if (song == null) return;
-    SpotifyLyricsSheet.show(context, song: song, controller: controller);
+    if (!AudioCapabilities.isDesktopUi(context)) {
+      SpotifyLyricsSheet.show(context, song: song, controller: controller);
+    }
   }
 
   static String _clock(Duration d) {
@@ -111,13 +114,15 @@ class DiscoveryPlaylistPage extends StatelessWidget {
           );
         },
       ),
-      bottomNavigationBar: ListenableBuilder(
-        listenable: controller,
-        builder: (context, _) => BottomPlayerBar(
-          controller: controller,
-          onOpenLyrics: () => _openLyrics(context),
-        ),
-      ),
+      bottomNavigationBar: AudioCapabilities.isDesktopUi(context)
+          ? null
+          : ListenableBuilder(
+              listenable: controller,
+              builder: (context, _) => BottomPlayerBar(
+                controller: controller,
+                onOpenLyrics: () => _openLyrics(context),
+              ),
+            ),
     );
   }
 }
