@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../auth/auth_service.dart';
 import '../auth/saved_credential_store.dart';
 import '../data/local_database.dart';
+import '../services/audio_capabilities.dart';
 import '../services/biometric_auth_service.dart';
 import '../theme/app_theme.dart';
 import 'forgot_password_dialog.dart';
@@ -36,7 +37,10 @@ class AuthGate extends StatelessWidget {
             final isLocked =
                 lockSnapshot.data ?? AuthService.instance.isAppLocked;
             if (isLocked) {
-              return BiometricLockView(user: user);
+              // Reopening a locked session always returns to the "Welcome back"
+              // sign-in view (saved account + fingerprint sign-in) on every
+              // platform. BiometricLockView is kept for direct use/tests only.
+              return const AuthView();
             }
             return const MusicDashboardView();
           },
@@ -468,12 +472,14 @@ class _AuthViewState extends State<AuthView> {
     }
     if (!_savedAccountsMenu.isShowing) {
       _savedAccountsMenu.show();
+      if (mounted) setState(() {});
     }
   }
 
   void _closeSavedAccountsMenu() {
     if (_savedAccountsMenu.isShowing) {
       _savedAccountsMenu.hide();
+      if (mounted) setState(() {});
     }
   }
 
@@ -1092,10 +1098,29 @@ class _AuthViewState extends State<AuthView> {
                                   ],
                             enableSuggestions: true,
                             autocorrect: false,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Email address',
                               hintText: 'name@example.com',
-                              prefixIcon: Icon(Icons.email_outlined, size: 20),
+                              prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                              suffixIcon: _hasSavedAccountsToShow
+                                  ? IconButton(
+                                      icon: Icon(
+                                        _savedAccountsMenu.isShowing
+                                            ? Icons.arrow_drop_up_rounded
+                                            : Icons.arrow_drop_down_rounded,
+                                        size: 24,
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                      onPressed: () {
+                                        if (_savedAccountsMenu.isShowing) {
+                                          _closeSavedAccountsMenu();
+                                        } else {
+                                          _openSavedAccountsMenu();
+                                        }
+                                      },
+                                      tooltip: 'Saved accounts',
+                                    )
+                                  : null,
                             ),
                             validator: (value) {
                               final v = value?.trim() ?? '';
@@ -1270,7 +1295,11 @@ class _AuthViewState extends State<AuthView> {
                           _isRegistering ? 'Create account' : 'Sign in',
                         ),
                       ),
-                      if (_canSignInWithFingerprint) ...[
+                      // On phones the fingerprint prompt opens automatically
+                      // when a saved account is tapped in the dropdown, so the
+                      // separate button is only shown on desktop.
+                      if (!AudioCapabilities.isMobile &&
+                          _canSignInWithFingerprint) ...[
                         const SizedBox(height: 10),
                         OutlinedButton.icon(
                           onPressed: _isBusy

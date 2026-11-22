@@ -7,7 +7,6 @@ import '../controllers/music_player_controller.dart';
 import '../data/local_database.dart';
 import '../models/equalizer_preset.dart';
 import '../services/audio_capabilities.dart';
-import '../services/biometric_auth_service.dart';
 import '../theme/app_theme.dart';
 import 'auth_gate.dart';
 
@@ -63,10 +62,6 @@ class _SettingsViewState extends State<SettingsView> {
   String _themeModeSetting = 'dark';
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
-
-  bool _biometricUnlockEnabled = false;
-  bool _biometricSupported = false;
-  bool _biometricEnrolled = false;
 
   int _cacheSizeBytes = -1;
   bool _clearingCache = false;
@@ -164,25 +159,6 @@ class _SettingsViewState extends State<SettingsView> {
           _themeModeSetting = settings['theme_mode']!;
         }
       });
-
-      final uid = AuthService.instance.currentUserId;
-      final supported = BiometricAuthService.instance.isPlatformSupported;
-      bool enrolled = false;
-      bool unlockEnabled = false;
-      if (supported) {
-        enrolled = await BiometricAuthService.instance.isBiometricEnrolled();
-        if (uid.isNotEmpty) {
-          unlockEnabled = await BiometricAuthService.instance
-              .isBiometricUnlockEnabled(uid);
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _biometricSupported = supported;
-          _biometricEnrolled = enrolled;
-          _biometricUnlockEnabled = unlockEnabled;
-        });
-      }
     } catch (e) {
       debugPrint('Error loading settings: $e');
     }
@@ -1190,60 +1166,10 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   Widget _buildAccountCategory(StateSetter setSubState) {
-    final isWindows =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildProfileCard(),
-        const SizedBox(height: 24),
-        _buildSectionHeader(Icons.security_rounded, 'Security & App Unlock'),
-        _buildCard([
-          if (_biometricSupported && _biometricEnrolled)
-            _buildSwitchTile(
-              title: isWindows ? 'Windows Hello Unlock' : 'Biometric Unlock',
-              subtitle: isWindows
-                  ? 'Unlock Pulse Studio using Windows Hello or device authentication'
-                  : 'Unlock Pulse Studio with your device\'s biometric authentication',
-              value: _biometricUnlockEnabled,
-              onChanged: (val) async {
-                final uid = AuthService.instance.currentUserId;
-                if (uid.isEmpty) return;
-                if (val) {
-                  final ok = await BiometricAuthService.instance
-                      .authenticateForUnlock();
-                  if (ok) {
-                    await BiometricAuthService.instance.enableBiometricUnlock(
-                      uid,
-                    );
-                    setState(() => _biometricUnlockEnabled = true);
-                    setSubState(() {});
-                  }
-                } else {
-                  await BiometricAuthService.instance.disableBiometricUnlock();
-                  setState(() => _biometricUnlockEnabled = false);
-                  setSubState(() {});
-                }
-              },
-            )
-          else
-            ListTile(
-              leading: const Icon(
-                Icons.fingerprint_rounded,
-                color: Colors.grey,
-              ),
-              title: Text(
-                isWindows ? 'Windows Hello Unlock' : 'Biometric Unlock',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                !_biometricSupported
-                    ? 'Biometric unlock is not supported on this platform'
-                    : 'No biometric credentials enrolled in device settings',
-                style: const TextStyle(fontSize: 12.5, color: Colors.grey),
-              ),
-            ),
-        ]),
         const SizedBox(height: 24),
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 4),

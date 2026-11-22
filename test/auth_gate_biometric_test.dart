@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music/auth/auth_service.dart';
@@ -70,6 +71,29 @@ void main() {
       expect(find.text('Sign in to continue to Pulse Studio.'), findsOneWidget);
       expect(find.widgetWithText(ElevatedButton, 'Sign in'), findsOneWidget);
       expect(find.byType(BiometricLockView), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'AuthGate shows AuthView instead of BiometricLockView on desktop when app is locked',
+    (WidgetTester tester) async {
+      final fakeAuth = FakeLocalAuthentication();
+      BiometricAuthService.instance = BiometricAuthService(localAuth: fakeAuth);
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+      });
+
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BiometricLockView), findsNothing);
+      expect(find.byType(AuthView), findsOneWidget);
+      expect(find.text('Welcome back'), findsOneWidget);
     },
   );
 

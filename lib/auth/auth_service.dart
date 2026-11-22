@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import '../data/local_database.dart';
+import '../services/audio_capabilities.dart';
 import '../services/biometric_auth_service.dart';
 
 class LocalUser {
@@ -913,6 +914,12 @@ class AuthService {
   Future<void> _checkBiometricLockAtStartup(String accountId) async {
     if (accountId.isEmpty) return;
     try {
+      if (!AudioCapabilities.isMobile) {
+        // On desktop and browser, require re-authentication via the Welcome back sign-in view
+        _isAppLocked = true;
+        if (!_lockController.isClosed) _lockController.add(true);
+        return;
+      }
       final biometrics = BiometricAuthService.instance;
       if (!biometrics.isPlatformSupported) return;
       final enabled = await biometrics.isBiometricUnlockEnabled(

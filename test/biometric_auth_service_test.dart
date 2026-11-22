@@ -149,6 +149,25 @@ void main() {
       expect(await service.isBiometricUnlockEnabled('user_123'), isFalse);
     });
 
+    test('on desktop platforms, isBiometricUnlockEnabled is auto-enabled when enrolled', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      try {
+        final service = BiometricAuthService(
+          localAuth: FakeLocalAuthentication(
+            availableBiometrics: [BiometricType.fingerprint],
+          ),
+        );
+        expect(await service.isBiometricUnlockEnabled('user_desktop'), isTrue);
+
+        final serviceNoBio = BiometricAuthService(
+          localAuth: FakeLocalAuthentication(availableBiometrics: []),
+        );
+        expect(await serviceNoBio.isBiometricUnlockEnabled('user_desktop'), isFalse);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
     test('never stores passwords or biometric templates', () async {
       final service = BiometricAuthService(localAuth: FakeLocalAuthentication());
       await service.enableBiometricUnlock('user_abc');
