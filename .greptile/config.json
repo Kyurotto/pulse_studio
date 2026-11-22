@@ -1,0 +1,48 @@
+{
+  "strictness": 2,
+  "commentTypes": [
+    "logic",
+    "syntax",
+    "style"
+  ],
+  "autoReview": [
+    "open",
+    "push"
+  ],
+  "triggerOnDrafts": false,
+  "ignorePatterns": ".dart_tool/\nbuild/\nandroid/.gradle/\nios/Pods/\n*.g.dart\n*.freezed.dart\n*.mocks.dart\ngraphify-out/",
+  "rules": [
+    {
+      "id": "flutter-state-mounted-check",
+      "rule": "In Flutter State classes, ensure 'mounted' is checked after an 'await' before calling setState() or using BuildContext.",
+      "scope": [
+        "lib/**"
+      ],
+      "severity": "high"
+    },
+    {
+      "id": "resource-disposal",
+      "rule": "Ensure stream subscriptions, animation controllers, audio players, and database/text controllers are properly closed or disposed in dispose().",
+      "scope": [
+        "lib/**"
+      ],
+      "severity": "high"
+    },
+    {
+      "id": "sql-injection-prevention",
+      "rule": "When executing raw SQL with sqflite, always use parameterized queries with arguments ('whereArgs') instead of string interpolation.",
+      "scope": [
+        "lib/**"
+      ],
+      "severity": "critical"
+    },
+    {
+      "id": "secret-hygiene",
+      "rule": "Never commit hardcoded secrets, Firebase service account keys, or sensitive API credentials in source files.",
+      "scope": [
+        "**"
+      ],
+      "severity": "critical"
+    }
+  ]
+}
