@@ -368,7 +368,6 @@ void main() {
       controller.dispose();
     },
   );
-
   testWidgets(
     'SettingsView hides "Cache played songs" on Windows and displays automatic cache info',
     (WidgetTester tester) async {
