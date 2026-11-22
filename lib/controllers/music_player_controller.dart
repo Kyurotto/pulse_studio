@@ -3250,7 +3250,12 @@ class MusicPlayerController extends ChangeNotifier {
   /// downloads touch the offline cache.
   bool _autoCachePlayedSongs = true;
 
-  bool get autoCachePlayedSongs => _autoCachePlayedSongs;
+  bool get autoCachePlayedSongs =>
+      (kIsWeb || _isDesktop) ? true : _autoCachePlayedSongs;
+
+  bool get _isMobile => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+  bool get _isDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
   void setAutoCachePlayedSongs(bool enabled) {
     if (_autoCachePlayedSongs == enabled) return;
@@ -4556,6 +4561,9 @@ class MusicPlayerController extends ChangeNotifier {
           );
         }
       }
+      if (currentSong?.id == song.id) {
+        unawaited(_cacheAudioOffline(song));
+      }
     }
 
     final hasFakeLyrics = _offlineFakeLyricsIds.contains(song.id);
@@ -4630,7 +4638,7 @@ class MusicPlayerController extends ChangeNotifier {
   /// Browser-only persistent audio store (Cache API). Null on native builds,
   /// where downloads continue to be written to the offline directory.
   final WebOfflineAudioStore? _webAudioStore = kIsWeb
-      ? createWebOfflineAudioStore()
+      ? LocalDatabase.webAudioStore
       : null;
   Future<void>? _webAudioHydrated;
 
@@ -4790,6 +4798,29 @@ class MusicPlayerController extends ChangeNotifier {
       '/data/user/0/com.example.music/app_flutter',
       '/data/data/com.example.music/files/offline_audio',
       '/data/data/com.example.music/files',
+    ],
+    if (!kIsWeb && Platform.isWindows) ...[
+      p.join(Directory.systemTemp.path, 'streaming_cache'),
+      p.join(Directory.systemTemp.path, 'pulse_streaming_cache'),
+      if (Platform.environment['USERPROFILE'] != null) ...[
+        p.join(
+          Platform.environment['USERPROFILE']!,
+          'OneDrive',
+          'Documents',
+          'offline_downloads',
+        ),
+        p.join(
+          Platform.environment['USERPROFILE']!,
+          'Documents',
+          'offline_downloads',
+        ),
+        p.join(
+          Platform.environment['USERPROFILE']!,
+          'AppData',
+          'Roaming',
+          'offline_downloads',
+        ),
+      ],
     ],
     'offline_downloads',
     'streaming_cache',
@@ -5570,14 +5601,20 @@ class MusicPlayerController extends ChangeNotifier {
   Future<void> _cacheAudioOffline(Song song) async {
     // Automatic caching is playback-only. Imports and background enrichment
     // never write audio unless the user explicitly downloads it.
-    if (!_autoCachePlayedSongs) return;
-    // Web downloads are explicit: the Cache API copy is created by
-    // downloadSong, never as a side effect of streaming.
-    if (kIsWeb) return;
+    // On mobile, honor the user's manual "Cache played songs" switch.
+    // On desktop (Windows) and Web (Chrome), played songs are always automatically cached!
+    if (_isMobile && !_autoCachePlayedSongs) return;
+
+    // Web caches via browser Cache API (WebOfflineAudioStore).
+    if (kIsWeb) {
+      if (_dataSaverMode) return;
+      unawaited(_downloadSongOnWeb(song, allowPreviewFallback: true));
+      return;
+    }
+
     // Data Saver pauses automatic caching so playback does not quietly pull
     // full tracks over a metered connection.
     if (_dataSaverMode) return;
-    if (song.isPreview) return;
 
     // 1. Check if a valid local offline file already exists
     final cached = await _findCachedAudioFile(song.id);
@@ -5604,6 +5641,10 @@ class MusicPlayerController extends ChangeNotifier {
     if (!await _mayDownloadNow()) {
       _logDiag('offline cache skipped: on mobile data', song: song);
       return;
+    }
+
+    if (SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(song.audioUrl)) {
+      if (await _materializeHlsAudio(song)) return;
     }
 
     if (_cachingIds.contains(song.id)) return;
@@ -5686,7 +5727,14 @@ class MusicPlayerController extends ChangeNotifier {
                 await targetFile.delete();
               } catch (_) {}
             }
-            await tempFile.rename(targetFile.path);
+            try {
+              await tempFile.rename(targetFile.path);
+            } catch (_) {
+              await tempFile.copy(targetFile.path);
+              try {
+                await tempFile.delete();
+              } catch (_) {}
+            }
             _invalidateOfflineLookup(song.id);
             _downloadedSongIds.add(song.id);
             LocalDatabase.notifyAudioCacheChanged();
@@ -6031,7 +6079,14 @@ class MusicPlayerController extends ChangeNotifier {
                 await targetFile.delete();
               } catch (_) {}
             }
-            await tempFile.rename(targetFile.path);
+            try {
+              await tempFile.rename(targetFile.path);
+            } catch (_) {
+              await tempFile.copy(targetFile.path);
+              try {
+                await tempFile.delete();
+              } catch (_) {}
+            }
             _invalidateOfflineLookup(song.id);
             _downloadedSongIds.add(song.id);
             LocalDatabase.notifyAudioCacheChanged();
@@ -8630,6 +8685,11 @@ class MusicPlayerController extends ChangeNotifier {
               } catch (_) {}
               _scheduleVolumeReasserts();
               _preloadNextQueueSong();
+              if (!song.audioUrl.startsWith('assets/') &&
+                  !song.audioUrl.startsWith('asset:/') &&
+                  !_isLocalAudioPath(song.audioUrl)) {
+                unawaited(_cacheAudioOffline(song));
+              }
             }
           } catch (playErr) {
             debugPrint(
@@ -8777,7 +8837,9 @@ class MusicPlayerController extends ChangeNotifier {
       await _audioPlayer.preloadNext(
         EnginePreload(
           songId: song.id,
-          uri: source.uri.toString(),
+          uri: source.uri.isScheme('file')
+              ? source.uri.toFilePath()
+              : source.uri.toString(),
           headers: source.headers,
         ),
       );

@@ -152,7 +152,7 @@ class _SettingsViewState extends State<SettingsView> {
           _downloadOnMobile = settings['download_on_mobile_data'] == 'true';
         }
         if (settings.containsKey('auto_cache_played_songs')) {
-          _autoCachePlayedSongs = settings['auto_cache_played_songs'] == 'true';
+          _autoCachePlayedSongs = settings['auto_cache_played_songs'] != 'false';
         }
         if (settings.containsKey('data_saver_mode')) {
           _dataSaverMode = settings['data_saver_mode'] == 'true';
@@ -1829,22 +1829,26 @@ class _SettingsViewState extends State<SettingsView> {
               _saveSetting('download_on_mobile_data', val.toString());
             },
           ),
-          Divider(height: 1, color: AppTheme.borderOf(context)),
-          _buildSwitchTile(
-            title: 'Cache played songs',
-            subtitle:
-                'Only save audio when you play it; imports no longer download automatically',
-            value: _autoCachePlayedSongs,
-            onChanged: (val) {
-              setState(() => _autoCachePlayedSongs = val);
-              setSubState(() {});
-              if (widget.controller != null) {
-                widget.controller!.setAutoCachePlayedSongs(val);
-              } else {
-                _saveSetting('auto_cache_played_songs', val.toString());
-              }
-            },
-          ),
+          if (!kIsWeb &&
+              (defaultTargetPlatform == TargetPlatform.android ||
+                  defaultTargetPlatform == TargetPlatform.iOS)) ...[
+            Divider(height: 1, color: AppTheme.borderOf(context)),
+            _buildSwitchTile(
+              title: 'Cache played songs',
+              subtitle:
+                  'Only save audio when you play it; imports no longer download automatically',
+              value: _autoCachePlayedSongs,
+              onChanged: (val) {
+                setState(() => _autoCachePlayedSongs = val);
+                setSubState(() {});
+                if (widget.controller != null) {
+                  widget.controller!.setAutoCachePlayedSongs(val);
+                } else {
+                  _saveSetting('auto_cache_played_songs', val.toString());
+                }
+              },
+            ),
+          ],
         ]),
         const SizedBox(height: 24),
         _buildSectionHeader(Icons.storage_rounded, 'Storage & Cache'),
@@ -1877,6 +1881,16 @@ class _SettingsViewState extends State<SettingsView> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  (kIsWeb || defaultTargetPlatform == TargetPlatform.windows)
+                      ? 'Played songs are automatically stored in cache for offline listening.'
+                      : 'Temporary audio cached from streaming playback.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textMutedOf(context),
+                  ),
                 ),
                 const SizedBox(height: 10),
                 ClipRRect(
