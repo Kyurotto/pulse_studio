@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music/auth/auth_service.dart';
 import 'package:music/auth/saved_credential_store.dart';
@@ -80,6 +81,20 @@ Future<void> settlePlatformWork(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Runs the test as a desktop build, where the manual fingerprint button is
+/// still shown under the Sign in button.
+void useDesktopPlatform() {
+  debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+  addTearDown(() => debugDefaultTargetPlatformOverride = null);
+}
+
+/// Runs the test as a phone build, where the fingerprint button is hidden and
+/// the prompt opens from a saved-account tap.
+void usePhonePlatform() {
+  debugDefaultTargetPlatformOverride = TargetPlatform.android;
+  addTearDown(() => debugDefaultTargetPlatformOverride = null);
+}
+
 void main() {
   const email = 'johnlaurencenovicio@gmail.com';
   const password = 'Secret123';
@@ -139,6 +154,7 @@ void main() {
   testWidgets(
     'tapping a saved account prompts fingerprint and signs in automatically',
     (tester) async {
+      useDesktopPlatform();
       tester.view.physicalSize = const Size(900, 1500);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -197,6 +213,7 @@ void main() {
   testWidgets('choosing an account from the floating menu fills both fields', (
     tester,
   ) async {
+    useDesktopPlatform();
     tester.view.physicalSize = const Size(900, 1500);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -247,6 +264,7 @@ void main() {
   testWidgets(
     'signing in with Remember me saves the account and enables fingerprint for the next login',
     (tester) async {
+      useDesktopPlatform();
       tester.view.physicalSize = const Size(900, 1500);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -325,6 +343,7 @@ void main() {
   testWidgets(
     'saved account without a stored password shows no validation error',
     (tester) async {
+      useDesktopPlatform();
       tester.view.physicalSize = const Size(900, 1500);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -371,6 +390,7 @@ void main() {
   testWidgets(
     'password-less saved account signs in with fingerprint via local fallback',
     (tester) async {
+      useDesktopPlatform();
       tester.view.physicalSize = const Size(900, 1500);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -424,6 +444,7 @@ void main() {
   testWidgets(
     'unchecking Remember me forgets the account and disables fingerprint',
     (tester) async {
+      usePhonePlatform();
       tester.view.physicalSize = const Size(900, 1500);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -461,6 +482,45 @@ void main() {
       expect(remembered, isEmpty);
       expect(savedPassword, isNull);
       expect(fingerprintEnabled, isFalse);
+    },
+  );
+
+  testWidgets(
+    'phone hides the fingerprint button and a saved account tap still prompts',
+    (tester) async {
+      usePhonePlatform();
+      tester.view.physicalSize = const Size(900, 1500);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(buildAuthView());
+      await pumpUntil(
+        tester,
+        () => emailFieldText(tester) == email,
+        description: 'saved account email autofill',
+      );
+      await settlePlatformWork(tester);
+
+      // Phones hide the manual button; the prompt opens from the account tap.
+      expect(find.text('Sign in with fingerprint'), findsNothing);
+
+      await tester.tap(find.text('Email address'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text('Saved accounts'), findsOneWidget);
+
+      await tester.tap(find.text('••••••••'));
+      await pumpUntil(
+        tester,
+        () => AuthService.instance.currentUser != null,
+        description: 'fingerprint sign-in from a phone saved account tap',
+      );
+      await settlePlatformWork(tester);
+
+      expect(fakeLocalAuth.lastLocalizedReason, contains('Pulse Studio'));
+      expect(AuthService.instance.currentUser, isA<LocalUser>());
     },
   );
 }

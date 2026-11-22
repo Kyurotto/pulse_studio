@@ -44,6 +44,7 @@ class AudioCapabilities {
     }
     return false;
   }
+
   /// True when the app is running on Windows with the libmpv engine active.
   /// Used for DSP push logic — NOT for UI lock/unlock decisions.
   static bool get desktopDspActive => isWindows && _desktopDspActive;

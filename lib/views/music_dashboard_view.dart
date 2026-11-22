@@ -112,6 +112,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
 
   Future<void> _checkBiometricOffer() async {
     try {
+      if (AudioCapabilities.isDesktop) return;
       final bio = BiometricAuthService.instance;
       if (!bio.isPlatformSupported) return;
       final enrolled = await bio.isBiometricEnrolled();

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
 import '../data/local_database.dart';
+import 'audio_capabilities.dart';
 
 /// Service responsible for device biometric capabilities and local app-unlock.
 ///
@@ -55,6 +56,11 @@ class BiometricAuthService {
     bool strict = false,
   }) async {
     if (!isPlatformSupported || accountId.isEmpty) return false;
+    if (AudioCapabilities.isDesktop) {
+      // On desktop (Windows Hello / device auth), app unlock is automatically enabled
+      // without requiring manual activation whenever biometrics or credentials are enrolled.
+      return await isBiometricEnrolled(strict: strict);
+    }
     try {
       final enabled = await LocalDatabase.instance.getSetting(
         keyBiometricUnlockEnabled,
