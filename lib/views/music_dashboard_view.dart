@@ -11,6 +11,7 @@ import '../controllers/music_player_controller.dart';
 import '../widgets/sidebar_nav.dart';
 import '../widgets/desktop_library_sidebar.dart';
 import '../widgets/desktop_playlist_detail_view.dart';
+import '../widgets/desktop_lyrics_view.dart';
 import '../widgets/album_card.dart';
 import '../widgets/track_list_view.dart';
 import '../widgets/right_panel.dart';
@@ -19,6 +20,7 @@ import '../widgets/spotify_lyrics_sheet.dart';
 import '../widgets/spotify_import_dialog.dart';
 import '../widgets/song_artwork_widget.dart';
 import '../services/display_rate_service.dart';
+import '../services/audio_capabilities.dart';
 import 'discovery_sections.dart';
 import 'playlist_screen.dart';
 import '../widgets/skeleton_loader.dart';
@@ -52,6 +54,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   bool _isLoadingDynamicRadios = false;
 
   String? _lastSongId;
+  bool _showDesktopLyrics = false;
   bool _autoLyricsSheetOpen = false;
   bool _lastIsPlaying = false;
   int _lastNavIndex = 0;
@@ -268,12 +271,13 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
 
     // "Show Lyrics Automatically": open the sheet once per new track. The
     // sheet itself follows controller.currentSong, so it stays in sync when
-    // the queue advances while it is open.
+    // the queue advances while it is open. Only show automatic popup on phone / mobile.
     if (currentSongId != _lastSongId &&
         currentSongId != null &&
         isPlaying &&
         _controller.autoLyrics &&
-        !_autoLyricsSheetOpen) {
+        !_autoLyricsSheetOpen &&
+        !AudioCapabilities.isDesktopUi(context)) {
       final song = _controller.currentSong;
       if (song != null) {
         _autoLyricsSheetOpen = true;
@@ -335,6 +339,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
     final isMobile = MediaQuery.of(context).size.width < 768;
     setState(() {
       _selectedPlaylistId = playlistId;
+      _showDesktopLyrics = false;
     });
 
     if (isMobile) {
@@ -390,13 +395,9 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
 
   void _playSongWithLyrics(Song song) {
     _controller.playSong(song);
-    SpotifyLyricsSheet.show(context, song: song, controller: _controller);
-  }
-
-  void _playPlaylistWithLyrics(String playlistId) {
-    _controller.playPlaylist(playlistId);
-    final song = _controller.currentSong;
-    if (song != null) {
+    // On phone / mobile devices, show the now playing sheet. On desktop, music plays
+    // in the persistent player and right panel without an intrusive modal popup.
+    if (!AudioCapabilities.isDesktopUi(context)) {
       SpotifyLyricsSheet.show(context, song: song, controller: _controller);
     }
   }
@@ -404,7 +405,13 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   void _showLyricsForCurrentSong() {
     final song = _controller.currentSong ?? _controller.allSongs.firstOrNull;
     if (song != null) {
-      SpotifyLyricsSheet.show(context, song: song, controller: _controller);
+      if (AudioCapabilities.isDesktopUi(context)) {
+        setState(() {
+          _showDesktopLyrics = !_showDesktopLyrics;
+        });
+      } else {
+        SpotifyLyricsSheet.show(context, song: song, controller: _controller);
+      }
     }
   }
 
@@ -717,18 +724,27 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                             if (isMobile) {
                               _controller.setNavIndex(2);
                             } else {
-                              setState(() => _selectedPlaylistId = null);
+                              setState(() {
+                                _selectedPlaylistId = null;
+                                _showDesktopLyrics = false;
+                              });
                               _controller.setNavIndex(0);
                             }
                           },
                           onArtistSelected: (artist) {
-                            setState(() => _selectedPlaylistId = null);
+                            setState(() {
+                              _selectedPlaylistId = null;
+                              _showDesktopLyrics = false;
+                            });
                             _searchTextController.text = artist;
                             _controller.setSearchQuery(artist);
                             _controller.setNavIndex(0);
                           },
                           onAlbumSelected: (album) {
-                            setState(() => _selectedPlaylistId = null);
+                            setState(() {
+                              _selectedPlaylistId = null;
+                              _showDesktopLyrics = false;
+                            });
                             _searchTextController.text = album;
                             _controller.setSearchQuery(album);
                             _controller.setNavIndex(0);
@@ -737,46 +753,55 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
 
                       // Main Content View
                       Expanded(
-                        child: RefreshIndicator(
-                          onRefresh: _handleRefresh,
-                          color: AppTheme.primaryOf(context),
-                          backgroundColor: AppTheme.cardSurfaceOf(context),
-                          notificationPredicate: (notification) {
-                            // Only the page's own vertical scroll counts. Horizontal
-                            // discovery carousels (depth > 0, pixels == 0) used to flip
-                            // the flag on, so scrolling up from below showed the circle.
-                            if (notification.depth != 0 ||
-                                notification.metrics.axis != Axis.vertical) {
-                              return false;
-                            }
-                            if (notification is ScrollStartNotification) {
-                              // Pull-to-refresh only when the drag began at the very top.
-                              _pullToRefreshActive =
-                                  notification.metrics.pixels <= 0;
-                            }
-                            final active = _pullToRefreshActive;
-                            if (notification is ScrollEndNotification) {
-                              // The indicator must still see this end event; reset
-                              // afterwards so a fling that overscrolls the top (started
-                              // lower down) can never trigger the circle.
-                              _pullToRefreshActive = false;
-                            }
-                            return active;
-                          },
-                          child: SingleChildScrollView(
-                            controller: _pageScrollController,
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isMobile ? 16 : 28,
-                              vertical: 20,
-                            ),
-                            child: ListenableBuilder(
-                              listenable: _controller,
-                              builder: (context, _) =>
-                                  _buildCurrentTabContent(isMobile),
-                            ),
-                          ),
-                        ),
+                        child: !isMobile && _showDesktopLyrics
+                            ? DesktopLyricsView(
+                                controller: _controller,
+                                onClose: () =>
+                                    setState(() => _showDesktopLyrics = false),
+                              )
+                            : RefreshIndicator(
+                                onRefresh: _handleRefresh,
+                                color: AppTheme.primaryOf(context),
+                                backgroundColor:
+                                    AppTheme.cardSurfaceOf(context),
+                                notificationPredicate: (notification) {
+                                  // Only the page's own vertical scroll counts. Horizontal
+                                  // discovery carousels (depth > 0, pixels == 0) used to flip
+                                  // the flag on, so scrolling up from below showed the circle.
+                                  if (notification.depth != 0 ||
+                                      notification.metrics.axis !=
+                                          Axis.vertical) {
+                                    return false;
+                                  }
+                                  if (notification is ScrollStartNotification) {
+                                    // Pull-to-refresh only when the drag began at the very top.
+                                    _pullToRefreshActive =
+                                        notification.metrics.pixels <= 0;
+                                  }
+                                  final active = _pullToRefreshActive;
+                                  if (notification is ScrollEndNotification) {
+                                    // The indicator must still see this end event; reset
+                                    // afterwards so a fling that overscrolls the top (started
+                                    // lower down) can never trigger the circle.
+                                    _pullToRefreshActive = false;
+                                  }
+                                  return active;
+                                },
+                                child: SingleChildScrollView(
+                                  controller: _pageScrollController,
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isMobile ? 16 : 28,
+                                    vertical: 20,
+                                  ),
+                                  child: ListenableBuilder(
+                                    listenable: _controller,
+                                    builder: (context, _) =>
+                                        _buildCurrentTabContent(isMobile),
+                                  ),
+                                ),
+                              ),
                       ),
 
                       // Right Activity / Now Playing Panel on Wide Screens
@@ -793,14 +818,15 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                   ),
                 ),
 
-                // Persistent Bottom Player
-                ListenableBuilder(
-                  listenable: _controller,
-                  builder: (context, _) => BottomPlayerBar(
-                    controller: _controller,
-                    onOpenLyrics: _showLyricsForCurrentSong,
+                // Persistent Bottom Player (Phone / Mobile only. On desktop, controls are in RightActivityPanel)
+                if (!AudioCapabilities.isDesktopUi(context))
+                  ListenableBuilder(
+                    listenable: _controller,
+                    builder: (context, _) => BottomPlayerBar(
+                      controller: _controller,
+                      onOpenLyrics: _showLyricsForCurrentSong,
+                    ),
                   ),
-                ),
 
                 // Bottom Navigation Layer (Home with logo, Explore with logo, Library with logo)
                 if (isPhone)
@@ -1061,7 +1087,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
           playlist: playlist,
           controller: _controller,
           onBack: () => setState(() => _selectedPlaylistId = null),
-          onSongTap: _playSongWithLyrics,
+          onSongTap: null,
           onAddToPlaylist: _showAddToPlaylistSheet,
           onDelete: _controller.playlists.any((p) => p.id == playlist.id)
               ? () => _confirmDeletePlaylist(playlist)
@@ -1699,7 +1725,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                   playlist: playlist,
                   isSelected: playlist.id == _selectedPlaylistId,
                   onTap: () => _openPlaylist(playlist.id),
-                  onPlay: () => _playPlaylistWithLyrics(playlist.id),
+                  onPlay: () => _controller.playPlaylist(playlist.id),
                   onDelete: () => _confirmDeletePlaylist(playlist),
                 );
               },
