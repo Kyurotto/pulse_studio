@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:material_ui/material_ui.dart';
 import 'package:http/http.dart' as http;
 import '../data/local_database.dart';
+import '../data/radio_station_presets.dart';
 import '../models/song_model.dart';
 
 /// Represents a Spotify-style Radio Station with artist highlights,
@@ -18,6 +19,9 @@ class RadioStation {
   final List<Song> songs;
   final String heroImageUrl;
 
+  /// When this station's metadata was last refreshed from a provider.
+  final DateTime? updatedAt;
+
   const RadioStation({
     required this.id,
     required this.title,
@@ -28,6 +32,7 @@ class RadioStation {
     this.avatarUrls = const [],
     this.songs = const [],
     this.heroImageUrl = '',
+    this.updatedAt,
   });
 
   /// Converts this radio station into a [MusicPlaylist] representation
@@ -55,6 +60,7 @@ class RadioStation {
       'gradientColors': gradientColors.map((c) => c.toARGB32()).toList(),
       'avatarUrls': avatarUrls,
       'heroImageUrl': heroImageUrl,
+      'updatedAt': updatedAt?.millisecondsSinceEpoch,
       'songs': songs.map((s) => {
         'id': s.id,
         'title': s.title,
@@ -114,6 +120,11 @@ class RadioStation {
       gradientColors: colors.isNotEmpty ? colors : const [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
       avatarUrls: rawAvatars.map((e) => e.toString()).toList(),
       heroImageUrl: map['heroImageUrl'] as String? ?? '',
+      updatedAt: map['updatedAt'] is num
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (map['updatedAt'] as num).toInt(),
+            )
+          : null,
       songs: songs,
     );
   }
@@ -175,6 +186,12 @@ class RadioDiscoveryService {
   List<RadioStation> _cachedTrendingRadios = [];
   List<RadioStation> _cachedOpmRadios = [];
   List<RadioStation> _cachedGlobalRadios = [];
+  List<RadioStation> _recentStations = [];
+  String _lastPlayedArtist = '';
+
+  /// Most recently played or selected artist. Empty until the dashboard has
+  /// loaded the persisted value; callers fall back to `Hev Abi`.
+  String get lastPlayedArtist => _lastPlayedArtist;
 
   RadioDiscoveryService({http.Client? client}) : _client = client ?? http.Client();
   static final RadioDiscoveryService instance = RadioDiscoveryService();
@@ -205,9 +222,304 @@ class RadioDiscoveryService {
             .map((e) => RadioStation.fromMap(e as Map<String, dynamic>))
             .toList();
       }
+      _lastPlayedArtist = await db.getSetting('last_played_artist') ?? '';
+      final recentJson = await db.getSetting('cached_recent_stations');
+      if (recentJson != null && recentJson.isNotEmpty) {
+        final list = jsonDecode(recentJson) as List<dynamic>;
+        _recentStations = list
+            .map((e) => RadioStation.fromMap(e as Map<String, dynamic>))
+            .toList();
+      }
     } catch (e) {
       debugPrint('[RadioDiscoveryService] loadCachedRadios failed: $e');
     }
+  }
+
+  /// Artist pills shown above the Home feed.
+  List<String> getQuickFilterArtists() {
+    const preferred = <String>[
+      'Flow G',
+      'Bruno Mars',
+      'VK Blanka',
+      'Hev Abi',
+      'Maki',
+      'Tothapi',
+      'Arthur Nery',
+      'LANY',
+    ];
+    return [
+      for (final name in preferred)
+        if (findArtistPreset(name) != null) name,
+    ];
+  }
+
+  /// The Home "Popular Radio" row. Alias of [getPopularRadios] with the
+  /// provider-neutral name used by the dashboard.
+  List<RadioStation> getPopularStations() => getPopularRadios();
+
+  /// The Home "Recents" row. Recent plays come first; curated defaults fill
+  /// the row when there is no listening history.
+  List<RadioStation> getRecentStations() {
+    if (_recentStations.isNotEmpty) return List.unmodifiable(_recentStations);
+    return List.unmodifiable(_defaultRecentStations());
+  }
+
+  /// Rebuilds the Recents row from listening history and persists the result.
+  Future<void> refreshRecentStations() async {
+    final stations = <RadioStation>[];
+    final seenIds = <String>{};
+
+    void add(RadioStation station) {
+      if (seenIds.add(station.id)) stations.add(station);
+    }
+
+    try {
+      final db = LocalDatabase.instance;
+      final userId = await db.getActiveSessionUserId();
+      if (userId != null && userId.isNotEmpty) {
+        final history = await db.getRecentListening(userId: userId, limit: 30);
+        for (final entry in history) {
+          if (stations.length >= 6) break;
+          final preset = findArtistPreset(entry.artist);
+          final name = (preset?.name ?? entry.artist).trim();
+          if (name.isEmpty) continue;
+          add(_stationForArtist(name));
+        }
+      }
+    } catch (e) {
+      debugPrint('[RadioDiscoveryService] refreshRecentStations failed: $e');
+    }
+
+    for (final station in _defaultRecentStations()) {
+      if (stations.length >= 8) break;
+      add(station);
+    }
+    _recentStations = stations;
+    unawaited(_persistRecentStations());
+  }
+
+  /// The Home "Recommended Stations" row.
+  List<RadioStation> getRecommendedStations() {
+    const names = <String>[
+      'Tothapi',
+      'Maki',
+      'Lola Amour',
+      'Orange & Lemons',
+      'Arthur Nery',
+      'TJ Monterde',
+    ];
+    final stations = <RadioStation>[];
+    for (final name in names) {
+      final preset = findArtistPreset(name);
+      if (preset != null) stations.add(_stationFromPreset(preset));
+    }
+    return stations;
+  }
+
+  /// The Home "Your Top Mixes" row.
+  List<DailyMix> getTopMixes() {
+    return [
+      for (var i = 0; i < radioMixPresets.length; i++)
+        _mixFromPreset(radioMixPresets[i]),
+    ];
+  }
+
+  /// Stations similar to [artistName] for the "More like" row.
+  ///
+  /// Empty input falls back to `Hev Abi`, matching the dashboard default.
+  List<RadioStation> getMoreLikeStations(String artistName) {
+    final trimmed = artistName.trim();
+    final seed = findArtistPreset(trimmed.isEmpty ? 'Hev Abi' : trimmed);
+    final seedName = seed?.name ?? (trimmed.isEmpty ? 'Hev Abi' : trimmed);
+    final stations = <RadioStation>[_stationForArtist(seedName)];
+    final seen = <String>{stations.first.id};
+
+    final candidates = <String>[
+      ...?seed?.collaborators,
+      for (final preset in radioArtistPresets) preset.name,
+    ];
+    for (final name in candidates) {
+      if (stations.length >= 8) break;
+      if (artistNamesMatch(name, seedName)) continue;
+      final station = _stationForArtist(name);
+      if (seen.add(station.id)) stations.add(station);
+    }
+    return stations;
+  }
+
+  /// Generates a station from a free-text query. Returns null for an empty
+  /// query, and a curated fallback station when the catalog is unavailable.
+  Future<RadioStation?> searchArtistRadio(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final station = await searchSpotifyRadio(trimmed);
+      if (station.songs.isEmpty) return _stationForArtist(trimmed);
+      return station;
+    } catch (e) {
+      debugPrint(
+        '[RadioDiscoveryService] searchArtistRadio fallback for "$trimmed": $e',
+      );
+      return _stationForArtist(trimmed);
+    }
+  }
+
+  /// Records that a station was played: updates the "More like" seed and the
+  /// Recents row. Only metadata/ids are cached, never audio.
+  Future<void> recordStationPlayed(RadioStation station) async {
+    final artist = station.artistName.trim();
+    if (artist.isNotEmpty) _lastPlayedArtist = artist;
+    _recentStations = [
+      station,
+      ..._recentStations.where((s) => s.id != station.id),
+    ].take(8).toList();
+    unawaited(_persistRecentStations());
+    try {
+      final db = LocalDatabase.instance;
+      if (_lastPlayedArtist.isNotEmpty) {
+        await db.setSetting('last_played_artist', _lastPlayedArtist);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _persistRecentStations() async {
+    try {
+      await LocalDatabase.instance.setSetting(
+        'cached_recent_stations',
+        jsonEncode(_recentStations.map((s) => s.toMap()).toList()),
+      );
+    } catch (_) {}
+  }
+
+  List<RadioStation> _defaultRecentStations() {
+    final stations = <RadioStation>[];
+    for (final name in defaultRecentStationNames) {
+      if (name == 'Black Clover OP') {
+        stations.add(_stationFromStationPreset(blackCloverRadioPreset));
+      } else if (name == '2000s') {
+        stations.add(_stationFromStationPreset(twoThousandsRadioPreset));
+      } else {
+        final preset = findArtistPreset(name);
+        if (preset != null) stations.add(_stationFromPreset(preset));
+      }
+    }
+    return stations;
+  }
+
+  RadioStation _stationForArtist(String name) {
+    final preset = findArtistPreset(name);
+    if (preset != null) return _stationFromPreset(preset);
+    return buildArtistRadio(artistName: name, existingSongs: _curatedSongPool());
+  }
+
+  RadioStation _stationFromPreset(RadioArtistPreset preset) {
+    final songs = _songsFromSeeds(
+      preset.tracks,
+      idPrefix: 'preset-${preset.slug}',
+      accent: preset.accent,
+    );
+    return RadioStation(
+      id: 'artist-${preset.slug}',
+      title: '${preset.name} Radio',
+      artistName: preset.name,
+      subtitle: preset.collaborators.isEmpty
+          ? '${preset.genre} picks and more'
+          : 'With ${preset.collaborators.join(', ')} and more',
+      backgroundColor: preset.accent,
+      gradientColors: [preset.accent, preset.accent.withValues(alpha: 0.8)],
+      songs: songs,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  RadioStation _stationFromStationPreset(RadioStationPreset preset) {
+    return RadioStation(
+      id: preset.id,
+      title: preset.title,
+      artistName: preset.artistName,
+      subtitle: preset.subtitle,
+      backgroundColor: preset.accent,
+      gradientColors: [preset.accent, preset.accent.withValues(alpha: 0.8)],
+      songs: _songsFromSeeds(
+        preset.tracks,
+        idPrefix: preset.id,
+        accent: preset.accent,
+      ),
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  DailyMix _mixFromPreset(RadioMixPreset preset) {
+    return DailyMix(
+      id: preset.id,
+      title: preset.title,
+      number: preset.number,
+      accentColor: preset.accent,
+      gradientColors: [preset.accent, preset.accent.withValues(alpha: 0.75)],
+      subtitle: preset.subtitle,
+      songs: _songsFromSeeds(
+        preset.tracks,
+        idPrefix: 'seed-${preset.id}',
+        accent: preset.accent,
+      ),
+    );
+  }
+
+  List<Song> _songsFromSeeds(
+    List<RadioTrackSeed> seeds, {
+    required String idPrefix,
+    required Color accent,
+  }) {
+    final songs = <Song>[];
+    for (var i = 0; i < seeds.length; i++) {
+      final seed = seeds[i];
+      songs.add(
+        Song(
+          id: '$idPrefix-${i + 1}',
+          title: seed.title,
+          artist: seed.artist,
+          album: seed.album.isEmpty ? seed.title : seed.album,
+          duration: seed.duration,
+          genre: 'Pop',
+          imageUrl: '',
+          gradientColors: [accent, accent.withValues(alpha: 0.8)],
+          plays: '',
+          lyrics: const [],
+          isPreview: false,
+        ),
+      );
+    }
+    return songs;
+  }
+
+  /// Curated metadata pool used when a provider is unavailable.
+  List<Song> _curatedSongPool() {
+    return dedupeSongs([
+      for (final preset in radioArtistPresets)
+        ..._songsFromSeeds(
+          preset.tracks,
+          idPrefix: 'preset-${preset.slug}',
+          accent: preset.accent,
+        ),
+      ..._fallbackPopularRadios().expand((s) => s.songs),
+      ..._fallbackOpmRadios().expand((s) => s.songs),
+      ..._fallbackGlobalRadios().expand((s) => s.songs),
+    ]);
+  }
+
+  /// Removes duplicate tracks by id and by `title|artist`.
+  static List<Song> dedupeSongs(Iterable<Song> songs) {
+    final seenIds = <String>{};
+    final seenNames = <String>{};
+    final result = <Song>[];
+    for (final song in songs) {
+      final nameKey = '${song.title.toLowerCase().trim()}|'
+          '${song.artist.toLowerCase().trim()}';
+      if (song.id.isNotEmpty && !seenIds.add(song.id)) continue;
+      if (!seenNames.add(nameKey)) continue;
+      result.add(song);
+    }
+    return result;
   }
 
   /// Curated Spotify Daily Mixes matching Screenshot 1
@@ -963,11 +1275,14 @@ class RadioDiscoveryService {
     ];
   }
 
-  /// Builds a dynamic Radio Station for any specific artist name
+  /// Builds a dynamic Radio Station for any specific artist name.
   RadioStation buildArtistRadio({
     required String artistName,
     required List<Song> existingSongs,
   }) {
+    final preset = findArtistPreset(artistName);
+    if (preset != null) return _stationFromPreset(preset);
+
     final pool = existingSongs.isNotEmpty
         ? existingSongs
         : [
@@ -988,7 +1303,8 @@ class RadioDiscoveryService {
       subtitle: 'Popular tracks and recommendations for $artistName',
       backgroundColor: pastel,
       gradientColors: [pastel, pastel.withValues(alpha: 0.85)],
-      songs: artistSongs.isNotEmpty ? artistSongs : pool.take(10).toList(),
+      songs: dedupeSongs(artistSongs.isNotEmpty ? artistSongs : pool.take(10)),
+      updatedAt: DateTime.now(),
     );
   }
 
@@ -1024,6 +1340,11 @@ class RadioDiscoveryService {
   /// Extracts collaborator artists from track titles, artist strings, and known presets
   List<String> extractCollaborators(String mainArtist, List<dynamic> rawTracks) {
     final lowerMain = mainArtist.toLowerCase().trim();
+
+    final curated = findArtistPreset(mainArtist);
+    if (curated != null && curated.collaborators.isNotEmpty) {
+      return curated.collaborators.take(3).toList();
+    }
 
     // Spotify-exact presets for trending stations shown in user screenshots
     final presets = <String, List<String>>{
@@ -1218,8 +1539,9 @@ class RadioDiscoveryService {
       backgroundColor: pastelColor,
       gradientColors: [pastelColor, pastelColor.withValues(alpha: 0.85)],
       avatarUrls: avatarUrls,
-      songs: songs,
+      songs: dedupeSongs(songs),
       heroImageUrl: avatarUrls.isNotEmpty ? avatarUrls.first : '',
+      updatedAt: DateTime.now(),
     );
 
     _radioCache[cacheKey] = station;

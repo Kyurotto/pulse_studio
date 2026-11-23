@@ -8,5 +8,5 @@ export 'web_offline_audio_api.dart';
 ///
 /// On the web this is a Cache API store; on Android/desktop/iOS it is a no-op
 /// because downloads are written to the app documents directory instead.
-WebOfflineAudioStore createWebOfflineAudioStore() =>
-    platform.createWebOfflineAudioStore();
+WebOfflineAudioStore createWebOfflineAudioStore({String? cacheName}) =>
+    platform.createWebOfflineAudioStore(cacheName: cacheName);

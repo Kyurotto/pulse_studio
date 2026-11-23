@@ -25,10 +25,12 @@ void main() {
     await LocalDatabase.instance.initialize();
 
     // path_provider is unavailable in widget tests, so the controller falls
-    // back to this directory. Keeping test files here exercises the same
-    // fallback lookup path used on a device without app-support access.
+    // back to this directory for permanent downloads. Keeping test files here
+    // exercises the same fallback lookup path used on a device without
+    // app-support access. The legacy `pulse_music_offline` directory is
+    // temporary cache and is intentionally not used for downloads anymore.
     cacheDir = Directory(
-      p.join(Directory.systemTemp.path, 'pulse_music_offline'),
+      p.join(Directory.systemTemp.path, 'pulse_music_downloads'),
     );
     await cacheDir.create(recursive: true);
   });

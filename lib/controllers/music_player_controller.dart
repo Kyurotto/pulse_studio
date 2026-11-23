@@ -181,6 +181,10 @@ class MusicPlayerController extends ChangeNotifier {
   /// and mobile keep the original `just_audio` player behind the same facade.
   late final PlaybackEngine _audioPlayer = _createPlaybackEngine();
 
+  /// The un-wrapped `just_audio` player on mobile, kept so the patched Android
+  /// implementation's `setMonoAudio` channel can be reached directly.
+  AudioPlayer? _justAudioPlayer;
+
   PlaybackEngine _createPlaybackEngine() {
     if (AudioCapabilities.isWindows) {
       try {
@@ -191,16 +195,16 @@ class MusicPlayerController extends ChangeNotifier {
         );
       }
     }
-    return JustAudioPlaybackEngine(
-      AudioPlayer(
-        useProxyForRequestHeaders: false,
-        audioPipeline: AudioEqualizerService.isPlatformSupported
-            ? AudioPipeline(
-                androidAudioEffects: [_equalizer.effect, _loudnessEnhancer],
-              )
-            : null,
-      ),
+    final player = AudioPlayer(
+      useProxyForRequestHeaders: false,
+      audioPipeline: AudioEqualizerService.isPlatformSupported
+          ? AudioPipeline(
+              androidAudioEffects: [_equalizer.effect, _loudnessEnhancer],
+            )
+          : null,
     );
+    _justAudioPlayer = player;
+    return JustAudioPlaybackEngine(player);
   }
 
   StreamSubscription<Duration>? _positionSub;
@@ -554,8 +558,9 @@ class MusicPlayerController extends ChangeNotifier {
   /// user's own queue runs out.
   bool get autoplay => _autoplay;
 
-  /// Reduces mobile data use by capping fresh streams and pausing automatic
-  /// offline caching while enabled.
+  /// Reduces mobile data use by capping freshly resolved streams. Playback
+  /// caching still follows the song that is currently being played; it is a
+  /// temporary copy and is not a user-requested download.
   bool get dataSaverMode => _dataSaverMode;
 
   String get streamingQuality => _streamingQuality;
@@ -651,9 +656,9 @@ class MusicPlayerController extends ChangeNotifier {
   void setMonoAudio(bool enabled, {bool save = true}) {
     if (_monoAudio != enabled) {
       _monoAudio = enabled;
-      // Android has no channel-mapping stage; Windows downmixes in the
-      // engine's FFmpeg filter chain.
-      _applyDesktopDsp();
+      // Android downmixes in the patched just_audio sink; Windows downmixes in
+      // the engine's FFmpeg filter chain.
+      unawaited(_applyMonoAudio());
       notifyListeners();
     }
     if (save) {
@@ -663,6 +668,41 @@ class MusicPlayerController extends ChangeNotifier {
           enabled.toString(),
         ),
       );
+    }
+  }
+
+  /// Pushes the mono preference to whichever engine is active.
+  Future<void> _applyMonoAudio() async {
+    if (AudioCapabilities.isAndroid) {
+      if (!await _pushMonoSettingToJustAudio()) return;
+      // The processor is activated when the sink is configured, so reload the
+      // current source to make a live toggle audible without stopping playback.
+      if (_audioPlayerHasSource && _isPlaying && _loadedSongId != null) {
+        final resumeAt = _currentPosition;
+        await _playCurrentSongAudio();
+        if (resumeAt > Duration.zero) {
+          seekTo(resumeAt);
+        }
+      }
+      return;
+    }
+    _applyDesktopDsp();
+  }
+
+  /// Sends the mono flag to the patched just_audio player without reloading.
+  ///
+  /// Returns false when the native player has not been initialized yet; the
+  /// flag is retried from [_markSourceLoaded] once a source is attached.
+  Future<bool> _pushMonoSettingToJustAudio() async {
+    if (!AudioCapabilities.isAndroid) return false;
+    final player = _justAudioPlayer;
+    if (player == null) return false;
+    try {
+      await player.setMonoAudio(_monoAudio);
+      return true;
+    } catch (e) {
+      debugPrint('[MusicPlayerController] setMonoAudio failed: $e');
+      return false;
     }
   }
 
@@ -779,6 +819,7 @@ class MusicPlayerController extends ChangeNotifier {
 
     unawaited(_applyLoudnessNormalization());
     _syncEngineTransitions();
+    unawaited(_applyMonoAudio());
   }
 
   /// The Android loudness enhancer only applies a gain offset; it has no
@@ -1154,6 +1195,7 @@ class MusicPlayerController extends ChangeNotifier {
       // persisted gain once the player is available.
       unawaited(_applyLoudnessNormalization());
       _applyDesktopDsp();
+      unawaited(_applyMonoAudio());
 
       // Desktop engine: the preloaded next track became audible. Adopt its
       // state instead of reloading it through the normal play path.
@@ -1933,7 +1975,6 @@ class MusicPlayerController extends ChangeNotifier {
       // Make the durable dead-stream markers authoritative before any row is
       // merged, so a quarantined row can never inherit an old in-memory URL.
       await _abandonedRemoteLoaded;
-      _autoCachePlayedSongs = allSettings[_autoCachePlayedSongsKey] != 'false';
       _allowExplicit = allSettings[allowExplicitSettingKey] != 'false';
       _visualizerEnabled = allSettings[visualizerSettingKey] != 'false';
       _loadPlaybackSettings(allSettings);
@@ -2018,7 +2059,9 @@ class MusicPlayerController extends ChangeNotifier {
               resolvedAudio = cachedFile.path;
               isPreview = false;
               isYouTubeAudio = false;
-              _downloadedSongIds.add(songId);
+              if (_isPersistentDownloadPath(cachedFile.path)) {
+                _downloadedSongIds.add(songId);
+              }
             } else {
               // Delete incomplete or 30s preview clips so the full track can
               // resolve on the live network.
@@ -2056,7 +2099,7 @@ class MusicPlayerController extends ChangeNotifier {
                 resolvedAudio = '';
                 isPreview = false;
                 isYouTubeAudio = true;
-              } else {
+              } else if (_isPersistentDownloadPath(resolvedAudio)) {
                 _downloadedSongIds.add(songId);
               }
             }
@@ -3242,31 +3285,9 @@ class MusicPlayerController extends ChangeNotifier {
   /// app_settings key written by the "Download on mobile data" switch.
   static const String _downloadOnMobileKey = 'download_on_mobile_data';
 
-  /// app_settings key written by the "Cache played songs" switch.
-  static const String _autoCachePlayedSongsKey = 'auto_cache_played_songs';
-
-  /// When true, playing a remote track still writes a local copy. Importing
-  /// playlists no longer downloads anything: only playback and explicit
-  /// downloads touch the offline cache.
-  bool _autoCachePlayedSongs = true;
-
-  bool get autoCachePlayedSongs =>
-      (kIsWeb || _isDesktop) ? true : _autoCachePlayedSongs;
-
-  bool get _isMobile => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-  bool get _isDesktop =>
-      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
-
-  void setAutoCachePlayedSongs(bool enabled) {
-    if (_autoCachePlayedSongs == enabled) return;
-    _autoCachePlayedSongs = enabled;
-    unawaited(
-      LocalDatabase.instance
-          .saveSetting(_autoCachePlayedSongsKey, enabled.toString())
-          .catchError((_) {}),
-    );
-    notifyListeners();
-  }
+  /// Playback always writes a temporary copy to the streaming cache.
+  /// Explicit downloads remain in the separate permanent offline store.
+  bool get autoCachePlayedSongs => true;
 
   /// Songs the player gave up on (no cache, no stream, no bundled asset).
   /// Drives the "can't play" message and Retry in the player bar.
@@ -3322,9 +3343,10 @@ class MusicPlayerController extends ChangeNotifier {
     }
   }
 
-  /// Offline-cache downloads are skipped on mobile data unless the user
-  /// turned "Download on mobile data" on. Data Saver always blocks them on
-  /// metered connections, regardless of that switch.
+  /// User-requested offline downloads are skipped on mobile data unless the
+  /// user turned "Download on mobile data" on. Automatic playback caching
+  /// deliberately does not use this gate because it must work for every
+  /// played song.
   Future<bool> _mayDownloadNow() async {
     if (!await _isOnMeteredConnection()) return true;
     if (_dataSaverMode) return false;
@@ -3761,8 +3783,9 @@ class MusicPlayerController extends ChangeNotifier {
               // Large files are trustworthy by size alone; smaller ones must
               // be confirmed by the database so short full tracks survive a
               // restart while 30s previews stay out of the downloaded set.
-              if (length >= _previewFileSizeThreshold ||
-                  await _isCompleteOfflineFile(songId, f)) {
+              if (_isPersistentDownloadPath(f.path) &&
+                  (length >= _previewFileSizeThreshold ||
+                      await _isCompleteOfflineFile(songId, f))) {
                 _downloadedSongIds.add(songId);
               }
             }
@@ -3781,6 +3804,7 @@ class MusicPlayerController extends ChangeNotifier {
         try {
           final cached = await _findCachedAudioFile(s.id);
           if (cached != null &&
+              _isPersistentDownloadPath(cached.path) &&
               cached.existsSync() &&
               await _isCompleteOfflineFile(s.id, cached)) {
             _downloadedSongIds.add(s.id);
@@ -4092,7 +4116,9 @@ class MusicPlayerController extends ChangeNotifier {
       final cached = await _findCachedAudioFile(song.id);
       if (cached != null && cached.existsSync()) {
         if (await _isCompleteOfflineFile(song.id, cached)) {
-          _downloadedSongIds.add(song.id);
+          if (_isPersistentDownloadPath(cached.path)) {
+            _downloadedSongIds.add(song.id);
+          }
           final changed = _applyEnrichment(
             song,
             TrackEnrichment(previewUrl: cached.path, isFullTrack: true),
@@ -4281,7 +4307,10 @@ class MusicPlayerController extends ChangeNotifier {
     }
   }
 
-  Future<bool> _materializeHlsAudio(Song song) async {
+  Future<bool> _materializeHlsAudio(
+    Song song, {
+    bool persistent = false,
+  }) async {
     final playlistUrl = song.audioUrl;
     if (!SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(playlistUrl)) {
       return false;
@@ -4290,7 +4319,7 @@ class MusicPlayerController extends ChangeNotifier {
     var ok = false;
     try {
       ok = await _withHlsMaterialisationSlot(
-        () => _downloadHlsToFile(song, playlistUrl),
+        () => _downloadHlsToFile(song, playlistUrl, persistent: persistent),
       );
     } finally {
       _materializingHlsIds.remove(song.id);
@@ -4314,7 +4343,7 @@ class MusicPlayerController extends ChangeNotifier {
         if (!_disposed &&
             song.audioUrl == playlistUrl &&
             !_materializingHlsIds.contains(song.id)) {
-          unawaited(_materializeHlsAudio(song));
+          unawaited(_materializeHlsAudio(song, persistent: persistent));
         }
       });
     } else if (song.audioUrl == playlistUrl) {
@@ -4330,10 +4359,16 @@ class MusicPlayerController extends ChangeNotifier {
   /// Failed HLS materialisation counts, used for the bounded retry above.
   final Map<String, int> _hlsMaterialiseFailures = <String, int>{};
 
-  Future<bool> _downloadHlsToFile(Song song, String playlistUrl) async {
+  Future<bool> _downloadHlsToFile(
+    Song song,
+    String playlistUrl, {
+    required bool persistent,
+  }) async {
     final downloader = SoundCloudHlsDownloader();
     try {
-      final offlineDir = await _getPersistentOfflineDirectory();
+      final offlineDir = persistent
+          ? await _getPersistentOfflineDirectory()
+          : await _getStreamingCacheDirectory();
       final tempFile = File(p.join(offlineDir.path, '${song.id}.hls.tmp'));
       final bytes = await downloader.download(
         playlistUrl: playlistUrl,
@@ -4356,7 +4391,7 @@ class MusicPlayerController extends ChangeNotifier {
       await tempFile.rename(targetFile.path);
 
       _invalidateOfflineLookup(song.id);
-      _downloadedSongIds.add(song.id);
+      if (persistent) _downloadedSongIds.add(song.id);
       LocalDatabase.notifyAudioCacheChanged();
 
       song.audioUrl = targetFile.path;
@@ -4640,7 +4675,11 @@ class MusicPlayerController extends ChangeNotifier {
   final WebOfflineAudioStore? _webAudioStore = kIsWeb
       ? LocalDatabase.webAudioStore
       : null;
+  final WebOfflineAudioStore? _webStreamingAudioStore = kIsWeb
+      ? LocalDatabase.webStreamingAudioStore
+      : null;
   Future<void>? _webAudioHydrated;
+  Future<void>? _webStreamingAudioHydrated;
 
   /// Resolves full YouTube tracks through a CORS-enabled Invidious proxy for
   /// browser downloads. Null on native builds, which have their own provider.
@@ -4650,13 +4689,20 @@ class MusicPlayerController extends ChangeNotifier {
 
   /// Reads the ids already stored in the browser cache. Called once at startup
   /// so download badges are correct before the user opens a playlist.
-  Future<void> _hydrateWebAudioStore() {
-    final existing = _webAudioHydrated;
+  Future<void> _hydrateWebAudioStore([WebOfflineAudioStore? targetStore]) {
+    final store = targetStore ?? _webAudioStore;
+    final isStreaming = identical(store, _webStreamingAudioStore);
+    final existing = isStreaming
+        ? _webStreamingAudioHydrated
+        : _webAudioHydrated;
     if (existing != null) return existing;
-    final store = _webAudioStore;
     if (store == null) {
       final done = Future<void>.value();
-      _webAudioHydrated = done;
+      if (isStreaming) {
+        _webStreamingAudioHydrated = done;
+      } else {
+        _webAudioHydrated = done;
+      }
       return done;
     }
     late final Future<void> future;
@@ -4666,46 +4712,95 @@ class MusicPlayerController extends ChangeNotifier {
           if (!_disposed) notifyListeners();
         })
         .catchError((Object e, StackTrace st) {
-          if (identical(_webAudioHydrated, future)) {
+          if (isStreaming) {
+            if (identical(_webStreamingAudioHydrated, future)) {
+              _webStreamingAudioHydrated = null;
+            }
+          } else if (identical(_webAudioHydrated, future)) {
             _webAudioHydrated = null;
           }
           debugPrint('[MusicPlayerController] web audio hydrate error: $e');
           Error.throwWithStackTrace(e, st);
         });
-    _webAudioHydrated = future;
+    if (isStreaming) {
+      _webStreamingAudioHydrated = future;
+    } else {
+      _webAudioHydrated = future;
+    }
     return future;
   }
 
+  /// True when [value] points at a user-requested offline download rather
+  /// than the temporary playback cache. Paths are normalised so Windows
+  /// backslashes match the same rules as Android and Linux.
+  static bool _isPersistentDownloadPath(String value) {
+    if (value.isEmpty) return false;
+    final normalized = value.replaceAll('\\', '/').toLowerCase();
+    if (normalized.contains('/offline_downloads/') ||
+        normalized.contains('/pulse_music_downloads/')) {
+      return true;
+    }
+    // Legacy downloads live in `offline_audio` under documents/support. Only
+    // copies inside an OS cache/temp directory are temporary.
+    if (normalized.contains('/offline_audio/')) {
+      final temporary =
+          normalized.contains('/cache/') ||
+          normalized.contains('/temp/') ||
+          normalized.contains('/tmp/');
+      return !temporary;
+    }
+    return false;
+  }
+
+  /// True when [value] points into the temporary playback cache.
+  static bool _isTemporaryCachePath(String value) {
+    if (value.isEmpty) return false;
+    final normalized = value.replaceAll('\\', '/').toLowerCase();
+    return normalized.contains('/streaming_cache/') ||
+        normalized.contains('/pulse_streaming_cache/') ||
+        normalized.contains('/pulse_music_offline/') ||
+        (normalized.contains('/cache/') &&
+            normalized.contains('/offline_audio/')) ||
+        (normalized.contains('/temp/') &&
+            normalized.contains('/offline_audio/'));
+  }
+
   /// Synchronously checks if a song is downloaded and available offline.
+  ///
+  /// Temporary streaming-cache copies are deliberately excluded: they are
+  /// playback cache, not a Download, so clearing the cache never removes the
+  /// Downloaded badge from a track the user did not explicitly download.
   bool isSongDownloaded(String songId) {
     // Web downloads live in the browser Cache API, not on disk.
     if (kIsWeb) return _webAudioStore?.has(songId) ?? false;
     if (_downloadedSongIds.contains(songId)) {
-      if (findCachedAudioFileSync(songId) != null) return true;
-      // The file was deleted outside the app (e.g. cache clear); drop the
-      // stale in-memory flag so the download button becomes actionable again.
+      final cached = findCachedAudioFileSync(songId);
+      if (cached != null && _isPersistentDownloadPath(cached.path)) {
+        return true;
+      }
+      // The file was deleted or only ever lived in the temporary cache; drop
+      // the stale in-memory flag so the download button becomes actionable.
       _downloadedSongIds.remove(songId);
     }
     final memo = _audioLookupMemo[songId];
-    if (memo != null && memo.existsSync() && memo.lengthSync() > 1024) {
+    if (memo != null &&
+        memo.existsSync() &&
+        memo.lengthSync() > 1024 &&
+        _isPersistentDownloadPath(memo.path)) {
       _downloadedSongIds.add(songId);
       return true;
     }
     final song = songById(songId);
-    if (song != null) {
-      if ((song.audioUrl.contains('offline_downloads') ||
-              song.audioUrl.contains('offline_audio') ||
-              song.audioUrl.contains('streaming_cache') ||
-              song.audioUrl.contains('pulse_music_offline')) &&
-          !song.audioUrl.startsWith('assets/')) {
-        try {
-          final file = File(song.audioUrl);
-          if (file.existsSync() && file.lengthSync() > 1024) {
-            _downloadedSongIds.add(songId);
-            return true;
-          }
-        } catch (_) {}
-      }
+    if (song != null &&
+        _isPersistentDownloadPath(song.audioUrl) &&
+        !song.audioUrl.startsWith('assets/')) {
+      try {
+        final file = File(song.audioUrl);
+        if (file.existsSync() && file.lengthSync() > 1024) {
+          _downloadedSongIds.add(songId);
+          return true;
+        }
+      } catch (_) {}
     }
     return false;
   }
@@ -4726,6 +4821,73 @@ class MusicPlayerController extends ChangeNotifier {
     return songs.any((s) => isSongDownloading(s.id));
   }
 
+  /// Deletes the temporary playback cache on phone, Windows, and web.
+  ///
+  /// Permanent downloads (`offline_downloads` on native, `webAudioStore` on
+  /// web) are preserved. If the loaded audio comes from the temporary cache,
+  /// playback is stopped first so Windows releases the file handle before the
+  /// file is deleted.
+  ///
+  /// [dirs] is injectable for tests; production callers omit it.
+  Future<int> clearAudioCache({List<Directory>? dirs}) async {
+    final loaded =
+        (_loadedSongId == null ? null : songById(_loadedSongId!)) ??
+        currentSong;
+    final loadedFromTemporaryCache =
+        loaded != null &&
+        (_isTemporaryCachePath(loaded.audioUrl) ||
+            (kIsWeb && (_webStreamingAudioStore?.has(loaded.id) ?? false)));
+
+    if (loadedFromTemporaryCache && (_audioPlayerHasSource || _isPlaying)) {
+      // Finish history before zeroing the position; the row uses the delta.
+      _finishListeningHistory();
+      _isPlaying = false;
+      _completionHandled = false;
+      _pendingHotSwapReload = false;
+      _currentPosition = Duration.zero;
+      _audioDuration = Duration.zero;
+      _positionNotifier.value = Duration.zero;
+      _playbackTimer?.cancel();
+      _cancelStallWatchdog();
+      _cancelAutomixFade();
+      // Invalidate any in-flight load so it cannot reopen the deleted file.
+      _playSessionId++;
+      try {
+        await _audioPlayer.stop();
+      } catch (_) {}
+      _audioPlayerHasSource = false;
+      _loadedSongId = null;
+    }
+
+    final freed = await LocalDatabase.clearLocalAudioCache(dirs: dirs);
+
+    // The files are gone: forget memoised lookups and Download badges, and
+    // clear any in-memory URL that still points at the deleted cache.
+    _audioLookupMemo.clear();
+    _staticAudioLookupMemo.clear();
+    _artworkLookupMemo.clear();
+    LocalDatabase.invalidateCachedAudioFileMemo();
+    _downloadedSongIds.clear();
+
+    void resetSong(Song song) {
+      if (_isTemporaryCachePath(song.audioUrl)) {
+        song.audioUrl = '';
+        song.isPreview = false;
+        song.isYouTubeAudio = true;
+      }
+    }
+
+    for (final song in _allSongs) {
+      resetSong(song);
+    }
+    for (final song in _queue) {
+      resetSong(song);
+    }
+    _locatingStatusVersion++;
+    notifyListeners();
+    return freed;
+  }
+
   /// Directory for permanent user-initiated offline downloads.
   /// Lives in persistent app documents or support storage, NEVER cleared by
   /// OS cache sweeps or the user "Clear Audio Cache" setting.
@@ -4741,8 +4903,10 @@ class MusicPlayerController extends ChangeNotifier {
         primary = Directory(p.join(supp.path, 'offline_downloads'));
       } catch (_) {}
     }
+    // Keep the fallback distinct from `pulse_music_offline`, the legacy
+    // temporary cache, so Clear Audio Cache can never delete downloads.
     primary ??= Directory(
-      p.join(Directory.systemTemp.path, 'pulse_music_offline'),
+      p.join(Directory.systemTemp.path, 'pulse_music_downloads'),
     );
     if (!await primary.exists()) {
       await primary.create(recursive: true);
@@ -4786,6 +4950,14 @@ class MusicPlayerController extends ChangeNotifier {
     'pulse_music_offline',
   );
 
+  /// Fallback persistent download directory used only when path_provider is
+  /// unavailable. Kept separate from the legacy temporary cache directory so
+  /// Clear Audio Cache cannot delete it.
+  static final String _systemTempDownloadDir = p.join(
+    Directory.systemTemp.path,
+    'pulse_music_downloads',
+  );
+
   static final List<String> _knownFallbackDirs = [
     if (!kIsWeb && Platform.isAndroid) ...[
       '/data/user/0/com.example.music/app_flutter/offline_downloads',
@@ -4826,6 +4998,7 @@ class MusicPlayerController extends ChangeNotifier {
     'streaming_cache',
     'offline_audio',
     _systemTempOfflineDir,
+    _systemTempDownloadDir,
   ];
 
   static void primeStaticOfflineCache() {
@@ -4930,6 +5103,7 @@ class MusicPlayerController extends ChangeNotifier {
       dirs.add(temp);
     } catch (_) {}
     dirs.add(Directory(_systemTempOfflineDir));
+    dirs.add(Directory(_systemTempDownloadDir));
     dirs.add(
       Directory(p.join(Directory.systemTemp.path, 'pulse_streaming_cache')),
     );
@@ -5286,6 +5460,9 @@ class MusicPlayerController extends ChangeNotifier {
     _loadedSongId = song.id;
     _loadedAudioUrl = song.audioUrl;
     _loadedWasPreview = song.isPreview;
+    // The native player is now initialized, so a mono preference restored from
+    // disk (or toggled before the first load) can finally reach the processor.
+    unawaited(_pushMonoSettingToJustAudio());
   }
 
   /// True when [url] points at a file on the device (not a remote stream or a
@@ -5565,6 +5742,10 @@ class MusicPlayerController extends ChangeNotifier {
       _getOfflineAssetFallback(song);
 
   @visibleForTesting
+  Future<void> cachePlaybackMetadataForTesting(Song song, Directory cacheDir) =>
+      _cachePlaybackMetadata(song, cacheDir);
+
+  @visibleForTesting
   List<String> ensureOfflineLyricsForTesting(Song song) =>
       _ensureOfflineLyrics(song);
 
@@ -5599,22 +5780,45 @@ class MusicPlayerController extends ChangeNotifier {
   );
 
   Future<void> _cacheAudioOffline(Song song) async {
-    // Automatic caching is playback-only. Imports and background enrichment
-    // never write audio unless the user explicitly downloads it.
-    // On mobile, honor the user's manual "Cache played songs" switch.
-    // On desktop (Windows) and Web (Chrome), played songs are always automatically cached!
-    if (_isMobile && !_autoCachePlayedSongs) return;
+    // Playback caching is temporary and separate from explicit downloads.
 
     // Web caches via browser Cache API (WebOfflineAudioStore).
     if (kIsWeb) {
-      if (_dataSaverMode) return;
-      unawaited(_downloadSongOnWeb(song, allowPreviewFallback: true));
+      final streamingStore = _webStreamingAudioStore;
+      if (streamingStore == null) return;
+      await _hydrateWebAudioStore(streamingStore);
+      await _cachePlaybackMetadataOnWeb(song, streamingStore);
+
+      // A browser download already lives in the permanent audio Cache API.
+      // Keep only artwork/metadata in the temporary playback cache; copying
+      // the downloaded audio again would defeat the separate-storage model.
+      final downloadStore = _webAudioStore;
+      var hasPersistentAudio = false;
+      if (downloadStore != null) {
+        await _hydrateWebAudioStore(downloadStore);
+        if (downloadStore.has(song.id)) {
+          hasPersistentAudio = await downloadStore.verifyExists(song.id);
+        }
+      }
+      if (hasPersistentAudio) return;
+
+      unawaited(
+        _downloadSongOnWeb(
+          song,
+          allowPreviewFallback: true,
+          targetStore: streamingStore,
+          markAsDownloaded: false,
+          cacheDuringPlayback: true,
+        ),
+      );
       return;
     }
 
-    // Data Saver pauses automatic caching so playback does not quietly pull
-    // full tracks over a metered connection.
-    if (_dataSaverMode) return;
+    final cacheDir = await _getStreamingCacheDirectory();
+    // A downloaded track already has its audio in permanent storage. Cache
+    // only the small playback extras here so the Local Audio Cache reflects
+    // played tracks without duplicating the downloaded audio.
+    await _cachePlaybackMetadata(song, cacheDir);
 
     // 1. Check if a valid local offline file already exists
     final cached = await _findCachedAudioFile(song.id);
@@ -5625,7 +5829,6 @@ class MusicPlayerController extends ChangeNotifier {
         } catch (_) {}
         _invalidateOfflineLookup(song.id);
       } else {
-        _downloadedSongIds.add(song.id);
         if (song.audioUrl != cached.path) {
           song.audioUrl = cached.path;
           song.isPreview = false;
@@ -5637,12 +5840,6 @@ class MusicPlayerController extends ChangeNotifier {
       }
     }
 
-    // Don't download over mobile data unless the user allowed it.
-    if (!await _mayDownloadNow()) {
-      _logDiag('offline cache skipped: on mobile data', song: song);
-      return;
-    }
-
     if (SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(song.audioUrl)) {
       if (await _materializeHlsAudio(song)) return;
     }
@@ -5651,7 +5848,6 @@ class MusicPlayerController extends ChangeNotifier {
     _cachingIds.add(song.id);
 
     try {
-      final cacheDir = await _getStreamingCacheDirectory();
       String urlToDownload = song.audioUrl;
 
       // If the URL is empty or expired, resolve fresh full or preview stream
@@ -5688,138 +5884,121 @@ class MusicPlayerController extends ChangeNotifier {
         return;
       }
 
-      final isGoogleVideo = urlToDownload.contains('googlevideo.com');
-      final userAgent = isGoogleVideo
-          ? TrackEnrichmentService.ytAndroidUserAgent
-          : TrackEnrichmentService.browserUserAgent;
-
-      final uri = Uri.parse(urlToDownload);
       final tempFile = File(p.join(cacheDir.path, '${song.id}.tmp'));
+      var downloadUrl = urlToDownload;
+      var cachedOk = false;
+      String? contentType;
 
-      final request = http.Request('GET', uri);
-      request.headers['User-Agent'] = userAgent;
-      request.headers['Accept'] = '*/*';
-      if (!isGoogleVideo) {
-        request.headers['Range'] = 'bytes=0-';
+      for (var attempt = 0; attempt < 2 && !cachedOk; attempt++) {
+        final isGoogleVideo = downloadUrl.contains('googlevideo.com');
+        final result = await _downloadToCacheFile(
+          song: song,
+          url: downloadUrl,
+          tempFile: tempFile,
+          isGoogleVideo: isGoogleVideo,
+        );
+        cachedOk = result.ok;
+        contentType = result.contentType;
+        if (cachedOk) break;
+
+        if ((result.statusCode == 403 || result.statusCode == 429) &&
+            isGoogleVideo) {
+          _enrichment.noteGooglevideoThrottle();
+        }
+        if (attempt == 0) {
+          // A googlevideo URL that was valid for the player can still reject a
+          // second request (throttled binding). Resolve a fresh stream once so
+          // Playback caching does not silently stay at 0 MB.
+          final fresh = await _freshCacheUrl(song);
+          if (fresh != null && fresh != downloadUrl) {
+            _logDiag(
+              'cache retry with a freshly resolved stream '
+              '(${result.statusCode})',
+              song: song,
+            );
+            downloadUrl = fresh;
+            continue;
+          }
+        }
+        debugPrint(
+          '[MusicPlayerController] Cache rejected (${result.statusCode}) for ${song.title}',
+        );
       }
 
-      final client = http.Client();
-      try {
-        final streamedResponse = await client
-            .send(request)
-            .timeout(const Duration(seconds: 50));
-        if (streamedResponse.statusCode == 200 ||
-            streamedResponse.statusCode == 206) {
-          final sink = tempFile.openWrite();
-          await streamedResponse.stream.pipe(sink);
-          await sink.flush();
-          await sink.close();
-
-          final downloadedBytes = await tempFile.length();
-          if (downloadedBytes >= _minimumAudioFileBytes) {
-            final ext = _audioExtensionForUrl(
-              urlToDownload,
-              contentType: streamedResponse.headers['content-type'],
-            );
-            final targetFile = File(p.join(cacheDir.path, '${song.id}$ext'));
-            if (await targetFile.exists()) {
-              try {
-                await targetFile.delete();
-              } catch (_) {}
-            }
-            try {
-              await tempFile.rename(targetFile.path);
-            } catch (_) {
-              await tempFile.copy(targetFile.path);
-              try {
-                await tempFile.delete();
-              } catch (_) {}
-            }
-            _invalidateOfflineLookup(song.id);
-            _downloadedSongIds.add(song.id);
-            LocalDatabase.notifyAudioCacheChanged();
-
-            song.audioUrl = targetFile.path;
-            song.isPreview = false;
-            song.isYouTubeAudio = false;
-            _syncSongPathToQueueAndDb(song);
-            _locatingStatusVersion++;
-            notifyListeners();
-            debugPrint(
-              '[MusicPlayerController] Successfully cached ${song.title} ($downloadedBytes bytes) to streaming cache: ${targetFile.path}',
-            );
-
-            // Persist to local SQLite database so offline playback works
-            unawaited(
-              LocalDatabase.instance
-                  .updateImportedSong(
-                    id: song.id,
-                    audioUrl: targetFile.path,
-                    isPreview: false,
-                    isYouTubeAudio: false,
-                    durationMs: song.duration.inMilliseconds,
-                    imageUrl: song.imageUrl,
-                    lyrics: song.lyrics,
-                  )
-                  .catchError((e) {
-                    debugPrint(
-                      '[MusicPlayerController] updateImportedSong error: $e',
-                    );
-                  }),
-            );
-
-            // Also cache artwork locally if available
-            if (song.imageUrl.startsWith('http')) {
-              try {
-                final artTarget = File(p.join(cacheDir.path, '${song.id}.jpg'));
-                if (!artTarget.existsSync()) {
-                  final artResp = await http
-                      .get(Uri.parse(song.imageUrl))
-                      .timeout(const Duration(seconds: 15));
-                  if (artResp.statusCode == 200 &&
-                      artResp.bodyBytes.isNotEmpty) {
-                    await artTarget.writeAsBytes(
-                      artResp.bodyBytes,
-                      flush: true,
-                    );
-                    _invalidateOfflineLookup(song.id, artwork: true);
-                    LocalDatabase.notifyAudioCacheChanged();
-                  }
-                }
-              } catch (_) {}
-            }
-          } else {
-            if (await tempFile.exists()) {
-              try {
-                await tempFile.delete();
-              } catch (_) {}
-            }
-            if ((streamedResponse.statusCode == 429 ||
-                    streamedResponse.statusCode == 403) &&
-                isGoogleVideo) {
-              _enrichment.noteGooglevideoThrottle();
-            }
-            debugPrint(
-              '[MusicPlayerController] Cache rejected (${streamedResponse.statusCode}) for ${song.title}',
-            );
-          }
-        } else {
-          if (await tempFile.exists()) {
-            try {
-              await tempFile.delete();
-            } catch (_) {}
-          }
-          if ((streamedResponse.statusCode == 429 ||
-                  streamedResponse.statusCode == 403) &&
-              isGoogleVideo) {
-            _enrichment.noteGooglevideoThrottle();
-          }
-          debugPrint(
-            '[MusicPlayerController] Cache rejected (${streamedResponse.statusCode}) for ${song.title}',
-          );
+      if (cachedOk) {
+        final downloadedBytes = await tempFile.length();
+        final ext = _audioExtensionForUrl(
+          downloadUrl,
+          contentType: contentType,
+        );
+        final targetFile = File(p.join(cacheDir.path, '${song.id}$ext'));
+        if (await targetFile.exists()) {
+          try {
+            await targetFile.delete();
+          } catch (_) {}
         }
-      } finally {
-        client.close();
+        try {
+          await tempFile.rename(targetFile.path);
+        } catch (_) {
+          await tempFile.copy(targetFile.path);
+          try {
+            await tempFile.delete();
+          } catch (_) {}
+        }
+        _invalidateOfflineLookup(song.id);
+        LocalDatabase.notifyAudioCacheChanged();
+
+        song.audioUrl = targetFile.path;
+        song.isPreview = false;
+        song.isYouTubeAudio = false;
+        _syncSongPathToQueueAndDb(song);
+        _locatingStatusVersion++;
+        notifyListeners();
+        debugPrint(
+          '[MusicPlayerController] Successfully cached ${song.title} ($downloadedBytes bytes) to streaming cache: ${targetFile.path}',
+        );
+
+        // Persist to local SQLite database so offline playback works
+        unawaited(
+          LocalDatabase.instance
+              .updateImportedSong(
+                id: song.id,
+                audioUrl: targetFile.path,
+                isPreview: false,
+                isYouTubeAudio: false,
+                durationMs: song.duration.inMilliseconds,
+                imageUrl: song.imageUrl,
+                lyrics: song.lyrics,
+              )
+              .catchError((e) {
+                debugPrint(
+                  '[MusicPlayerController] updateImportedSong error: $e',
+                );
+              }),
+        );
+
+        // Also cache artwork locally if available
+        if (song.imageUrl.startsWith('http')) {
+          try {
+            final artTarget = File(p.join(cacheDir.path, '${song.id}.jpg'));
+            if (!artTarget.existsSync()) {
+              final artResp = await http
+                  .get(Uri.parse(song.imageUrl))
+                  .timeout(const Duration(seconds: 15));
+              if (artResp.statusCode == 200 && artResp.bodyBytes.isNotEmpty) {
+                await artTarget.writeAsBytes(artResp.bodyBytes, flush: true);
+                _invalidateOfflineLookup(song.id, artwork: true);
+                LocalDatabase.notifyAudioCacheChanged();
+              }
+            }
+          } catch (_) {}
+        }
+      } else {
+        if (await tempFile.exists()) {
+          try {
+            await tempFile.delete();
+          } catch (_) {}
+        }
       }
     } catch (e) {
       debugPrint(
@@ -5828,6 +6007,245 @@ class MusicPlayerController extends ChangeNotifier {
     } finally {
       _cachingIds.remove(song.id);
     }
+  }
+
+  /// Stores the non-audio playback data for one track in the temporary cache.
+  ///
+  /// The file names are derived from the song id, so replaying a track updates
+  /// the same metadata/artwork files instead of adding another copy. This is
+  /// intentionally separate from the downloaded audio file: a permanent
+  /// offline download should never be duplicated into the playback cache.
+  Future<void> _cachePlaybackMetadata(Song song, Directory cacheDir) async {
+    try {
+      if (!await cacheDir.exists()) {
+        await cacheDir.create(recursive: true);
+      }
+
+      var changed = false;
+      final metadataFile = File(
+        p.join(cacheDir.path, '${song.id}.metadata.json'),
+      );
+      final metadata = jsonEncode({
+        'id': song.id,
+        'title': song.title,
+        'artist': song.artist,
+        'album': song.album,
+        'genre': song.genre,
+        'durationMs': song.duration.inMilliseconds,
+        'plays': song.plays,
+        'lyrics': song.lyrics,
+        'imageUrl': song.imageUrl,
+        'isExplicit': song.isExplicit,
+      });
+      var existingMetadata = '';
+      try {
+        existingMetadata = await metadataFile.readAsString();
+      } catch (_) {}
+      if (existingMetadata != metadata) {
+        await metadataFile.writeAsString(metadata, flush: true);
+        changed = true;
+      }
+
+      final imageUrl = song.imageUrl.trim();
+      if (imageUrl.isNotEmpty) {
+        final artworkFile = File(p.join(cacheDir.path, '${song.id}.jpg'));
+        final artworkIsUsable =
+            await artworkFile.exists() && await artworkFile.length() > 100;
+        if (!artworkIsUsable) {
+          List<int>? bytes;
+          final lowerImageUrl = imageUrl.toLowerCase();
+          if (lowerImageUrl.startsWith('http://') ||
+              lowerImageUrl.startsWith('https://')) {
+            try {
+              final response = await http
+                  .get(Uri.parse(imageUrl))
+                  .timeout(const Duration(seconds: 15));
+              if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+                bytes = response.bodyBytes;
+              }
+            } catch (_) {}
+          } else {
+            try {
+              final source = imageUrl.startsWith('file://')
+                  ? File.fromUri(Uri.parse(imageUrl))
+                  : File(imageUrl);
+              if (await source.exists() && await source.length() > 100) {
+                bytes = await source.readAsBytes();
+              }
+            } catch (_) {}
+          }
+          if (bytes != null && bytes.isNotEmpty) {
+            await artworkFile.writeAsBytes(bytes, flush: true);
+            _invalidateOfflineLookup(song.id, artwork: true);
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) LocalDatabase.notifyAudioCacheChanged();
+    } catch (e) {
+      debugPrint(
+        '[MusicPlayerController] Playback metadata cache error for ${song.title}: $e',
+      );
+    }
+  }
+
+  /// Stores artwork and metadata in the browser's temporary playback cache.
+  ///
+  /// Cache API entries are keyed by track id and asset name, so replaying a
+  /// track replaces the same metadata entry and reuses the same artwork entry.
+  /// The downloaded audio remains in the separate persistent audio cache.
+  Future<void> _cachePlaybackMetadataOnWeb(
+    Song song,
+    WebOfflineAudioStore store,
+  ) async {
+    try {
+      final metadata = utf8.encode(
+        jsonEncode({
+          'id': song.id,
+          'title': song.title,
+          'artist': song.artist,
+          'album': song.album,
+          'genre': song.genre,
+          'durationMs': song.duration.inMilliseconds,
+          'plays': song.plays,
+          'lyrics': song.lyrics,
+          'imageUrl': song.imageUrl,
+          'isExplicit': song.isExplicit,
+        }),
+      );
+      await store.saveAuxiliary(
+        song.id,
+        'metadata.json',
+        metadata,
+        contentType: 'application/json',
+      );
+
+      final imageUrl = song.imageUrl.trim();
+      if (imageUrl.isEmpty || await store.hasAuxiliary(song.id, 'artwork')) {
+        return;
+      }
+      final lowerImageUrl = imageUrl.toLowerCase();
+      if (!lowerImageUrl.startsWith('http://') &&
+          !lowerImageUrl.startsWith('https://')) {
+        return;
+      }
+      try {
+        final response = await http
+            .get(Uri.parse(imageUrl))
+            .timeout(const Duration(seconds: 15));
+        if (response.statusCode != 200 || response.bodyBytes.isEmpty) return;
+        await store.saveAuxiliary(
+          song.id,
+          'artwork',
+          response.bodyBytes,
+          contentType: response.headers['content-type'] ?? 'image/jpeg',
+        );
+      } catch (_) {}
+    } catch (e) {
+      debugPrint(
+        '[MusicPlayerController] Web playback metadata cache error for ${song.title}: $e',
+      );
+    }
+  }
+
+  /// Streams [url] into [tempFile] and reports progress to the Settings cache
+  /// counter while the bytes are still arriving.
+  Future<({bool ok, int statusCode, String? contentType})>
+  _downloadToCacheFile({
+    required Song song,
+    required String url,
+    required File tempFile,
+    required bool isGoogleVideo,
+  }) async {
+    final userAgent = isGoogleVideo
+        ? TrackEnrichmentService.ytAndroidUserAgent
+        : TrackEnrichmentService.browserUserAgent;
+
+    final request = http.Request('GET', Uri.parse(url));
+    request.headers['User-Agent'] = userAgent;
+    request.headers['Accept'] = '*/*';
+    if (!isGoogleVideo) {
+      request.headers['Range'] = 'bytes=0-';
+    }
+
+    final client = http.Client();
+    try {
+      final streamedResponse = await client
+          .send(request)
+          .timeout(const Duration(seconds: 50));
+      final contentType = streamedResponse.headers['content-type'];
+      if (streamedResponse.statusCode != 200 &&
+          streamedResponse.statusCode != 206) {
+        try {
+          await streamedResponse.stream.drain<void>();
+        } catch (_) {}
+        return (
+          ok: false,
+          statusCode: streamedResponse.statusCode,
+          contentType: contentType,
+        );
+      }
+
+      final sink = tempFile.openWrite();
+      var lastNotify = DateTime.now();
+      try {
+        await for (final chunk in streamedResponse.stream) {
+          sink.add(chunk);
+          final now = DateTime.now();
+          if (now.difference(lastNotify) >= const Duration(seconds: 2)) {
+            lastNotify = now;
+            // Let the Settings "Local Audio Cache" counter grow while the
+            // track is still downloading instead of only at completion.
+            LocalDatabase.notifyAudioCacheChanged();
+          }
+        }
+        await sink.flush();
+      } finally {
+        await sink.close();
+      }
+
+      final length = await tempFile.length();
+      return (
+        ok: length >= _minimumAudioFileBytes,
+        statusCode: streamedResponse.statusCode,
+        contentType: contentType,
+      );
+    } catch (e) {
+      debugPrint(
+        '[MusicPlayerController] Cache download failed for ${song.title}: $e',
+      );
+      return (ok: false, statusCode: -1, contentType: null);
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Resolves one fresh full-track URL after a throttled cache download.
+  ///
+  /// Googlevideo URLs are bound to the request that resolved them; a second
+  /// request can be rejected even while the player keeps streaming fine.
+  Future<String?> _freshCacheUrl(Song song) async {
+    try {
+      final enrichment = await _enrichment.enrichTrack(
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        duration: song.duration,
+        previewFallbackOnly: false,
+        allowPreviewFallback: false,
+        prioritizeYouTube: true,
+        youtubeOnly: _requiresStrictYouTube(song),
+        preferredBitrateKbps: effectiveDownloadQualityKbps,
+      );
+      final url = enrichment.previewUrl;
+      if (url != null &&
+          url.startsWith('http') &&
+          !url.toLowerCase().contains('.m3u8')) {
+        return url;
+      }
+    } catch (_) {}
+    return null;
   }
 
   void _syncSongPathToQueueAndDb(Song song) {
@@ -5970,7 +6388,7 @@ class MusicPlayerController extends ChangeNotifier {
     // A SoundCloud HLS playlist is a full-length stream that has to be
     // materialised before it can be stored.
     if (SoundCloudHlsDownloader.isSoundCloudPlaylistUrl(song.audioUrl)) {
-      if (await _materializeHlsAudio(song)) return true;
+      if (await _materializeHlsAudio(song, persistent: true)) return true;
     }
 
     if (_cachingIds.contains(song.id)) return false;
@@ -6205,21 +6623,26 @@ class MusicPlayerController extends ChangeNotifier {
   Future<bool> _downloadSongOnWeb(
     Song song, {
     bool allowPreviewFallback = false,
+    WebOfflineAudioStore? targetStore,
+    bool markAsDownloaded = true,
+    bool cacheDuringPlayback = false,
   }) async {
-    final store = _webAudioStore;
+    final store = targetStore ?? _webAudioStore;
     if (store == null) return false;
 
-    await _hydrateWebAudioStore();
+    await _hydrateWebAudioStore(store);
     if (store.has(song.id)) {
       final exists = await store.verifyExists(song.id);
       if (!exists) {
-        _downloadedSongIds.remove(song.id);
-        _locatingStatusVersion++;
-        notifyListeners();
+        if (markAsDownloaded) {
+          _downloadedSongIds.remove(song.id);
+          _locatingStatusVersion++;
+          notifyListeners();
+        }
       } else {
         final cachedIsPreview = store.isPreview(song.id);
         if (!cachedIsPreview || allowPreviewFallback) {
-          _downloadedSongIds.add(song.id);
+          if (markAsDownloaded) _downloadedSongIds.add(song.id);
           notifyListeners();
           return true;
         }
@@ -6227,7 +6650,7 @@ class MusicPlayerController extends ChangeNotifier {
     }
     if (_cachingIds.contains(song.id)) return false;
 
-    if (!await _mayDownloadNow()) {
+    if (!cacheDuringPlayback && !await _mayDownloadNow()) {
       _logDiag('downloadSong skipped: on mobile data', song: song);
       return false;
     }
@@ -6263,6 +6686,8 @@ class MusicPlayerController extends ChangeNotifier {
               contentType: fetched.contentType,
               preview: false,
               persistedUrl: urlToDownload,
+              targetStore: store,
+              markAsDownloaded: markAsDownloaded,
             )) {
           return true;
         }
@@ -6296,6 +6721,8 @@ class MusicPlayerController extends ChangeNotifier {
               persistedUrl: resolved.streamUrl,
               youtubeVideoId: resolved.videoId,
               duration: resolved.duration,
+              targetStore: store,
+              markAsDownloaded: markAsDownloaded,
             )) {
           return true;
         }
@@ -6324,6 +6751,8 @@ class MusicPlayerController extends ChangeNotifier {
         contentType: fetched.contentType,
         preview: previewOnly,
         persistedUrl: urlToDownload,
+        targetStore: store,
+        markAsDownloaded: markAsDownloaded,
       );
     } catch (e) {
       debugPrint(
@@ -6344,17 +6773,45 @@ class MusicPlayerController extends ChangeNotifier {
     // MP3 frame sync (11 bits set: 0xFF followed by 0xE0..0xFF)
     if (bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0) return true;
     // Ogg container (OggS)
-    if (bytes[0] == 0x4F && bytes[1] == 0x67 && bytes[2] == 0x67 && bytes[3] == 0x53) return true;
+    if (bytes[0] == 0x4F &&
+        bytes[1] == 0x67 &&
+        bytes[2] == 0x67 &&
+        bytes[3] == 0x53) {
+      return true;
+    }
     // RIFF (WAV)
-    if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46) {
-      if (bytes[8] == 0x57 && bytes[9] == 0x41 && bytes[10] == 0x56 && bytes[11] == 0x45) return true;
+    if (bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46) {
+      if (bytes[8] == 0x57 &&
+          bytes[9] == 0x41 &&
+          bytes[10] == 0x56 &&
+          bytes[11] == 0x45) {
+        return true;
+      }
     }
     // FLAC (fLaC)
-    if (bytes[0] == 0x66 && bytes[1] == 0x4C && bytes[2] == 0x61 && bytes[3] == 0x43) return true;
+    if (bytes[0] == 0x66 &&
+        bytes[1] == 0x4C &&
+        bytes[2] == 0x61 &&
+        bytes[3] == 0x43) {
+      return true;
+    }
     // MP4/M4A (ftyp box at offset 4)
-    if (bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70) return true;
+    if (bytes[4] == 0x66 &&
+        bytes[5] == 0x74 &&
+        bytes[6] == 0x79 &&
+        bytes[7] == 0x70) {
+      return true;
+    }
     // Matroska / WebM EBML header (0x1A 0x45 0xDF 0xA3)
-    if (bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3) return true;
+    if (bytes[0] == 0x1A &&
+        bytes[1] == 0x45 &&
+        bytes[2] == 0xDF &&
+        bytes[3] == 0xA3) {
+      return true;
+    }
     return false;
   }
 
@@ -6374,8 +6831,8 @@ class MusicPlayerController extends ChangeNotifier {
         );
         return null;
       }
-      final rawContentType =
-          (response.headers['content-type'] ?? '').toLowerCase();
+      final rawContentType = (response.headers['content-type'] ?? '')
+          .toLowerCase();
       if (rawContentType.startsWith('text/') ||
           rawContentType.startsWith('image/') ||
           rawContentType.contains('html') ||
@@ -6394,7 +6851,8 @@ class MusicPlayerController extends ChangeNotifier {
         );
         return null;
       }
-      final isGeneric = rawContentType.isEmpty ||
+      final isGeneric =
+          rawContentType.isEmpty ||
           rawContentType == 'application/octet-stream' ||
           rawContentType == 'binary/octet-stream';
       if (isGeneric) {
@@ -6427,8 +6885,10 @@ class MusicPlayerController extends ChangeNotifier {
     required String persistedUrl,
     String? youtubeVideoId,
     Duration? duration,
+    WebOfflineAudioStore? targetStore,
+    bool markAsDownloaded = true,
   }) async {
-    final store = _webAudioStore;
+    final store = targetStore ?? _webAudioStore;
     if (store == null) return false;
 
     final saved = await store.save(
@@ -6446,13 +6906,15 @@ class MusicPlayerController extends ChangeNotifier {
     }
 
     final videoId = (youtubeVideoId ?? '').trim();
-    _downloadedSongIds.add(song.id);
-    song.audioUrl = persistedUrl;
-    song.isPreview = preview;
-    song.isYouTubeAudio = false;
-    if (videoId.isNotEmpty) song.youtubeVideoId = videoId;
-    if (duration != null && duration > Duration.zero) {
-      song.duration = duration;
+    if (markAsDownloaded) {
+      _downloadedSongIds.add(song.id);
+      song.audioUrl = persistedUrl;
+      song.isPreview = preview;
+      song.isYouTubeAudio = false;
+      if (videoId.isNotEmpty) song.youtubeVideoId = videoId;
+      if (duration != null && duration > Duration.zero) {
+        song.duration = duration;
+      }
     }
     LocalDatabase.notifyAudioCacheChanged();
 
@@ -6874,6 +7336,7 @@ class MusicPlayerController extends ChangeNotifier {
         // URL (which also made startup cleanup delete the file).
         final cached = await _findCachedAudioFile(s.id);
         if (cached != null &&
+            _isPersistentDownloadPath(cached.path) &&
             await cached.exists() &&
             await _isCompleteOfflineFile(s.id, cached)) {
           row['audio_url'] = cached.path;
@@ -6882,9 +7345,10 @@ class MusicPlayerController extends ChangeNotifier {
           _downloadedSongIds.add(s.id);
         } else {
           final audioUrl = row['audio_url'] as String? ?? '';
-          // Expiring stream URLs are dead after a restart; leave the row
-          // empty so enrichment resolves a fresh one instead.
-          if (audioUrl.contains('googlevideo.com') ||
+          // Expiring stream URLs and temporary cache paths are dead after a
+          // restart; leave the row empty so enrichment resolves a fresh one.
+          if (_isTemporaryCachePath(audioUrl) ||
+              audioUrl.contains('googlevideo.com') ||
               audioUrl.toLowerCase().contains('.m3u8')) {
             row['audio_url'] = '';
           }
@@ -8034,6 +8498,9 @@ class MusicPlayerController extends ChangeNotifier {
       song.isPreview = false;
     }
 
+    WebOfflineAudioStore? cachedWebStore;
+    var cachedWebIsPreview = false;
+
     // Set when a cached preview is held in reserve while the online enrichment
     // branch below tries to select a full source.
     var cachedPreviewFallback = false;
@@ -8041,22 +8508,31 @@ class MusicPlayerController extends ChangeNotifier {
     // 0b. Audio downloaded into the browser Cache API. Native builds never
     // populate this store, so the lookup is web-only.
     if (!forceAsset && kIsWeb) {
-      final isCachedPreview = _webAudioStore?.isPreview(song.id) ?? false;
+      await _hydrateWebAudioStore();
+      await _hydrateWebAudioStore(_webStreamingAudioStore);
+      final persistentStore = _webAudioStore;
+      final streamingStore = _webStreamingAudioStore;
+      if (persistentStore?.has(song.id) ?? false) {
+        cachedWebStore = persistentStore;
+      } else if (streamingStore?.has(song.id) ?? false) {
+        cachedWebStore = streamingStore;
+      }
+      cachedWebIsPreview = cachedWebStore?.isPreview(song.id) ?? false;
       final isOnline = await _isDeviceOnline();
       // Prefer verified full cached copies and play a cached preview when it
       // is the only available source for offline playback. While online, a
       // cached preview is kept in reserve instead of being skipped: the
       // enrichment branch below gets a chance to select a full source, and the
       // preview is used for playback when it does not.
-      if (!isCachedPreview || !isOnline) {
-        final blobUrl = await _webAudioStore?.objectUrl(song.id);
+      if (cachedWebStore != null && (!cachedWebIsPreview || !isOnline)) {
+        final blobUrl = await cachedWebStore.objectUrl(song.id);
         if (blobUrl != null && blobUrl.isNotEmpty) {
           _offlineFallbackIds.remove(song.id);
           song.isYouTubeAudio = false;
-          song.isPreview = isCachedPreview;
+          song.isPreview = cachedWebIsPreview;
           return AudioSource.uri(Uri.parse(blobUrl), tag: mediaItem);
         }
-      } else {
+      } else if (cachedWebStore != null) {
         cachedPreviewFallback = true;
       }
       // A desktop/Android file path is meaningless in the browser: clear it
@@ -8228,11 +8704,11 @@ class MusicPlayerController extends ChangeNotifier {
     // The online enrichment branch did not select a full source: play the
     // cached preview held in reserve rather than skipping it.
     if (cachedPreviewFallback) {
-      final blobUrl = await _webAudioStore?.objectUrl(song.id);
+      final blobUrl = await cachedWebStore?.objectUrl(song.id);
       if (blobUrl != null && blobUrl.isNotEmpty) {
         _offlineFallbackIds.remove(song.id);
         song.isYouTubeAudio = false;
-        song.isPreview = _webAudioStore?.isPreview(song.id) ?? true;
+        song.isPreview = cachedWebStore?.isPreview(song.id) ?? true;
         return AudioSource.uri(Uri.parse(blobUrl), tag: mediaItem);
       }
     }
@@ -8509,6 +8985,10 @@ class MusicPlayerController extends ChangeNotifier {
       );
       unawaited(_logPlaybackDiagnostics('PRE-LOAD', song));
 
+      // The patched Android sink reads the mono flag when it configures for
+      // this source, so push it before the load rather than after.
+      unawaited(_pushMonoSettingToJustAudio());
+
       final loadStart = DateTime.now();
       try {
         await _audioPlayer
@@ -8685,9 +9165,9 @@ class MusicPlayerController extends ChangeNotifier {
               } catch (_) {}
               _scheduleVolumeReasserts();
               _preloadNextQueueSong();
-              if (!song.audioUrl.startsWith('assets/') &&
-                  !song.audioUrl.startsWith('asset:/') &&
-                  !_isLocalAudioPath(song.audioUrl)) {
+              if ((kIsWeb || song.audioUrl.isNotEmpty) &&
+                  !song.audioUrl.startsWith('assets/') &&
+                  !song.audioUrl.startsWith('asset:/')) {
                 unawaited(_cacheAudioOffline(song));
               }
             }

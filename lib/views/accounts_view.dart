@@ -77,8 +77,18 @@ class _AccountsViewState extends State<AccountsView> {
     if (_switching) return;
     setState(() => _switching = true);
     try {
-      await AuthService.instance.signOut();
+      final cleared = await AuthService.instance.signOut();
       if (!mounted) return;
+      if (!cleared) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Signed out, but the saved session could not be removed from '
+              'the local database.',
+            ),
+          ),
+        );
+      }
       Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
       if (!mounted) return;

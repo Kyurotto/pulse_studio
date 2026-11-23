@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import '../auth/auth_service.dart';
 import '../controllers/music_player_controller.dart';
@@ -56,7 +55,6 @@ class _SettingsViewState extends State<SettingsView> {
   bool _autoLyrics = false;
   bool _allowExplicit = true;
   bool _downloadOnMobile = false;
-  bool _autoCachePlayedSongs = true;
   bool _dataSaverMode = false;
   bool _reduceAnimations = false;
   String _themeModeSetting = 'dark';
@@ -64,6 +62,7 @@ class _SettingsViewState extends State<SettingsView> {
   final TextEditingController _searchController = TextEditingController();
 
   int _cacheSizeBytes = -1;
+  int _downloadSizeBytes = -1;
   bool _clearingCache = false;
   bool _cacheRefreshInFlight = false;
   bool _cacheRefreshQueued = false;
@@ -146,9 +145,6 @@ class _SettingsViewState extends State<SettingsView> {
         if (settings.containsKey('download_on_mobile_data')) {
           _downloadOnMobile = settings['download_on_mobile_data'] == 'true';
         }
-        if (settings.containsKey('auto_cache_played_songs')) {
-          _autoCachePlayedSongs = settings['auto_cache_played_songs'] != 'false';
-        }
         if (settings.containsKey('data_saver_mode')) {
           _dataSaverMode = settings['data_saver_mode'] == 'true';
         }
@@ -186,9 +182,20 @@ class _SettingsViewState extends State<SettingsView> {
     }
     _cacheRefreshInFlight = true;
     try {
-      final bytes = await LocalDatabase.getLocalAudioCacheSizeBytes();
-      if (!mounted || bytes == _cacheSizeBytes) return;
-      setState(() => _cacheSizeBytes = bytes);
+      // "Local Audio Cache" counts only the temporary playback cache: the
+      // bytes accumulated by playing music. Permanent downloads are read too
+      // but shown on their own line, so saving songs for offline use never
+      // inflates the cache number.
+      final usage = await LocalDatabase.getLocalAudioStorageUsage();
+      if (!mounted) return;
+      if (usage.cacheBytes == _cacheSizeBytes &&
+          usage.downloadBytes == _downloadSizeBytes) {
+        return;
+      }
+      setState(() {
+        _cacheSizeBytes = usage.cacheBytes;
+        _downloadSizeBytes = usage.downloadBytes;
+      });
     } catch (e) {
       debugPrint('Error reading audio cache size: $e');
     } finally {
@@ -211,7 +218,7 @@ class _SettingsViewState extends State<SettingsView> {
     return '${(bytes / kb).toStringAsFixed(0)} KB';
   }
 
-  /// Visual share of a nominal 8 GB cache budget for the storage bar.
+  /// Visual share of a nominal 8 GB playback-cache budget for the storage bar.
   int get _cacheBarFlex {
     if (_cacheSizeBytes <= 0) return 1;
     const referenceBytes = 8 * 1024 * 1024 * 1024;
@@ -774,14 +781,16 @@ class _SettingsViewState extends State<SettingsView> {
           side: BorderSide(color: AppTheme.borderOf(dialogContext)),
         ),
         title: Text(
-          'Clear audio cache?',
+          'Clear playback cache?',
           style: TextStyle(
             color: AppTheme.textPrimaryOf(dialogContext),
             fontWeight: FontWeight.bold,
           ),
         ),
         content: Text(
-          'This will free up storage space by clearing temporary streaming cache. Your permanently downloaded songs, playlists, library tracks, and account data will NOT be deleted.',
+          'This frees ${_formatCacheSize(_cacheSizeBytes)} of temporary '
+          'playback cache. Your downloaded songs, playlists, library tracks, '
+          'and account data will NOT be deleted.',
           style: TextStyle(
             color: AppTheme.textSecondaryOf(dialogContext),
             height: 1.4,
@@ -823,7 +832,11 @@ class _SettingsViewState extends State<SettingsView> {
 
     if (confirm == true && mounted) {
       setState(() => _clearingCache = true);
-      final freed = await LocalDatabase.clearLocalAudioCache();
+      // Let the controller stop cache-backed playback first (Windows holds an
+      // open handle) and reset its in-memory badges/lookups after deletion.
+      final freed = widget.controller != null
+          ? await widget.controller!.clearAudioCache()
+          : await LocalDatabase.clearLocalAudioCache();
       if (!mounted) return;
       await _refreshCacheSize();
       if (!mounted) return;
@@ -832,7 +845,7 @@ class _SettingsViewState extends State<SettingsView> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Cache cleared! Freed ${_formatCacheSize(freed)} of storage. Offline downloads remain intact.',
+            'Playback cache cleared! Freed ${_formatCacheSize(freed)}. Your offline downloads are intact.',
           ),
         ),
       );
@@ -893,9 +906,20 @@ class _SettingsViewState extends State<SettingsView> {
 
     if (confirm == true && mounted) {
       // Perform sign out
-      await AuthService.instance.signOut();
+      final cleared = await AuthService.instance.signOut();
 
       if (!mounted) return;
+
+      if (!cleared) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Signed out, but the saved session could not be removed from '
+              'the local database.',
+            ),
+          ),
+        );
+      }
 
       // Navigate back to AuthGate / AuthView cleanly
       Navigator.of(context).pushAndRemoveUntil(
@@ -1731,8 +1755,8 @@ class _SettingsViewState extends State<SettingsView> {
           _buildSwitchTile(
             title: 'Data Saver Mode',
             subtitle: cellularSupported
-                ? 'Caps new streams and downloads at ~96 kbps, pauses automatic song caching, and blocks cache downloads on mobile data.'
-                : 'Caps new streams where the source supports it and pauses automatic song caching.',
+                ? 'Caps new streams and downloads at ~96 kbps; playback caching follows the song currently playing.'
+                : 'Caps new streams where the source supports it; playback caching follows the song currently playing.',
             value: _dataSaverMode,
             onChanged: (val) {
               setState(() => _dataSaverMode = val);
@@ -1755,26 +1779,7 @@ class _SettingsViewState extends State<SettingsView> {
               _saveSetting('download_on_mobile_data', val.toString());
             },
           ),
-          if (!kIsWeb &&
-              (defaultTargetPlatform == TargetPlatform.android ||
-                  defaultTargetPlatform == TargetPlatform.iOS)) ...[
-            Divider(height: 1, color: AppTheme.borderOf(context)),
-            _buildSwitchTile(
-              title: 'Cache played songs',
-              subtitle:
-                  'Only save audio when you play it; imports no longer download automatically',
-              value: _autoCachePlayedSongs,
-              onChanged: (val) {
-                setState(() => _autoCachePlayedSongs = val);
-                setSubState(() {});
-                if (widget.controller != null) {
-                  widget.controller!.setAutoCachePlayedSongs(val);
-                } else {
-                  _saveSetting('auto_cache_played_songs', val.toString());
-                }
-              },
-            ),
-          ],
+          Divider(height: 1, color: AppTheme.borderOf(context)),
         ]),
         const SizedBox(height: 24),
         _buildSectionHeader(Icons.storage_rounded, 'Storage & Cache'),
@@ -1810,9 +1815,7 @@ class _SettingsViewState extends State<SettingsView> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  (kIsWeb || defaultTargetPlatform == TargetPlatform.windows)
-                      ? 'Played songs are automatically stored in cache for offline listening.'
-                      : 'Temporary audio cached from streaming playback.',
+                  'Playback cache only. Grows as you play music.',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppTheme.textMutedOf(context),
@@ -1851,7 +1854,7 @@ class _SettingsViewState extends State<SettingsView> {
                   children: [
                     _StorageLegend(
                       color: AppTheme.primaryOf(context),
-                      label: 'Audio Cache',
+                      label: 'Playback Cache',
                     ),
                     const _StorageLegend(
                       color: Colors.blueAccent,
@@ -1890,8 +1893,8 @@ class _SettingsViewState extends State<SettingsView> {
                         : _cacheSizeBytes < 0
                         ? 'Calculating…'
                         : _cacheSizeBytes > 0
-                        ? 'Clear Audio Cache'
-                        : 'Cache is Clean (0 MB)',
+                        ? 'Clear Playback Cache (${_formatCacheSize(_cacheSizeBytes)})'
+                        : 'Playback Cache is Clean',
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: _cacheSizeBytes > 0
@@ -2243,7 +2246,7 @@ class _SettingsViewState extends State<SettingsView> {
             style: TextStyle(color: AppTheme.textPrimaryOf(context)),
           ),
           subtitle: Text(
-            'Audio cache: ${_formatCacheSize(_cacheSizeBytes)}',
+            'Playback cache: ${_formatCacheSize(_cacheSizeBytes)}',
             style: TextStyle(color: AppTheme.primaryOf(context)),
           ),
           trailing: Icon(

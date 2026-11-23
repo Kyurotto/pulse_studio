@@ -6,7 +6,8 @@ import 'package:web/web.dart' as web;
 
 import 'web_offline_audio_api.dart';
 
-WebOfflineAudioStore createWebOfflineAudioStore() => _CacheApiAudioStore();
+WebOfflineAudioStore createWebOfflineAudioStore({String? cacheName}) =>
+    _CacheApiAudioStore(cacheName: cacheName);
 
 /// Browser implementation of [WebOfflineAudioStore] backed by the Cache API.
 ///
@@ -20,8 +21,15 @@ WebOfflineAudioStore createWebOfflineAudioStore() => _CacheApiAudioStore();
 /// cross-origin reads; YouTube's media CDN does not, so those rows stay
 /// stream-only in the browser build.
 class _CacheApiAudioStore implements WebOfflineAudioStore {
-  static const String _cacheName = 'pulse_offline_audio_v1';
+  static const String _defaultCacheName = 'pulse_offline_audio_v1';
   static const String _keyPrefix = 'https://pulse-offline.local/audio/';
+  static const String _auxiliaryKeyPrefix =
+      'https://pulse-offline.local/auxiliary/';
+
+  _CacheApiAudioStore({String? cacheName})
+    : _cacheName = cacheName ?? _defaultCacheName;
+
+  final String _cacheName;
 
   final Set<String> _ids = <String>{};
   final Set<String> _previewIds = <String>{};
@@ -51,6 +59,9 @@ class _CacheApiAudioStore implements WebOfflineAudioStore {
 
   String _keyFor(String songId, {bool preview = false}) =>
       '$_keyPrefix${Uri.encodeComponent(songId)}${preview ? '?preview=1' : ''}';
+
+  String _auxiliaryKey(String songId, String name) =>
+      '$_auxiliaryKeyPrefix${Uri.encodeComponent(songId)}/${Uri.encodeComponent(name)}';
 
   String? _songIdFromKey(String url) {
     if (!url.startsWith(_keyPrefix)) return null;
@@ -126,11 +137,13 @@ class _CacheApiAudioStore implements WebOfflineAudioStore {
       await _ensureHydrated();
       final cache = await _openCache();
       final isPrev = _previewIds.contains(songId);
-      var response =
-          await cache.match(_keyFor(songId, preview: isPrev).toJS).toDart;
+      var response = await cache
+          .match(_keyFor(songId, preview: isPrev).toJS)
+          .toDart;
       if (response == null) {
-        response =
-            await cache.match(_keyFor(songId, preview: !isPrev).toJS).toDart;
+        response = await cache
+            .match(_keyFor(songId, preview: !isPrev).toJS)
+            .toDart;
         if (response != null) {
           if (isPrev) {
             _previewIds.remove(songId);
@@ -171,11 +184,13 @@ class _CacheApiAudioStore implements WebOfflineAudioStore {
       if (memo != null) return memo;
       final cache = await _openCache();
       final isPrev = _previewIds.contains(songId);
-      var response =
-          await cache.match(_keyFor(songId, preview: isPrev).toJS).toDart;
+      var response = await cache
+          .match(_keyFor(songId, preview: isPrev).toJS)
+          .toDart;
       if (response == null) {
-        response =
-            await cache.match(_keyFor(songId, preview: !isPrev).toJS).toDart;
+        response = await cache
+            .match(_keyFor(songId, preview: !isPrev).toJS)
+            .toDart;
         if (response != null) {
           if (isPrev) {
             _previewIds.remove(songId);
@@ -214,10 +229,9 @@ class _CacheApiAudioStore implements WebOfflineAudioStore {
         <JSAny>[Uint8List.fromList(bytes).toJS].toJS,
         web.BlobPropertyBag(type: contentType),
       );
-      await cache.put(
-        _keyFor(songId, preview: preview).toJS,
-        web.Response(blob),
-      ).toDart;
+      await cache
+          .put(_keyFor(songId, preview: preview).toJS, web.Response(blob))
+          .toDart;
       try {
         await cache.delete(_keyFor(songId, preview: !preview).toJS).toDart;
       } catch (_) {}
@@ -234,6 +248,44 @@ class _CacheApiAudioStore implements WebOfflineAudioStore {
         } catch (_) {}
       }
       return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> saveAuxiliary(
+    String songId,
+    String name,
+    List<int> bytes, {
+    required String contentType,
+  }) async {
+    if (songId.isEmpty || name.isEmpty || bytes.isEmpty) return false;
+    try {
+      await _requestPersistence();
+      final cache = await _openCache();
+      final blob = web.Blob(
+        <JSAny>[Uint8List.fromList(bytes).toJS].toJS,
+        web.BlobPropertyBag(type: contentType),
+      );
+      await cache
+          .put(_auxiliaryKey(songId, name).toJS, web.Response(blob))
+          .toDart;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> hasAuxiliary(String songId, String name) async {
+    if (songId.isEmpty || name.isEmpty) return false;
+    try {
+      final cache = await _openCache();
+      final response = await cache
+          .match(_auxiliaryKey(songId, name).toJS)
+          .toDart;
+      return response != null;
     } catch (_) {
       return false;
     }

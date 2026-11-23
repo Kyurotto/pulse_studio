@@ -17,6 +17,42 @@ import '../models/listening_history.dart';
 import '../services/web_offline_audio.dart';
 import 'web_database_sync.dart';
 
+/// Bytes of audio the app keeps on this device, split by ownership.
+///
+/// [downloadBytes] holds the permanent offline downloads the user asked for;
+/// [cacheBytes] holds the temporary playback copies that "Clear Audio Cache"
+/// removes. Settings headlines [cacheBytes] — the cache built up by playing
+/// music — and lists [downloadBytes] separately so saved songs never inflate
+/// the playback-cache number.
+@immutable
+class LocalAudioStorageUsage {
+  const LocalAudioStorageUsage({
+    required this.downloadBytes,
+    required this.cacheBytes,
+  });
+
+  /// Permanent offline downloads: never removed by "Clear Audio Cache".
+  final int downloadBytes;
+
+  /// Temporary playback cache: safe to remove at any time.
+  final int cacheBytes;
+
+  int get totalBytes => downloadBytes + cacheBytes;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LocalAudioStorageUsage &&
+      other.downloadBytes == downloadBytes &&
+      other.cacheBytes == cacheBytes;
+
+  @override
+  int get hashCode => Object.hash(downloadBytes, cacheBytes);
+
+  @override
+  String toString() =>
+      'LocalAudioStorageUsage(download: $downloadBytes, cache: $cacheBytes)';
+}
+
 /// Stores the music library, playlists, and user accounts on the device.
 ///
 /// Audio files remain on disk; this database stores their metadata and paths.
@@ -28,13 +64,25 @@ class LocalDatabase {
   static const _databaseVersion = 8;
 
   static WebOfflineAudioStore? _webAudioStore;
+  static WebOfflineAudioStore? _webStreamingAudioStore;
 
   /// Browser-only persistent audio store for cached/downloaded tracks.
   static WebOfflineAudioStore get webAudioStore =>
       _webAudioStore ??= createWebOfflineAudioStore();
 
+  /// Browser-only temporary playback cache. It is intentionally separate from
+  /// [webAudioStore], which holds user-requested offline downloads.
+  static WebOfflineAudioStore get webStreamingAudioStore =>
+      _webStreamingAudioStore ??= createWebOfflineAudioStore(
+        cacheName: 'pulse_streaming_audio_v1',
+      );
+
   static set webAudioStore(WebOfflineAudioStore? store) =>
       _webAudioStore = store;
+
+  @visibleForTesting
+  static set webStreamingAudioStoreForTesting(WebOfflineAudioStore? store) =>
+      _webStreamingAudioStore = store;
 
   /// Sentinel user IDs that represent anonymous / guest ownership.
   /// Real user IDs must never collide with these values.
@@ -59,6 +107,69 @@ class LocalDatabase {
   @visibleForTesting
   static void setDatabaseForTesting(Database? db) {
     instance._database = db;
+  }
+
+  /// Test hook for [clearActiveSession]. Lets auth tests simulate a database
+  /// that cannot be repaired without touching real files.
+  @visibleForTesting
+  static Future<void> Function()? debugClearActiveSessionOverride;
+
+  /// True when SQLite rejected a write because the connection or file is
+  /// read-only (SQLITE_READONLY, error code 8).
+  static bool _isReadOnlyDatabaseError(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('readonly') || text.contains('read-only');
+  }
+
+  /// Closes and reopens the database, then verifies that a write succeeds.
+  ///
+  /// On Windows a SQLite handle can stay read-only for the lifetime of the
+  /// process when the file was temporarily read-only at open time (antivirus
+  /// scan, sync client, restored backup). Reopening re-negotiates access.
+  Future<bool> _reopenDatabaseForWrite() async {
+    try {
+      await _database?.close();
+    } catch (_) {}
+    _database = null;
+    try {
+      final db = await database;
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS app_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )
+      ''');
+      const probeKey = '__write_probe__';
+      await db.insert('app_settings', {
+        'key': probeKey,
+        'value': '1',
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      await db.delete('app_settings', where: 'key = ?', whereArgs: [probeKey]);
+      return true;
+    } catch (error) {
+      debugPrint('[LocalDatabase] Reopen for writing failed: $error');
+      return false;
+    }
+  }
+
+  /// Runs [action], retrying once after reopening the connection when SQLite
+  /// reports a read-only database.
+  Future<void> _withReadOnlyRepair(
+    Future<void> Function() action, {
+    required String operation,
+  }) async {
+    try {
+      await action();
+    } catch (error) {
+      if (!_isReadOnlyDatabaseError(error)) rethrow;
+      debugPrint(
+        '[LocalDatabase] $operation hit a read-only database; '
+        'reopening and retrying once.',
+      );
+      final reopened = await _reopenDatabaseForWrite();
+      if (!reopened) rethrow;
+      await action();
+    }
   }
 
   Future<void> _syncToWorkspace() async {
@@ -398,15 +509,11 @@ class LocalDatabase {
           for (final s in songs) {
             final songId = s['song_id'] as String;
             if (await isSongDeleted(songId)) continue;
-            await db.insert(
-              'imported_playlist_songs',
-              {
-                'playlist_id': newId,
-                'song_id': songId,
-                'position': s['position'],
-              },
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
+            await db.insert('imported_playlist_songs', {
+              'playlist_id': newId,
+              'song_id': songId,
+              'position': s['position'],
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
           }
         }
       }
@@ -1174,13 +1281,16 @@ class LocalDatabase {
   }
 
   Future<void> saveActiveSession(String userId) async {
-    final db = await database;
     final now = DateTime.now().millisecondsSinceEpoch;
-    await db.insert('user_sessions', {
-      'user_id': userId,
-      'saved_at': now,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _withReadOnlyRepair(() async {
+      final db = await database;
+      await db.insert('user_sessions', {
+        'user_id': userId,
+        'saved_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }, operation: 'saveActiveSession');
     try {
+      final db = await database;
       await db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
     } catch (_) {}
     await _syncToWorkspace();
@@ -1200,9 +1310,14 @@ class LocalDatabase {
   }
 
   Future<void> clearActiveSession() async {
-    final db = await database;
-    await db.delete('user_sessions');
+    final override = debugClearActiveSessionOverride;
+    if (override != null) return override();
+    await _withReadOnlyRepair(() async {
+      final db = await database;
+      await db.delete('user_sessions');
+    }, operation: 'clearActiveSession');
     try {
+      final db = await database;
       await db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
     } catch (_) {}
     await _syncToWorkspace();
@@ -2261,7 +2376,9 @@ class LocalDatabase {
     final db = await database;
     try {
       final columns = <String>{
-        for (final row in await db.rawQuery('PRAGMA table_info(imported_songs)'))
+        for (final row in await db.rawQuery(
+          'PRAGMA table_info(imported_songs)',
+        ))
           row['name']?.toString() ?? '',
       };
       final youtubeVideoId = columns.contains('youtube_video_id')
@@ -2883,6 +3000,9 @@ class LocalDatabase {
     dirs.add(
       Directory(path.join(Directory.systemTemp.path, 'pulse_music_offline')),
     );
+    dirs.add(
+      Directory(path.join(Directory.systemTemp.path, 'pulse_music_downloads')),
+    );
     _offlineDirsMemo = dirs;
     return dirs;
   }
@@ -2930,23 +3050,132 @@ class LocalDatabase {
     return byPath.values.toList(growable: false);
   }
 
-  /// Total bytes currently used by downloaded audio and cached artwork.
+  /// Directories that hold permanent offline downloads.
   ///
-  /// [dirs] is injectable for tests; production callers use the resolved
-  /// offline cache directories.
+  /// These are the songs the user saved for offline use: they must survive
+  /// "Clear Audio Cache" and OS cache sweeps, so only persistent app storage is
+  /// listed here. Temporary `offline_audio` copies are deliberately excluded —
+  /// [getLocalAudioCacheDirs] owns those.
+  static List<Directory>? _downloadDirsMemo;
+
+  static Future<List<Directory>> getLocalAudioDownloadDirs() async {
+    if (kIsWeb) return const [];
+    final memo = _downloadDirsMemo;
+    if (memo != null) return memo;
+    final dirs = <Directory>[];
+    final seen = <String>{};
+    void add(Directory dir) {
+      final key = path.normalize(path.absolute(dir.path)).toLowerCase();
+      if (seen.add(key)) dirs.add(dir);
+    }
+
+    if (!kIsWeb && Platform.isAndroid) {
+      add(
+        Directory(
+          '/data/user/0/com.example.music/app_flutter/offline_downloads',
+        ),
+      );
+      add(Directory('/data/user/0/com.example.music/files/offline_downloads'));
+      add(Directory('/data/data/com.example.music/files/offline_downloads'));
+      add(Directory('/data/user/0/com.example.music/files/offline_audio'));
+      add(Directory('/data/data/com.example.music/files/offline_audio'));
+      add(
+        Directory('/data/user/0/com.example.music/app_flutter/offline_audio'),
+      );
+    }
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      add(Directory(path.join(docs.path, 'offline_downloads')));
+      add(Directory(path.join(docs.path, 'offline_audio')));
+    } catch (_) {}
+    try {
+      final supp = await getApplicationSupportDirectory();
+      add(Directory(path.join(supp.path, 'offline_downloads')));
+      add(Directory(path.join(supp.path, 'offline_audio')));
+    } catch (_) {}
+    add(
+      Directory(path.join(Directory.systemTemp.path, 'pulse_music_downloads')),
+    );
+    _downloadDirsMemo = dirs;
+    return dirs;
+  }
+
+  /// Total bytes currently used by the temporary playback cache and its cached
+  /// artwork.
+  ///
+  /// This is what "Clear Playback Cache" frees; it deliberately excludes
+  /// permanent downloads. Use [getLocalAudioStorageUsage] for the full local
+  /// footprint. [dirs] is injectable for tests; production callers use the
+  /// resolved offline cache directories.
   static Future<int> getLocalAudioCacheSizeBytes({
     List<Directory>? dirs,
   }) async {
     if (kIsWeb) {
       try {
-        return await webAudioStore.sizeBytes();
+        return await webStreamingAudioStore.sizeBytes();
       } catch (_) {
         return 0;
       }
     }
-    var total = 0;
+    return _sumDirectoryBytes(dirs ?? await getLocalAudioCacheDirs());
+  }
+
+  /// Test hook that makes the Settings storage card deterministic in widget
+  /// tests. Production builds never set it.
+  @visibleForTesting
+  static Future<LocalAudioStorageUsage> Function()? debugStorageUsageOverride;
+
+  /// Total bytes of audio kept on this device, split into permanent downloads
+  /// and the temporary playback cache.
+  ///
+  /// Settings headlines [LocalAudioStorageUsage.cacheBytes] — the cache built
+  /// up by playing music — and lists the downloads on their own line, so
+  /// downloaded songs are never counted as playback cache. [downloadDirs] and
+  /// [cacheDirs] are injectable for tests.
+  static Future<LocalAudioStorageUsage> getLocalAudioStorageUsage({
+    List<Directory>? downloadDirs,
+    List<Directory>? cacheDirs,
+  }) async {
+    final override = debugStorageUsageOverride;
+    if (override != null) return override();
+    if (kIsWeb) {
+      var downloads = 0;
+      var cache = 0;
+      try {
+        downloads = await webAudioStore.sizeBytes();
+      } catch (_) {}
+      try {
+        cache = await webStreamingAudioStore.sizeBytes();
+      } catch (_) {}
+      return LocalAudioStorageUsage(
+        downloadBytes: downloads,
+        cacheBytes: cache,
+      );
+    }
+    // One shared `seen` set keeps a path that appears in both lists from being
+    // counted twice.
     final seen = <String>{};
-    for (final dir in dirs ?? await getLocalAudioCacheDirs()) {
+    final downloadBytes = await _sumDirectoryBytes(
+      downloadDirs ?? await getLocalAudioDownloadDirs(),
+      seen: seen,
+    );
+    final cacheBytes = await _sumDirectoryBytes(
+      cacheDirs ?? await getLocalAudioCacheDirs(),
+      seen: seen,
+    );
+    return LocalAudioStorageUsage(
+      downloadBytes: downloadBytes,
+      cacheBytes: cacheBytes,
+    );
+  }
+
+  static Future<int> _sumDirectoryBytes(
+    Iterable<Directory> dirs, {
+    Set<String>? seen,
+  }) async {
+    var total = 0;
+    final visited = seen ?? <String>{};
+    for (final dir in dirs) {
       try {
         if (!await dir.exists()) continue;
         await for (final entity in dir.list(
@@ -2955,7 +3184,7 @@ class LocalDatabase {
         )) {
           if (entity is! File) continue;
           final normalized = path.normalize(path.absolute(entity.path));
-          if (!seen.add(normalized)) continue;
+          if (!visited.add(normalized)) continue;
           try {
             total += await entity.length();
           } catch (_) {}
@@ -2972,7 +3201,7 @@ class LocalDatabase {
   static Future<int> clearLocalAudioCache({List<Directory>? dirs}) async {
     if (kIsWeb) {
       try {
-        final store = webAudioStore;
+        final store = webStreamingAudioStore;
         final size = await store.sizeBytes();
         await store.clear();
         notifyAudioCacheChanged();
@@ -3013,8 +3242,12 @@ class LocalDatabase {
         await db.update(
           'imported_songs',
           {'audio_url': ''},
-          where: "audio_url LIKE ? OR audio_url LIKE ?",
-          whereArgs: ['%streaming_cache%', '%pulse_streaming_cache%'],
+          where: 'audio_url LIKE ? OR audio_url LIKE ? OR audio_url LIKE ?',
+          whereArgs: [
+            '%streaming_cache%',
+            '%pulse_streaming_cache%',
+            '%pulse_music_offline%',
+          ],
         );
       } catch (_) {}
     }

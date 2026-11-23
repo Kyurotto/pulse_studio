@@ -77,5 +77,13 @@ void main() {
       expect(AudioCapabilities.supportsMonoAudio, isTrue);
       expect(AudioCapabilities.supportsCellularDataPolicy, isTrue);
     });
+
+    test('android supports mono audio through the patched engine', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      expect(AudioCapabilities.isAndroid, isTrue);
+      expect(AudioCapabilities.supportsMonoAudio, isTrue);
+    });
   });
 }

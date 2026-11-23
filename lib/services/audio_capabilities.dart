@@ -71,9 +71,11 @@ class AudioCapabilities {
   /// Android has `AndroidLoudnessEnhancer`; Windows uses `dynaudnorm`.
   static bool get supportsLoudnessNormalization => isAndroid || isWindows;
 
-  /// `just_audio` 0.9.x has no channel-mapping processor. The Windows engine
-  /// does, via an FFmpeg `pan` filter.
-  static bool get supportsMonoAudio => isWindows;
+  /// Android downmixes through the patched `just_audio` ExoPlayer sink
+  /// (`packages/just_audio`); Windows uses the libmpv FFmpeg `pan` filter.
+  /// Other platforms (iOS, Linux, desktop `just_audio` fallback, web) have no
+  /// channel-mapping stage.
+  static bool get supportsMonoAudio => isAndroid || isWindows;
 
   /// The Windows engine overlaps two players for a real crossfade.
   static bool get supportsOverlappingCrossfade => isWindows;

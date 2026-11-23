@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import '../auth/auth_service.dart';
 import '../auth/saved_credential_store.dart';
 import '../data/local_database.dart';
-import '../services/audio_capabilities.dart';
 import '../services/biometric_auth_service.dart';
 import '../theme/app_theme.dart';
 import 'forgot_password_dialog.dart';
@@ -276,6 +275,7 @@ class _AuthViewState extends State<AuthView> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocusNode = FocusNode();
   final _confirmPasswordController = TextEditingController();
   final _emailFieldKey = GlobalKey();
   final _emailFieldLink = LayerLink();
@@ -300,11 +300,6 @@ class _AuthViewState extends State<AuthView> {
   /// password for them.
   bool _canUseFingerprintFor(String email) =>
       _fingerprintEmails.contains(email);
-
-  bool get _canSignInWithFingerprint =>
-      !_isRegistering &&
-      _selectedAccountEmail != null &&
-      _canUseFingerprintFor(_selectedAccountEmail!);
 
   @override
   void initState() {
@@ -487,6 +482,7 @@ class _AuthViewState extends State<AuthView> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _passwordFocusNode.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
@@ -644,14 +640,14 @@ class _AuthViewState extends State<AuthView> {
         return;
       }
 
-      final verified = await _biometrics.authenticateForUnlock(
+      final outcome = await _biometrics.authenticateForUnlockDetailed(
         customReason: 'Sign in to Pulse Studio',
       );
-      if (!verified) {
-        _showError(
-          'Fingerprint verification was not completed. '
-          'Try again or use your password.',
-        );
+      if (!outcome.succeeded) {
+        _showError(outcome.userMessage);
+        // Put the cursor back on the password field so the fallback is one
+        // step away instead of leaving the user stuck at the prompt.
+        if (mounted) _passwordFocusNode.requestFocus();
         return;
       }
 
@@ -1136,6 +1132,7 @@ class _AuthViewState extends State<AuthView> {
                       const SizedBox(height: 14),
                       TextFormField(
                         controller: _passwordController,
+                        focusNode: _passwordFocusNode,
                         autovalidateMode: AutovalidateMode.onUserInteraction,
                         obscureText: _obscurePassword,
                         // password = existing credential (browser autofills the
@@ -1295,28 +1292,7 @@ class _AuthViewState extends State<AuthView> {
                           _isRegistering ? 'Create account' : 'Sign in',
                         ),
                       ),
-                      // On phones the fingerprint prompt opens automatically
-                      // when a saved account is tapped in the dropdown, so the
-                      // separate button is only shown on desktop.
-                      if (!AudioCapabilities.isMobile &&
-                          _canSignInWithFingerprint) ...[
-                        const SizedBox(height: 10),
-                        OutlinedButton.icon(
-                          onPressed: _isBusy
-                              ? null
-                              : () => _signInWithFingerprint(),
-                          icon: const Icon(Icons.fingerprint_rounded, size: 22),
-                          label: const Text('Sign in with fingerprint'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppTheme.primary,
-                            side: BorderSide(
-                              color: AppTheme.primary.withAlpha(120),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 12),
                       const Text(
                         'Works offline — no Wi-Fi or data needed.',
                         textAlign: TextAlign.center,

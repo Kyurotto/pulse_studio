@@ -165,7 +165,7 @@ void main() {
       await tester.pumpWidget(buildAuthView());
       await pumpUntil(
         tester,
-        () => find.text('Sign in with fingerprint').evaluate().isNotEmpty,
+        () => emailFieldText(tester) == email,
         description: 'remembered account autofill',
       );
       await settlePlatformWork(tester);
@@ -174,7 +174,7 @@ void main() {
       // autofill popup only appears when the email field is tapped.
       expect(find.text('Saved accounts'), findsNothing);
       expect(find.text(email), findsWidgets);
-      expect(find.text('Sign in with fingerprint'), findsOneWidget);
+      expect(find.text('Sign in with fingerprint'), findsNothing);
 
       final fields = tester
           .widgetList<TextFormField>(find.byType(TextFormField))
@@ -188,7 +188,7 @@ void main() {
       expect(find.text('Saved accounts'), findsOneWidget);
       expect(find.text('••••••••'), findsOneWidget);
       // The account advertises that fingerprint is ready for it.
-      expect(find.byIcon(Icons.fingerprint_rounded), findsNWidgets(2));
+      expect(find.byIcon(Icons.fingerprint_rounded), findsOneWidget);
 
       // One tap on the saved account fills both fields, opens the device
       // biometric prompt, and signs in with the stored password once the
@@ -325,13 +325,13 @@ void main() {
       await tester.pumpWidget(buildAuthView());
       await pumpUntil(
         tester,
-        () => find.text('Sign in with fingerprint').evaluate().isNotEmpty,
-        description: 'fingerprint button after sign-out',
+        () => emailFieldText(tester) == email,
+        description: 'autofill after sign-out',
       );
       await settlePlatformWork(tester);
 
       expect(find.text('Saved accounts'), findsNothing);
-      expect(find.text('Sign in with fingerprint'), findsOneWidget);
+      expect(find.text('Sign in with fingerprint'), findsNothing);
 
       await tester.tap(find.text('Email address'), warnIfMissed: false);
       await tester.pumpAndSettle();
@@ -409,12 +409,12 @@ void main() {
       await tester.pumpWidget(buildAuthView());
       await pumpUntil(
         tester,
-        () => find.text('Sign in with fingerprint').evaluate().isNotEmpty,
-        description: 'fingerprint ready for a password-less saved account',
+        () => emailFieldText(tester) == email,
+        description: 'autofill for a password-less saved account',
       );
       await settlePlatformWork(tester);
 
-      expect(find.text('Sign in with fingerprint'), findsOneWidget);
+      expect(find.text('Sign in with fingerprint'), findsNothing);
       await tester.tap(find.text('Email address'), warnIfMissed: false);
       await tester.pumpAndSettle();
 
