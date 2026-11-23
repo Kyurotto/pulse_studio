@@ -9,6 +9,7 @@ class FakeWebOfflineAudioStore implements WebOfflineAudioStore {
   final Set<String> _previewIds = <String>{};
   final Map<String, String> _objectUrls = <String, String>{};
   final Map<String, List<int>> storage = <String, List<int>>{};
+  final Map<String, List<int>> auxiliaryStorage = <String, List<int>>{};
   bool shouldFailRemove = false;
   bool shouldFailHydrate = false;
   bool hydrated = false;
@@ -71,6 +72,21 @@ class FakeWebOfflineAudioStore implements WebOfflineAudioStore {
   }
 
   @override
+  Future<bool> saveAuxiliary(
+    String songId,
+    String name,
+    List<int> bytes, {
+    required String contentType,
+  }) async {
+    auxiliaryStorage['$songId::$name'] = bytes;
+    return true;
+  }
+
+  @override
+  Future<bool> hasAuxiliary(String songId, String name) async =>
+      auxiliaryStorage.containsKey('$songId::$name');
+
+  @override
   Future<void> remove(String songId) async {
     if (shouldFailRemove) {
       throw Exception('Cache storage deletion failed');
@@ -80,12 +96,22 @@ class FakeWebOfflineAudioStore implements WebOfflineAudioStore {
   }
 
   @override
-  Future<int> sizeBytes() async =>
-      storage.values.fold<int>(0, (int sum, bytes) => sum + bytes.length);
+  Future<int> sizeBytes() async {
+    final audioBytes = storage.values.fold<int>(
+      0,
+      (int sum, bytes) => sum + bytes.length,
+    );
+    final auxiliaryBytes = auxiliaryStorage.values.fold<int>(
+      0,
+      (int sum, bytes) => sum + bytes.length,
+    );
+    return audioBytes + auxiliaryBytes;
+  }
 
   @override
   Future<void> clear() async {
     storage.clear();
+    auxiliaryStorage.clear();
     _ids.clear();
     _previewIds.clear();
     _objectUrls.clear();
@@ -106,7 +132,19 @@ void main() {
       expect(stub.isPreview('test'), isFalse);
       expect(await stub.verifyExists('test'), isFalse);
       expect(await stub.objectUrl('test'), isNull);
-      expect(await stub.save('test', [1, 2, 3], contentType: 'audio/mpeg'), isFalse);
+      expect(
+        await stub.save('test', [1, 2, 3], contentType: 'audio/mpeg'),
+        isFalse,
+      );
+      expect(
+        await stub.saveAuxiliary('test', 'metadata.json', [
+          1,
+          2,
+          3,
+        ], contentType: 'application/json'),
+        isFalse,
+      );
+      expect(await stub.hasAuxiliary('test', 'metadata.json'), isFalse);
       await stub.remove('test');
       stub.invalidate('test');
       expect(await stub.sizeBytes(), 0);
@@ -147,11 +185,7 @@ void main() {
 
     test('verifyExists purges missing entries from in-memory index', () async {
       final store = FakeWebOfflineAudioStore();
-      await store.save(
-        'track-1',
-        [1, 2, 3],
-        contentType: 'audio/mpeg',
-      );
+      await store.save('track-1', [1, 2, 3], contentType: 'audio/mpeg');
       expect(store.has('track-1'), isTrue);
 
       // Simulate external eviction from underlying cache
@@ -164,22 +198,46 @@ void main() {
       expect(store.has('track-1'), isFalse);
     });
 
-    test('remove propagates failure and preserves in-memory index on error', () async {
-      final store = FakeWebOfflineAudioStore();
-      await store.save('track-err', [1, 2, 3], contentType: 'audio/mpeg');
-      store.shouldFailRemove = true;
+    test(
+      'auxiliary entries are keyed once and counted in storage usage',
+      () async {
+        final store = FakeWebOfflineAudioStore();
+        await store.save('track-1', [1, 2, 3], contentType: 'audio/mpeg');
+        await store.saveAuxiliary('track-1', 'metadata.json', [
+          4,
+          5,
+        ], contentType: 'application/json');
+        await store.saveAuxiliary('track-1', 'metadata.json', [
+          6,
+          7,
+          8,
+          9,
+        ], contentType: 'application/json');
 
-      expect(
-        () async => await store.remove('track-err'),
-        throwsA(isA<Exception>()),
-      );
-      // Because removal failed, in-memory index is not purged
-      expect(store.has('track-err'), isTrue);
+        expect(await store.hasAuxiliary('track-1', 'metadata.json'), isTrue);
+        expect(await store.sizeBytes(), 3 + 4);
+      },
+    );
 
-      // Now succeed
-      store.shouldFailRemove = false;
-      await store.remove('track-err');
-      expect(store.has('track-err'), isFalse);
-    });
+    test(
+      'remove propagates failure and preserves in-memory index on error',
+      () async {
+        final store = FakeWebOfflineAudioStore();
+        await store.save('track-err', [1, 2, 3], contentType: 'audio/mpeg');
+        store.shouldFailRemove = true;
+
+        expect(
+          () async => await store.remove('track-err'),
+          throwsA(isA<Exception>()),
+        );
+        // Because removal failed, in-memory index is not purged
+        expect(store.has('track-err'), isTrue);
+
+        // Now succeed
+        store.shouldFailRemove = false;
+        await store.remove('track-err');
+        expect(store.has('track-err'), isFalse);
+      },
+    );
   });
 }

@@ -78,8 +78,8 @@
     "semantic_hash": "78d60bef6935c677e32f7cb983b471db"
   },
   ".vscode/settings.json": {
-    "mtime": 1795331941.1424463,
-    "seen": 1795332137.328783,
+    "mtime": 1795332685.5028174,
+    "seen": 1795338555.886453,
     "ast_hash": "0c8600505a18611ff4aa7e16901cb153",
     "semantic_hash": ""
   },
@@ -108,8 +108,8 @@
     "semantic_hash": "803fe22651fbe96ed401eb0b66a492d1"
   },
   "android/settings.gradle.kts": {
-    "mtime": 1795331941.1464508,
-    "seen": 1795332137.3297236,
+    "mtime": 1795332685.5078197,
+    "seen": 1795338555.8891983,
     "ast_hash": "5fa2b9a47f7158439e0a83b5d7d5e4a1",
     "semantic_hash": ""
   },
@@ -150,21 +150,21 @@
     "semantic_hash": "0c3e86af131f6a9e547c80b5ed058914"
   },
   "lib/auth/auth_service.dart": {
-    "mtime": 1795331941.209482,
-    "seen": 1795332137.330965,
-    "ast_hash": "12d34c4d38119fd525178893f013eb09",
+    "mtime": 1795342188.5132418,
+    "seen": 1795342983.9110563,
+    "ast_hash": "92cce63aac685a76edf782c68ae5b143",
     "semantic_hash": ""
   },
   "lib/controllers/music_player_controller.dart": {
-    "mtime": 1795331543.1350214,
-    "seen": 1795332137.331331,
-    "ast_hash": "55fb52d5b834c4aea9a8ca1e66f1c99a",
+    "mtime": 1795420669.552637,
+    "seen": 1795420715.8910558,
+    "ast_hash": "7468d7917e4d95f838abf4b729a58581",
     "semantic_hash": ""
   },
   "lib/data/local_database.dart": {
-    "mtime": 1795331543.1380222,
-    "seen": 1795332137.3313344,
-    "ast_hash": "2587f620a912c1a4347162b6a489697e",
+    "mtime": 1795417770.1803849,
+    "seen": 1795418086.3119874,
+    "ast_hash": "80d3206458cb7de5855e19468aacfc8d",
     "semantic_hash": ""
   },
   "lib/main.dart": {
@@ -216,9 +216,9 @@
     "semantic_hash": ""
   },
   "lib/views/auth_gate.dart": {
-    "mtime": 1795331941.2129898,
-    "seen": 1795332137.335363,
-    "ast_hash": "289df36761856ccc17ec4dfadf9b47a5",
+    "mtime": 1795345766.6955433,
+    "seen": 1795345792.1433384,
+    "ast_hash": "41676d53dfe45991a346bb030b34a441",
     "semantic_hash": ""
   },
   "lib/views/discovery_playlist_page.dart": {
@@ -234,15 +234,15 @@
     "semantic_hash": ""
   },
   "lib/views/music_dashboard_view.dart": {
-    "mtime": 1795331941.2153327,
-    "seen": 1795332137.3357227,
-    "ast_hash": "966d05c31575c19dfc27e87edff74f53",
+    "mtime": 1795346943.5530994,
+    "seen": 1795347118.4084747,
+    "ast_hash": "6e2b018e0b0e55a4463f0231b77e0dbe",
     "semantic_hash": ""
   },
   "lib/views/settings_view.dart": {
-    "mtime": 1795332077.5453844,
-    "seen": 1795332137.3360481,
-    "ast_hash": "3b24dc3041d9b64fe0c8fa855e8f8318",
+    "mtime": 1795419291.1418097,
+    "seen": 1795419549.903366,
+    "ast_hash": "9b993715ab8152468061c4c00eda1256",
     "semantic_hash": ""
   },
   "lib/widgets/album_card.dart": {
@@ -420,9 +420,9 @@
     "semantic_hash": ""
   },
   "test/playback_offline_sync_test.dart": {
-    "mtime": 1794467714.7639308,
-    "seen": 1794467962.8299255,
-    "ast_hash": "9ca8b6795aed41028ab61fe42e5d0d74",
+    "mtime": 1795360098.225892,
+    "seen": 1795364234.0318277,
+    "ast_hash": "72b0b3b1b447889c4079bbefb8992da2",
     "semantic_hash": ""
   },
   "test/spotify_import_live_test.dart": {
@@ -462,8 +462,8 @@
     "semantic_hash": "3c5c50588ce1c1e8430ea645e2db73fb"
   },
   "windows/flutter/generated_plugin_registrant.cc": {
-    "mtime": 1795331815.3085406,
-    "seen": 1795332137.348313,
+    "mtime": 1795420500.373952,
+    "seen": 1795420715.9444032,
     "ast_hash": "33d15e72b3cc88e8279a4353923f1c80",
     "semantic_hash": ""
   },
@@ -1434,9 +1434,9 @@
     "semantic_hash": ""
   },
   "pubspec.yaml": {
-    "mtime": 1795173253.9350543,
-    "seen": 1795174852.6427264,
-    "ast_hash": "f23892617aa413749a91a576ff00a943",
+    "mtime": 1795350166.418184,
+    "seen": 1795352945.0741382,
+    "ast_hash": "084f0dbeaf7a9d40ed38c97c965751fc",
     "semantic_hash": ""
   },
   "web/index.html": {
@@ -1716,9 +1716,9 @@
     "semantic_hash": ""
   },
   "lib/services/radio_discovery_service.dart": {
-    "mtime": 1795173253.8594499,
-    "seen": 1795174852.587438,
-    "ast_hash": "5158e2ed675ee477a1a7675b162165b2",
+    "mtime": 1795340787.1353867,
+    "seen": 1795341072.334004,
+    "ast_hash": "8c917b31b9a58ded3e8a1e9fd645ffbf",
     "semantic_hash": ""
   },
   "test/library_and_discovery_radio_test.dart": {
@@ -1794,15 +1794,15 @@
     "semantic_hash": ""
   },
   "test/local_audio_cache_test.dart": {
-    "mtime": 1794547174.9480975,
-    "seen": 1794551236.9527798,
-    "ast_hash": "7f24444c9010fd5bf0eae7adcd98c7b5",
+    "mtime": 1795419308.3517869,
+    "seen": 1795419549.9306543,
+    "ast_hash": "1fb119f5f8a5cf822a780a1f1c81896a",
     "semantic_hash": ""
   },
   "test/radio_playlist_offline_download_test.dart": {
-    "mtime": 1795173253.9795074,
-    "seen": 1795174852.5998964,
-    "ast_hash": "80d87a48df43aeed047500667573bad9",
+    "mtime": 1795358200.2520716,
+    "seen": 1795358730.5277941,
+    "ast_hash": "ad568251333b81bccd22affbf0bf996c",
     "semantic_hash": ""
   },
   "test/imported_playlist_image_stability_test.dart": {
@@ -1848,9 +1848,9 @@
     "semantic_hash": ""
   },
   "lib/views/accounts_view.dart": {
-    "mtime": 1795173253.8634975,
-    "seen": 1795174852.590039,
-    "ast_hash": "e2007023eb48809498ce4bb9524f6fc1",
+    "mtime": 1795342508.0846677,
+    "seen": 1795342983.9168177,
+    "ast_hash": "1b31170893e00ff6fc1e00753523e3f2",
     "semantic_hash": ""
   },
   "lib/views/listening_stats_view.dart": {
@@ -1878,9 +1878,9 @@
     "semantic_hash": ""
   },
   "test/settings_categorized_view_test.dart": {
-    "mtime": 1795331890.80259,
-    "seen": 1795332137.3457239,
-    "ast_hash": "2939dbabe5378df6a2e9de3d1878be82",
+    "mtime": 1795419376.7899623,
+    "seen": 1795419549.9330728,
+    "ast_hash": "6a54c1c3f2478032ac9a8c763733ad78",
     "semantic_hash": ""
   },
   "test/no_autoplay_on_enrichment_test.dart": {
@@ -1968,21 +1968,21 @@
     "semantic_hash": ""
   },
   "lib/services/biometric_auth_service.dart": {
-    "mtime": 1795331941.2114823,
-    "seen": 1795332137.3325117,
-    "ast_hash": "2cf3c9690d49b5884c774188d8bd56c0",
+    "mtime": 1795342418.1885452,
+    "seen": 1795342983.9134808,
+    "ast_hash": "4c0537c034d98f7857a2ca463718ef69",
     "semantic_hash": ""
   },
   "test/auth_gate_biometric_test.dart": {
-    "mtime": 1795332097.6208885,
-    "seen": 1795332137.3409798,
+    "mtime": 1795332685.589038,
+    "seen": 1795338555.9250793,
     "ast_hash": "4b24780ceded4be44a739ac5405e0370",
     "semantic_hash": ""
   },
   "test/biometric_auth_service_test.dart": {
-    "mtime": 1795331941.222322,
-    "seen": 1795332137.3411624,
-    "ast_hash": "f1cda9e73d95ac375c4be6a6d7badb1c",
+    "mtime": 1795342249.9930196,
+    "seen": 1795342983.9242032,
+    "ast_hash": "1522b3343856cfd00002af1175e637d6",
     "semantic_hash": ""
   },
   "lib/auth/saved_credential_store.dart": {
@@ -1992,9 +1992,9 @@
     "semantic_hash": ""
   },
   "test/auth_gate_saved_account_test.dart": {
-    "mtime": 1795332107.8137126,
-    "seen": 1795332137.3409824,
-    "ast_hash": "4a04724cc0e0b15b184ab0fc349bee12",
+    "mtime": 1795345583.8016915,
+    "seen": 1795345743.662766,
+    "ast_hash": "a84ea2bf8745276d836a9c78038f0e5f",
     "semantic_hash": ""
   },
   "web/sqflite_sw.js": {
@@ -2016,27 +2016,27 @@
     "semantic_hash": ""
   },
   "lib/services/web_offline_audio.dart": {
-    "mtime": 1795143483.6818602,
-    "seen": 1795153651.6371744,
-    "ast_hash": "62a01aba767ad39f4d0c801d3cb39504",
+    "mtime": 1795355947.4793649,
+    "seen": 1795358014.817469,
+    "ast_hash": "6e2b8dc72e310917ddb55ae62911bb61",
     "semantic_hash": ""
   },
   "lib/services/web_offline_audio_api.dart": {
-    "mtime": 1795143483.68286,
-    "seen": 1795153651.637178,
-    "ast_hash": "586d6d86817a721db2a00591b3bd7178",
+    "mtime": 1795420263.974563,
+    "seen": 1795420715.8978145,
+    "ast_hash": "6d50af5c6332b0183b802a54d0ac4ac5",
     "semantic_hash": ""
   },
   "lib/services/web_offline_audio_stub.dart": {
-    "mtime": 1795143483.68286,
-    "seen": 1795153651.6371815,
-    "ast_hash": "ea8a5983fe0234d196bc8cb636f8a533",
+    "mtime": 1795420263.9768171,
+    "seen": 1795420715.8978212,
+    "ast_hash": "804ee04b59dfa7c704b3a9149a6fda23",
     "semantic_hash": ""
   },
   "lib/services/web_offline_audio_web.dart": {
-    "mtime": 1795143483.6838593,
-    "seen": 1795153651.637185,
-    "ast_hash": "7429e2118eb39d63003622a6b6e61fc1",
+    "mtime": 1795420263.9828272,
+    "seen": 1795420715.897827,
+    "ast_hash": "b53f9e7531cf520d4ca677c3faac3363",
     "semantic_hash": ""
   },
   "lib/services/web_youtube_audio_resolver.dart": {
@@ -2058,9 +2058,9 @@
     "semantic_hash": ""
   },
   "test/web_offline_audio_test.dart": {
-    "mtime": 1795143483.6963868,
-    "seen": 1795153651.6509755,
-    "ast_hash": "3c8cf032acec997a05e90a6ac7bb0012",
+    "mtime": 1795420263.9933352,
+    "seen": 1795420715.9432628,
+    "ast_hash": "aafc3ce5fed79b0109e64408c7b8a8ce",
     "semantic_hash": ""
   },
   "lib/data/web_database_sync.dart": {
@@ -2082,9 +2082,9 @@
     "semantic_hash": ""
   },
   "lib/services/audio_capabilities.dart": {
-    "mtime": 1795332065.2995145,
-    "seen": 1795332137.3323429,
-    "ast_hash": "794a19a6cdfde4fe2309b649ac473778",
+    "mtime": 1795350404.0156524,
+    "seen": 1795352944.949898,
+    "ast_hash": "ad972bdfd913edb92587ff8b413c2189",
     "semantic_hash": ""
   },
   "lib/services/media_kit_playback_engine.dart": {
@@ -2100,9 +2100,9 @@
     "semantic_hash": ""
   },
   "test/audio_engine_dsp_test.dart": {
-    "mtime": 1795173253.947267,
-    "seen": 1795174852.5952337,
-    "ast_hash": "5720eaa2c1286850afd08cac39d1ae7f",
+    "mtime": 1795352136.9013724,
+    "seen": 1795352944.9802368,
+    "ast_hash": "7cf6de445d41071f68839ce3fd0272cd",
     "semantic_hash": ""
   },
   ".github/copilot-instructions.md": {
@@ -2139,6 +2139,810 @@
     "mtime": 1795331944.0888543,
     "seen": 1795332137.3725631,
     "ast_hash": "62bcda91e192f7f9f587f283e0e6e339",
+    "semantic_hash": ""
+  },
+  "lib/data/radio_station_presets.dart": {
+    "mtime": 1795340787.2689905,
+    "seen": 1795341072.3309877,
+    "ast_hash": "0fba96657b6737f47aac73aafe9627cc",
+    "semantic_hash": ""
+  },
+  "test/music_dashboard_view_test.dart": {
+    "mtime": 1795346943.8892286,
+    "seen": 1795347118.444354,
+    "ast_hash": "a857761d79561e452cb81f3fbae7932d",
+    "semantic_hash": ""
+  },
+  "test/radio_discovery_service_test.dart": {
+    "mtime": 1795337285.8640757,
+    "seen": 1795338555.937954,
+    "ast_hash": "40c129a177f920ab386696f9ded4f22d",
+    "semantic_hash": ""
+  },
+  "test/sign_out_resilience_test.dart": {
+    "mtime": 1795342302.5406806,
+    "seen": 1795342983.9292655,
+    "ast_hash": "44c1f9c30602403de6439b842a0e2532",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/android/build.gradle": {
+    "mtime": 1789827678.6299217,
+    "seen": 1795352944.9753647,
+    "ast_hash": "33827187d344e61713e234b175679b68",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/android/settings.gradle": {
+    "mtime": 1789827678.6279204,
+    "seen": 1795352944.9753711,
+    "ast_hash": "f4a2d8f71860c0e13ba5700cbcca7573",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/android/src/main/java/com/ryanheise/just_audio/AudioPlayer.java": {
+    "mtime": 1795350265.358217,
+    "seen": 1795352944.9753766,
+    "ast_hash": "0eee36adba6a5aa0dcc24a32755f8e07",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/android/src/main/java/com/ryanheise/just_audio/BetterEventChannel.java": {
+    "mtime": 1789827678.619918,
+    "seen": 1795352944.9753819,
+    "ast_hash": "d35c8e355805fa24d3f1ebee66aff1a9",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/android/src/main/java/com/ryanheise/just_audio/JustAudioPlugin.java": {
+    "mtime": 1789827678.6249175,
+    "seen": 1795352944.975386,
+    "ast_hash": "a06cb25aff9560c52638d2b98bc6e044",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/android/src/main/java/com/ryanheise/just_audio/MainMethodCallHandler.java": {
+    "mtime": 1789827678.6219194,
+    "seen": 1795352944.9753907,
+    "ast_hash": "7d6e74df6e421ee499f35b564ade1204",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/android/src/main/java/com/ryanheise/just_audio/MonoAudioProcessor.java": {
+    "mtime": 1795350214.3589592,
+    "seen": 1795352944.9753957,
+    "ast_hash": "90eb5af834e0f826cf729a4b4b53773a",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/android/src/main/java/com/ryanheise/just_audio/MonoRenderersFactory.java": {
+    "mtime": 1795350214.3945155,
+    "seen": 1795352944.9754004,
+    "ast_hash": "8e43647a950062a9183be5885abebca9",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Package.swift": {
+    "mtime": 1789827678.272287,
+    "seen": 1795352944.975406,
+    "ast_hash": "a1b4f64a488e6a6bf0f25053b2fc4fed",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/AudioPlayer.m": {
+    "mtime": 1789827678.3105688,
+    "seen": 1795352944.9754107,
+    "ast_hash": "9a53dd85114433bfa416d70789a19f25",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/AudioSource.m": {
+    "mtime": 1789827678.3241658,
+    "seen": 1795352944.9754164,
+    "ast_hash": "42c61bae1a66304171a7f65db05807a1",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/BetterEventChannel.m": {
+    "mtime": 1789827678.3211632,
+    "seen": 1795352944.9754212,
+    "ast_hash": "bf5c439633d2f82751945fc10ca39576",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/ClippingAudioSource.m": {
+    "mtime": 1789827678.2762866,
+    "seen": 1795352944.9754717,
+    "ast_hash": "168237860173e43f1324577e7a2b8ffe",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/ConcatenatingAudioSource.m": {
+    "mtime": 1789827678.3161664,
+    "seen": 1795352944.9754913,
+    "ast_hash": "d4f90cd1bed072fd240ff2ea7a9cb3cb",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/IndexedAudioSource.m": {
+    "mtime": 1789827678.2742853,
+    "seen": 1795352944.9754972,
+    "ast_hash": "023f853d9178161ce2fe479ef862ce79",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/IndexedPlayerItem.m": {
+    "mtime": 1789827678.2772844,
+    "seen": 1795352944.9755027,
+    "ast_hash": "aa7e699cbd03bfdb4c81baf5d1705798",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/JustAudioPlugin.m": {
+    "mtime": 1789827678.3221655,
+    "seen": 1795352944.9755087,
+    "ast_hash": "c74a11a783beec26f67eb7f4ac7126d7",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/LoadControl.m": {
+    "mtime": 1789827678.3115644,
+    "seen": 1795352944.9755137,
+    "ast_hash": "3c929331131634e61bea0b66fd69bfbf",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/LoopingAudioSource.m": {
+    "mtime": 1789827678.3191626,
+    "seen": 1795352944.9755182,
+    "ast_hash": "039d79b8ba59032db88be91c3132907c",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/UriAudioSource.m": {
+    "mtime": 1789827678.3129687,
+    "seen": 1795352944.9755228,
+    "ast_hash": "4c53213454c002391c512e6d8fde2a45",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/include/just_audio/AudioPlayer.h": {
+    "mtime": 1789827678.2812881,
+    "seen": 1795352944.9755278,
+    "ast_hash": "b8b0e9b33f3fc5f6c51b58ab144ebdd2",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/include/just_audio/AudioSource.h": {
+    "mtime": 1789827678.2985675,
+    "seen": 1795352944.9755325,
+    "ast_hash": "cea055e2377addb593fa818f8267d986",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/include/just_audio/BetterEventChannel.h": {
+    "mtime": 1789827678.3065722,
+    "seen": 1795352944.9755368,
+    "ast_hash": "aff38d92d661f75ce24bbf45a9bd714a",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/include/just_audio/ClippingAudioSource.h": {
+    "mtime": 1789827678.2857237,
+    "seen": 1795352944.975542,
+    "ast_hash": "bc5083fa89ae6e4f7a882342c50d14bd",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/include/just_audio/ConcatenatingAudioSource.h": {
+    "mtime": 1789827678.287737,
+    "seen": 1795352944.9755473,
+    "ast_hash": "37b7ddb9144b1f72c1273ade08cdbe48",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/include/just_audio/IndexedAudioSource.h": {
+    "mtime": 1789827678.2965682,
+    "seen": 1795352944.9755526,
+    "ast_hash": "7b36019b852eb33f8bf17a766f7bcada",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/include/just_audio/IndexedPlayerItem.h": {
+    "mtime": 1789827678.2897408,
+    "seen": 1795352944.9755573,
+    "ast_hash": "ed0aa66d0a974d7de58aaa864d50e221",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/include/just_audio/JustAudioPlugin.h": {
+    "mtime": 1789827678.3085647,
+    "seen": 1795352944.975562,
+    "ast_hash": "28709cf98caca3ed96abde0065e38e61",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/include/just_audio/LoadControl.h": {
+    "mtime": 1789827678.2909546,
+    "seen": 1795352944.9755666,
+    "ast_hash": "b09ef934711514bd275940a81a30ae12",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/include/just_audio/LoopingAudioSource.h": {
+    "mtime": 1789827678.3055677,
+    "seen": 1795352944.9755714,
+    "ast_hash": "98d80978e7b72bcce70d104273dcb2a7",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/darwin/just_audio/Sources/just_audio/include/just_audio/UriAudioSource.h": {
+    "mtime": 1789827678.2945654,
+    "seen": 1795352944.975576,
+    "ast_hash": "a0cb5bf1794fea99d9f6a63353a7e08d",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/android/app/build.gradle": {
+    "mtime": 1789827678.578066,
+    "seen": 1795352944.9755805,
+    "ast_hash": "7c10aee91cef759f1365e56a4bcadf49",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/android/app/src/main/java/com/ryanheise/just_audio_example/MainActivity.java": {
+    "mtime": 1789827678.5478728,
+    "seen": 1795352944.9755845,
+    "ast_hash": "a429593c18020e74a5c192b5326a8ead",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java": {
+    "mtime": 1795350276.416431,
+    "seen": 1795352944.975589,
+    "ast_hash": "ce7b718ac9c2548e6007747840c4c910",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/android/build.gradle": {
+    "mtime": 1789827678.58308,
+    "seen": 1795352944.9755936,
+    "ast_hash": "39e3bcbd1cded33cba2963e9fd864581",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/android/settings.gradle": {
+    "mtime": 1789827678.5800655,
+    "seen": 1795352944.975598,
+    "ast_hash": "b0eb7b9e69a92f62d2b83d5d7acd3d29",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/android/settings_aar.gradle": {
+    "mtime": 1789827678.5870636,
+    "seen": 1795352944.9756029,
+    "ast_hash": "a7fe1ac39169b5e5285a5e53662f251b",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/integration_test/app_test.dart": {
+    "mtime": 1789827678.527773,
+    "seen": 1795352944.9756076,
+    "ast_hash": "4e6667ab03f28fe6dc4733cc436ba6ad",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift": {
+    "mtime": 1795350276.614843,
+    "seen": 1795352944.9756124,
+    "ast_hash": "c3ca67f6d9d27f78ca451a7112e4c386",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Sources/FlutterGeneratedPluginSwiftPackage/FlutterGeneratedPluginSwiftPackage.swift": {
+    "mtime": 1795350276.5970776,
+    "seen": 1795352944.975618,
+    "ast_hash": "e6366d8685ad56268730656aa0a6e00c",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Flutter/ephemeral/flutter_lldb_helper.py": {
+    "mtime": 1795350274.4439168,
+    "seen": 1795352944.9756224,
+    "ast_hash": "98fc75412162af387e2e3461e4e58094",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Flutter/flutter_export_environment.sh": {
+    "mtime": 1795350274.5908365,
+    "seen": 1795352944.9756267,
+    "ast_hash": "a533c3bf851f5cf3a3673b1277e572c7",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/AppDelegate.h": {
+    "mtime": 1789827678.3446772,
+    "seen": 1795352944.9756315,
+    "ast_hash": "ead7d82317a6fb9a0a47dbb163a44d14",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/AppDelegate.m": {
+    "mtime": 1789827678.3888044,
+    "seen": 1795352944.975636,
+    "ast_hash": "b7135d97f189633b658aecc7d99ebf9f",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json": {
+    "mtime": 1789827678.372986,
+    "seen": 1795352944.9756405,
+    "ast_hash": "c3cdf9688b604d14f2e76a8287e16167",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/LaunchImage.imageset/Contents.json": {
+    "mtime": 1789827678.3549786,
+    "seen": 1795352944.975645,
+    "ast_hash": "770f4f65e02ca2fc57f46f4f4148d15d",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/GeneratedPluginRegistrant.h": {
+    "mtime": 1795350276.505423,
+    "seen": 1795352944.9756503,
+    "ast_hash": "decb9041b5e91a07e66f4664e5dac408",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/GeneratedPluginRegistrant.m": {
+    "mtime": 1795350276.5151122,
+    "seen": 1795352944.9756548,
+    "ast_hash": "3d65cd4239544f7620e8d5a0a72b5bf2",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/main.m": {
+    "mtime": 1789827678.3908105,
+    "seen": 1795352944.975659,
+    "ast_hash": "252bfd22e612043786fa9277888266ed",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/lib/common.dart": {
+    "mtime": 1795350260.7048712,
+    "seen": 1795352944.9756637,
+    "ast_hash": "3bda00d4faf04aa65bb9c4c44bc88877",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/lib/example_caching.dart": {
+    "mtime": 1795354458.60162,
+    "seen": 1795354581.967837,
+    "ast_hash": "7ed4e8b3f77c7cde61f8d2dbd15ae9b4",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/lib/example_effects.dart": {
+    "mtime": 1795350260.7048712,
+    "seen": 1795352944.9756727,
+    "ast_hash": "b28011769a01eb75ead0c84fe69d2ce5",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/lib/example_playlist.dart": {
+    "mtime": 1795350260.7048712,
+    "seen": 1795352944.9756773,
+    "ast_hash": "5629019f5218b372a32feb7d6ec283c6",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/lib/example_radio.dart": {
+    "mtime": 1795350260.705867,
+    "seen": 1795352944.9756818,
+    "ast_hash": "2c218b805cd3c0000db64cd6e8296de5",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/lib/main.dart": {
+    "mtime": 1795350260.705867,
+    "seen": 1795352944.9756863,
+    "ast_hash": "de83374b8c3f34da57aac38da6f30f63",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/linux/flutter/generated_plugin_registrant.cc": {
+    "mtime": 1789827678.4342377,
+    "seen": 1795352944.9756951,
+    "ast_hash": "d07afe003d5837167bdd357d593f20a0",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/linux/flutter/generated_plugin_registrant.h": {
+    "mtime": 1789827678.4278893,
+    "seen": 1795352944.9756997,
+    "ast_hash": "d295462c9da9f7fef22dc86c34492318",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/linux/main.cc": {
+    "mtime": 1789827678.4437764,
+    "seen": 1795352944.9757044,
+    "ast_hash": "0643b8609698e96b3abd63c210361a87",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/linux/my_application.cc": {
+    "mtime": 1789827678.4422412,
+    "seen": 1795352944.9757087,
+    "ast_hash": "26723ac6b2fc7fb7e9d312103258a4b8",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/linux/my_application.h": {
+    "mtime": 1789827678.4412398,
+    "seen": 1795352944.9757133,
+    "ast_hash": "7bd839b67ebee22174be9f4da4521b6f",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Flutter/GeneratedPluginRegistrant.swift": {
+    "mtime": 1795350276.5313413,
+    "seen": 1795352944.9757192,
+    "ast_hash": "628e955c2b2f5af2e2bc5b90550c867c",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift": {
+    "mtime": 1795350276.8477592,
+    "seen": 1795352944.975724,
+    "ast_hash": "59698291197c1b2276ef81ea1fa4a062",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Sources/FlutterGeneratedPluginSwiftPackage/FlutterGeneratedPluginSwiftPackage.swift": {
+    "mtime": 1795350276.8437567,
+    "seen": 1795352944.9757288,
+    "ast_hash": "e6366d8685ad56268730656aa0a6e00c",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Flutter/ephemeral/flutter_export_environment.sh": {
+    "mtime": 1795350274.6253984,
+    "seen": 1795352944.9757335,
+    "ast_hash": "be8e556d878889efb92cfa0ce6dd8f9f",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Runner/AppDelegate.swift": {
+    "mtime": 1789827678.4718273,
+    "seen": 1795352944.9758184,
+    "ast_hash": "2a7411ae3e7c6715525b94b6f8d2e80b",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json": {
+    "mtime": 1789827678.466305,
+    "seen": 1795352944.9758253,
+    "ast_hash": "5bd47c3ef1d1a261037c87fb3ddb9cfd",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Runner/MainFlutterWindow.swift": {
+    "mtime": 1789827678.4738271,
+    "seen": 1795352944.97583,
+    "ast_hash": "da69378dd4558360d3f2132c07003750",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/test/widget_test.dart": {
+    "mtime": 1795350260.705867,
+    "seen": 1795352944.9758348,
+    "ast_hash": "d9a408c32538c2b8c7b967c571170acd",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/test_driver/integration_test.dart": {
+    "mtime": 1789827678.6099217,
+    "seen": 1795352944.9758403,
+    "ast_hash": "e9635127111018a3d2ef70f7266cd4a7",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/web/manifest.json": {
+    "mtime": 1789827678.5919194,
+    "seen": 1795352944.9758449,
+    "ast_hash": "15f73b7e8a8209c2206210b3ac8dea1b",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/flutter/generated_plugin_registrant.cc": {
+    "mtime": 1789827678.5237727,
+    "seen": 1795352944.9758494,
+    "ast_hash": "8e4a17b98ce62b6f0a16c6000aee40b2",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/flutter/generated_plugin_registrant.h": {
+    "mtime": 1789827678.5197754,
+    "seen": 1795352944.9758542,
+    "ast_hash": "0ea33875f9f8e118f9c2ded03e2e2835",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/runner/flutter_window.cpp": {
+    "mtime": 1789827678.5157285,
+    "seen": 1795352944.9758594,
+    "ast_hash": "33cfe7edb15df580c3b9f20c12337c60",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/runner/flutter_window.h": {
+    "mtime": 1789827678.508733,
+    "seen": 1795352944.9758646,
+    "ast_hash": "79bea736711adda00c49419a39a4a0b4",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/runner/main.cpp": {
+    "mtime": 1789827678.50173,
+    "seen": 1795352944.97587,
+    "ast_hash": "e6c688e364a4a8f629f509afcd8a68be",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/runner/resource.h": {
+    "mtime": 1789827678.4987319,
+    "seen": 1795352944.97589,
+    "ast_hash": "c8f809a4f8d3f2f625e358fd90f72fee",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/runner/utils.cpp": {
+    "mtime": 1789827678.514728,
+    "seen": 1795352944.9758966,
+    "ast_hash": "871560f4eecc7e1ac44398a0ee748702",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/runner/utils.h": {
+    "mtime": 1789827678.5097342,
+    "seen": 1795352944.9759011,
+    "ast_hash": "c741fb9cddbf3a62f4688b6cca39ddcc",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/runner/win32_window.cpp": {
+    "mtime": 1789827678.511729,
+    "seen": 1795352944.975906,
+    "ast_hash": "5912f5ea9be16f88da68751ea557e86a",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/runner/win32_window.h": {
+    "mtime": 1789827678.5107307,
+    "seen": 1795352944.9759107,
+    "ast_hash": "fb1ab730377ad5aa5c1dee1cfdc5a093",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/lib/just_audio.dart": {
+    "mtime": 1795351306.9752035,
+    "seen": 1795352944.9759157,
+    "ast_hash": "8fcf475762783cb77bf6470562959df5",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/test/just_audio_test.dart": {
+    "mtime": 1795350260.705867,
+    "seen": 1795352944.9759207,
+    "ast_hash": "7bea4cafd4e26d2ad35ea96444161c3b",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/CHANGELOG.md": {
+    "mtime": 1789827678.3341637,
+    "seen": 1795352945.0734553,
+    "ast_hash": "d8ad1b82d985646dda64dc241c9739f9",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/README.md": {
+    "mtime": 1789827678.2659192,
+    "seen": 1795352945.0734737,
+    "ast_hash": "0de79fcbcba61fb983c570507b26c616",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/analysis_options.yaml": {
+    "mtime": 1795350276.898107,
+    "seen": 1795352945.0734816,
+    "ast_hash": "e44e21e59d6a6b320254e10ec36a4cf1",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/README.md": {
+    "mtime": 1789827678.524774,
+    "seen": 1795352945.0734868,
+    "ast_hash": "93b079471c5349d6317611fbc4428c29",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/analysis_options.yaml": {
+    "mtime": 1795350273.6936474,
+    "seen": 1795352945.0734932,
+    "ast_hash": "a4cee01a2977dc29e60328529baac705",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md": {
+    "mtime": 1789827678.352969,
+    "seen": 1795352945.0734978,
+    "ast_hash": "e175e436acacf76c814d83532d0b662c",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/linux/CMakeLists.txt": {
+    "mtime": 1789827678.4258778,
+    "seen": 1795352945.073503,
+    "ast_hash": "da1782bc8f3dc2e109445a8d32dea7db",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/linux/flutter/CMakeLists.txt": {
+    "mtime": 1789827678.4298892,
+    "seen": 1795352945.0735075,
+    "ast_hash": "66a8ccde85d32f0bb51bdfcd6c3eebcc",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/pubspec.yaml": {
+    "mtime": 1795350260.705867,
+    "seen": 1795352945.0735126,
+    "ast_hash": "b0c9d56726250002dcfabacc18687dcc",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/web/index.html": {
+    "mtime": 1789827678.589917,
+    "seen": 1795352945.0735166,
+    "ast_hash": "926cd8008bef60a4e735ba8d18fbac9c",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/CMakeLists.txt": {
+    "mtime": 1789827678.5177739,
+    "seen": 1795352945.0735207,
+    "ast_hash": "2ddd3feac226051d4529974701c3ee2f",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/flutter/CMakeLists.txt": {
+    "mtime": 1789827678.521773,
+    "seen": 1795352945.0735247,
+    "ast_hash": "0731cf3b00f4916e99ac55703fb2a94a",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/windows/runner/CMakeLists.txt": {
+    "mtime": 1789827678.5047324,
+    "seen": 1795352945.0735283,
+    "ast_hash": "5ea8d1d28f2c1b3941ad228b4a1405b8",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/pubspec.yaml": {
+    "mtime": 1795351134.336068,
+    "seen": 1795352945.073532,
+    "ast_hash": "67f434f249b8343425e1394a08cc44b4",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/android/app/src/main/res/mipmap-hdpi/ic_launcher.png": {
+    "mtime": 1789827678.577065,
+    "seen": 1795352945.0909574,
+    "ast_hash": "13e9c72ec37fac220397aa819fa1ef2d",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/android/app/src/main/res/mipmap-mdpi/ic_launcher.png": {
+    "mtime": 1789827678.5730646,
+    "seen": 1795352945.0909646,
+    "ast_hash": "6270344430679711b81476e29878caa7",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png": {
+    "mtime": 1789827678.57107,
+    "seen": 1795352945.0909696,
+    "ast_hash": "a0a8db5985280b3679d99a820ae2db79",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png": {
+    "mtime": 1789827678.5561683,
+    "seen": 1795352945.0909755,
+    "ast_hash": "afe1b655b9f32da22f9a4301bb8e6ba8",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": {
+    "mtime": 1789827678.5605297,
+    "seen": 1795352945.0909798,
+    "ast_hash": "57838d52c318faff743130c3fcfae0c6",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png": {
+    "mtime": 1789827678.3652613,
+    "seen": 1795352945.0909853,
+    "ast_hash": "c785f8932297af4acd5f5ccb7630f01c",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@1x.png": {
+    "mtime": 1789827678.3741097,
+    "seen": 1795352945.0909898,
+    "ast_hash": "e2b9a9fb66c6f8165a179d370eb723c0",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@2x.png": {
+    "mtime": 1789827678.367275,
+    "seen": 1795352945.0909941,
+    "ast_hash": "19898f3eea0783250a0e2a20dc147827",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@3x.png": {
+    "mtime": 1789827678.375535,
+    "seen": 1795352945.090999,
+    "ast_hash": "128e30cc061e49f503f48c338a21380e",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@1x.png": {
+    "mtime": 1789827678.3841128,
+    "seen": 1795352945.0910041,
+    "ast_hash": "9595f5692fac4a15b50616d6549e9ed4",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@2x.png": {
+    "mtime": 1789827678.380544,
+    "seen": 1795352945.0910087,
+    "ast_hash": "2adf6396c0f80a2ddc96ead2f2405220",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@3x.png": {
+    "mtime": 1789827678.3623884,
+    "seen": 1795352945.0910127,
+    "ast_hash": "f8e7955550407d4ec71d28e7c2d8c8c6",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@1x.png": {
+    "mtime": 1789827678.3825462,
+    "seen": 1795352945.0910163,
+    "ast_hash": "19898f3eea0783250a0e2a20dc147827",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@2x.png": {
+    "mtime": 1789827678.387804,
+    "seen": 1795352945.0910203,
+    "ast_hash": "a34a631e106b9e7251e55fa199d34bca",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@3x.png": {
+    "mtime": 1789827678.368785,
+    "seen": 1795352945.0910237,
+    "ast_hash": "27c7e24d5bfb4f14a7978883bebfaf73",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@2x.png": {
+    "mtime": 1789827678.377546,
+    "seen": 1795352945.0910282,
+    "ast_hash": "27c7e24d5bfb4f14a7978883bebfaf73",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@3x.png": {
+    "mtime": 1789827678.3855379,
+    "seen": 1795352945.0910325,
+    "ast_hash": "7af6f2ed506e771a319d46846dde1f26",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@1x.png": {
+    "mtime": 1789827678.3613849,
+    "seen": 1795352945.091037,
+    "ast_hash": "975d8a8c44f5d28ac65263294b84b0c5",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@2x.png": {
+    "mtime": 1789827678.3707993,
+    "seen": 1795352945.0910413,
+    "ast_hash": "c0fa6a088a2d486e4d75a012096d611b",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-83.5x83.5@2x.png": {
+    "mtime": 1789827678.3785448,
+    "seen": 1795352945.0910459,
+    "ast_hash": "d86de75e9341c42432a12b3d58e364b8",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage.png": {
+    "mtime": 1789827678.3499682,
+    "seen": 1795352945.0910504,
+    "ast_hash": "978c1bee49d7ad5fc1a4d81099b13e18",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@2x.png": {
+    "mtime": 1789827678.3579772,
+    "seen": 1795352945.0910552,
+    "ast_hash": "978c1bee49d7ad5fc1a4d81099b13e18",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@3x.png": {
+    "mtime": 1789827678.3569765,
+    "seen": 1795352945.0910587,
+    "ast_hash": "978c1bee49d7ad5fc1a4d81099b13e18",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png": {
+    "mtime": 1789827678.4633021,
+    "seen": 1795352945.091063,
+    "ast_hash": "9e943798973d8337e94637a639bf1a57",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png": {
+    "mtime": 1789827678.458293,
+    "seen": 1795352945.0910673,
+    "ast_hash": "b7da05eb1e3dde358fb6591cf3a29348",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_16.png": {
+    "mtime": 1789827678.4698274,
+    "seen": 1795352945.0910716,
+    "ast_hash": "e3516d01efaafaf34ca2ee2142181cad",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_256.png": {
+    "mtime": 1789827678.4708266,
+    "seen": 1795352945.0910757,
+    "ast_hash": "4a7edbb5a7b3072d6452de36331bb2a8",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_32.png": {
+    "mtime": 1789827678.4603026,
+    "seen": 1795352945.0910811,
+    "ast_hash": "8a4fb0d67f0ecf1865d9d9f97e0f449a",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_512.png": {
+    "mtime": 1789827678.467306,
+    "seen": 1795352945.091086,
+    "ast_hash": "586d6c7e93b7f746e6e94e35a7dbb6a5",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_64.png": {
+    "mtime": 1789827678.4643025,
+    "seen": 1795352945.0910902,
+    "ast_hash": "64b46626103336f80c23fc64656272a1",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/web/favicon.png": {
+    "mtime": 1789827678.5969224,
+    "seen": 1795352945.0910945,
+    "ast_hash": "5dcef449791fa27946b3d35ad8803796",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/web/icons/Icon-192.png": {
+    "mtime": 1789827678.5939188,
+    "seen": 1795352945.091098,
+    "ast_hash": "ac9a721a12bbc803b44f645561ecb1e1",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/web/icons/Icon-512.png": {
+    "mtime": 1789827678.5959213,
+    "seen": 1795352945.0911021,
+    "ast_hash": "96e752610906ba2a93c65f8abe1645f1",
+    "semantic_hash": ""
+  },
+  "packages/just_audio/example/audio/nature.mp3": {
+    "mtime": 1789827678.612919,
+    "seen": 1795352945.0986612,
+    "ast_hash": "307dd7497eb947c850778ce6ffefa240",
     "semantic_hash": ""
   }
 }

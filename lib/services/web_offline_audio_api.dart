@@ -33,6 +33,21 @@ abstract class WebOfflineAudioStore {
     bool preview = false,
   });
 
+  /// Persists non-audio playback data such as artwork or metadata under the
+  /// track's temporary playback-cache namespace.
+  ///
+  /// Auxiliary entries never appear as downloadable tracks and are counted by
+  /// [sizeBytes] so the Local Audio Cache reflects their storage use.
+  Future<bool> saveAuxiliary(
+    String songId,
+    String name,
+    List<int> bytes, {
+    required String contentType,
+  }) async => false;
+
+  /// True when a named auxiliary entry already exists for [songId].
+  Future<bool> hasAuxiliary(String songId, String name) async => false;
+
   /// Deletes the stored track and revokes its blob URL.
   Future<void> remove(String songId);
 

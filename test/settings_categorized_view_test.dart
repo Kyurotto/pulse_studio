@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music/controllers/music_player_controller.dart';
+import 'package:music/data/local_database.dart';
 import 'package:music/services/audio_capabilities.dart';
 import 'package:music/theme/app_theme.dart';
 import 'package:music/views/settings_view.dart';
@@ -17,9 +18,7 @@ void main() {
       final controller = MusicPlayerController();
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: SettingsView(controller: controller),
-        ),
+        MaterialApp(home: SettingsView(controller: controller)),
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
@@ -41,7 +40,10 @@ void main() {
         find.text('Reduce animations • Canvas • Allow explicit content'),
         findsOneWidget,
       );
-      expect(find.text('Gapless playback • Autoplay • Equalizer'), findsOneWidget);
+      expect(
+        find.text('Gapless playback • Autoplay • Equalizer'),
+        findsOneWidget,
+      );
       expect(
         find.text('Data saver mode • Downloads over cellular'),
         findsOneWidget,
@@ -116,9 +118,7 @@ void main() {
       final controller = MusicPlayerController();
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: SettingsView(controller: controller),
-        ),
+        MaterialApp(home: SettingsView(controller: controller)),
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
@@ -187,10 +187,7 @@ void main() {
       final editText = tester.widget<Text>(find.text('Edit'));
       expect(editText.style?.color, AppTheme.lightTextPrimary);
 
-      expect(
-        find.byIcon(Icons.edit_rounded),
-        findsWidgets,
-      );
+      expect(find.byIcon(Icons.edit_rounded), findsWidgets);
 
       // Verify profile card text has dark/black text
       final profileName = tester.widget<Text>(find.text('Guest'));
@@ -252,7 +249,9 @@ void main() {
       await tester.tap(find.text('Media quality'));
       await tester.pumpAndSettle();
 
-      final wifiTitle = tester.widget<Text>(find.text('Wi-Fi streaming quality'));
+      final wifiTitle = tester.widget<Text>(
+        find.text('Wi-Fi streaming quality'),
+      );
       expect(wifiTitle.style?.color, AppTheme.lightTextPrimary);
 
       final dlTitle = tester.widget<Text>(find.text('Audio download quality'));
@@ -278,9 +277,7 @@ void main() {
       final controller = MusicPlayerController();
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: SettingsView(controller: controller),
-        ),
+        MaterialApp(home: SettingsView(controller: controller)),
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
@@ -358,7 +355,9 @@ void main() {
         );
         expect(cellular.onChanged, isNotNull);
         expect(
-          find.textContaining('Off: songs are saved for offline use only on Wi-Fi'),
+          find.textContaining(
+            'Off: songs are saved for offline use only on Wi-Fi',
+          ),
           findsOneWidget,
         );
       }
@@ -369,58 +368,95 @@ void main() {
     },
   );
 
+  testWidgets('SettingsView keeps playback caching automatic on Windows', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final controller = MusicPlayerController();
+
+    await tester.pumpWidget(
+      MaterialApp(home: SettingsView(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Data-saving and offline'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cache played songs'), findsNothing);
+    expect(controller.autoCachePlayedSongs, isTrue);
+    expect(
+      find.text('Playback cache only. Grows as you play music.'),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    controller.dispose();
+  });
+
+  testWidgets('SettingsView hides the playback-cache switch on Android', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final controller = MusicPlayerController();
+
+    await tester.pumpWidget(
+      MaterialApp(home: SettingsView(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Data-saving and offline'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cache played songs'), findsNothing);
+    expect(controller.autoCachePlayedSongs, isTrue);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    controller.dispose();
+  });
+
   testWidgets(
-    'SettingsView hides "Cache played songs" on Windows and displays automatic cache info',
+    'Local Audio Cache shows only playback cache and lists downloads apart',
     (WidgetTester tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
-      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      tester.view.physicalSize = const Size(400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      LocalDatabase.debugStorageUsageOverride = () async =>
+          const LocalAudioStorageUsage(
+            downloadBytes: 2 * 1024 * 1024 * 1024,
+            cacheBytes: 3 * 1024 * 1024,
+          );
+      addTearDown(() => LocalDatabase.debugStorageUsageOverride = null);
 
       final controller = MusicPlayerController();
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: SettingsView(controller: controller),
-        ),
+        MaterialApp(home: SettingsView(controller: controller)),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.text('Data-saving and offline'));
       await tester.pumpAndSettle();
 
-      // "Cache played songs" switch tile should be removed on Windows
-      expect(find.text('Cache played songs'), findsNothing);
+      // The cache headline tracks playback only: the 2 GB of saved downloads is
+      // listed separately and must never inflate the playback-cache number.
+      expect(find.text('3.0 MB'), findsOneWidget);
+      expect(find.text('2.0 GB'), findsNothing);
       expect(
-        find.text('Played songs are automatically stored in cache for offline listening.'),
+        find.text('Playback cache only. Grows as you play music.'),
         findsOneWidget,
       );
-      expect(controller.autoCachePlayedSongs, isTrue);
-
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
-      controller.dispose();
-    },
-  );
-
-  testWidgets(
-    'SettingsView shows "Cache played songs" switch tile on Android',
-    (WidgetTester tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
-      addTearDown(() => debugDefaultTargetPlatformOverride = null);
-
-      final controller = MusicPlayerController();
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SettingsView(controller: controller),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Data-saving and offline'));
-      await tester.pumpAndSettle();
-
-      // "Cache played songs" switch tile should be visible on Android
-      expect(find.text('Cache played songs'), findsOneWidget);
+      expect(find.textContaining('Downloads 2.0 GB'), findsNothing);
+      expect(find.textContaining('separate, never counted'), findsNothing);
+      expect(find.text('Audio & Downloads'), findsNothing);
+      expect(find.text('Clear Playback Cache (3.0 MB)'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump();

@@ -21,15 +21,17 @@ import '../widgets/spotify_import_dialog.dart';
 import '../widgets/song_artwork_widget.dart';
 import '../services/display_rate_service.dart';
 import '../services/audio_capabilities.dart';
-import 'discovery_sections.dart';
 import 'playlist_screen.dart';
 import '../widgets/skeleton_loader.dart';
-import '../services/discovery_service.dart';
 import '../services/radio_discovery_service.dart';
 
 class MusicDashboardView extends StatefulWidget {
   final MusicPlayerController? controller;
-  const MusicDashboardView({super.key, this.controller});
+
+  /// Injectable for tests; defaults to the shared singleton.
+  final RadioDiscoveryService? radioService;
+
+  const MusicDashboardView({super.key, this.controller, this.radioService});
 
   @override
   State<MusicDashboardView> createState() => _MusicDashboardViewState();
@@ -37,10 +39,9 @@ class MusicDashboardView extends StatefulWidget {
 
 class _MusicDashboardViewState extends State<MusicDashboardView> {
   late final MusicPlayerController _controller;
+  late final RadioDiscoveryService _radioService;
   final TextEditingController _searchTextController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final GlobalKey<DiscoverySectionsState> _discoveryKey =
-      GlobalKey<DiscoverySectionsState>();
   bool _pullToRefreshActive = false;
   String? _selectedPlaylistId;
   StreamSubscription<Object?>? _authSub;
@@ -52,6 +53,18 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   final ScrollController _pageScrollController = ScrollController();
   List<RadioStation> _dynamicPopularRadios = [];
   bool _isLoadingDynamicRadios = false;
+
+  // Radio dashboard state.
+  String _selectedCategory = 'All';
+  String _moreLikeArtist = 'Hev Abi';
+  List<RadioStation> _recentStations = const [];
+  List<RadioStation> _recommendedStations = const [];
+  List<DailyMix> _topMixes = const [];
+  List<RadioStation> _moreLikeStations = const [];
+  Timer? _searchDebounce;
+  int _searchRequestId = 0;
+  RadioStation? _stationSearchResult;
+  bool _isSearchingStation = false;
 
   String? _lastSongId;
   bool _showDesktopLyrics = false;
@@ -71,6 +84,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   void initState() {
     super.initState();
     _controller = widget.controller ?? MusicPlayerController();
+    _radioService = widget.radioService ?? RadioDiscoveryService.instance;
     _lastSongId = _controller.currentSong?.id;
     _lastIsPlaying = _controller.isPlaying;
     _lastNavIndex = _controller.currentNavIndex;
@@ -90,10 +104,12 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
         _controller.loadSavedPlaylists();
       }
     });
-    _dynamicPopularRadios = RadioDiscoveryService.instance.getPopularRadios();
+    _dynamicPopularRadios = _radioService.getPopularRadios();
     _controller.preLocateExploreRadios(_dynamicPopularRadios);
+    _refreshRadioState();
     final isTest = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
     if (!isTest) {
+      unawaited(_loadRadioDashboard());
       Future.delayed(const Duration(milliseconds: 1200), () {
         if (mounted) _checkBiometricOffer();
       });
@@ -101,13 +117,44 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
         if (mounted) {
           _controller.autoDownloadExploreRadios([
             ..._dynamicPopularRadios,
-            ...RadioDiscoveryService.instance.getOpmRadios(),
-            ...RadioDiscoveryService.instance.getGlobalRadios(),
+            ..._radioService.getOpmRadios(),
+            ..._radioService.getGlobalRadios(),
           ]);
         }
       });
       _loadDynamicRadios();
     }
+    // Restore an in-flight search when the dashboard is mounted with a query
+    // already set (e.g. tests or a deep link).
+    if (_controller.searchQuery.trim().isNotEmpty) {
+      _scheduleStationSearch(_controller.searchQuery);
+    }
+  }
+
+  /// Recomputes the synchronous Home rows from the radio service.
+  void _refreshRadioState() {
+    final artist = _radioService.lastPlayedArtist.trim();
+    _moreLikeArtist = artist.isEmpty ? 'Hev Abi' : artist;
+    _recentStations = _radioService.getRecentStations();
+    _recommendedStations = _radioService.getRecommendedStations();
+    _topMixes = _radioService.getTopMixes();
+    _moreLikeStations = _radioService.getMoreLikeStations(_moreLikeArtist);
+  }
+
+  /// Loads persisted dashboard state (category + recents) without blocking
+  /// the first frame. Failures keep the curated defaults.
+  Future<void> _loadRadioDashboard() async {
+    try {
+      final category = await LocalDatabase.instance.getSetting(
+        'dashboard_category',
+      );
+      if (mounted && category != null && category.isNotEmpty) {
+        setState(() => _selectedCategory = category);
+      }
+    } catch (_) {}
+    await _radioService.refreshRecentStations();
+    if (!mounted) return;
+    setState(_refreshRadioState);
   }
 
   Future<void> _checkBiometricOffer() async {
@@ -170,12 +217,12 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
     try {
       // Start all three fetches together, but wait for the OPM/Global rows
       // too. Previously they completed after the rebuild, so those carousels
-      // kept rendering fallback stations with zero songs — and Download All
+      // kept rendering fallback stations with zero songs ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â and Download All
       // silently did nothing until the next rebuild.
-      final trendingFuture = RadioDiscoveryService.instance
+      final trendingFuture = _radioService
           .fetchTrendingRadios();
-      final opmFuture = RadioDiscoveryService.instance.fetchOpmRadios();
-      final globalFuture = RadioDiscoveryService.instance.fetchGlobalRadios();
+      final opmFuture = _radioService.fetchOpmRadios();
+      final globalFuture = _radioService.fetchGlobalRadios();
 
       final stations = await trendingFuture;
       final opmStations = await opmFuture;
@@ -308,6 +355,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
         repeatMode != _lastRepeatMode ||
         shuffle != _lastShuffle ||
         isMuted != _lastIsMuted) {
+      final queryChanged = query != _lastQuery;
       _lastSongId = currentSongId;
       _lastIsPlaying = isPlaying;
       _lastNavIndex = navIndex;
@@ -318,13 +366,46 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       _lastRepeatMode = repeatMode;
       _lastShuffle = shuffle;
       _lastIsMuted = isMuted;
+      if (queryChanged) _scheduleStationSearch(query);
       setState(() {});
     }
+  }
+
+  /// Debounces catalog radio searches so each keystroke does not hit the
+  /// network, and ignores results from outdated queries.
+  void _scheduleStationSearch(String query) {
+    _searchDebounce?.cancel();
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      _searchRequestId++;
+      if (_stationSearchResult != null || _isSearchingStation) {
+        setState(() {
+          _stationSearchResult = null;
+          _isSearchingStation = false;
+        });
+      }
+      return;
+    }
+    setState(() {
+      _isSearchingStation = true;
+      _stationSearchResult = null;
+    });
+    final requestId = ++_searchRequestId;
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      final station = await _radioService.searchArtistRadio(trimmed);
+      if (!mounted || requestId != _searchRequestId) return;
+      setState(() {
+        _stationSearchResult = station;
+        _isSearchingStation = false;
+      });
+    });
   }
 
   @override
   void dispose() {
     _authSub?.cancel();
+    _searchDebounce?.cancel();
+    _searchRequestId++;
     _controller.removeListener(_onStateChange);
     _pageScrollController
       ..removeListener(_onPageScroll)
@@ -352,7 +433,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
         return;
       }
 
-      final radio = RadioDiscoveryService.instance
+      final radio = _radioService
           .getPopularRadios()
           .where((r) => r.id == playlistId || 'radio-${r.id}' == playlistId)
           .firstOrNull;
@@ -466,21 +547,20 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   /// rows (Quick Picks, Covers & Remixes, Community Favorites, Trending For You)
   /// and immediately fast-locates their tracks.
   Future<void> _handleRefresh() async {
-    await Future.wait([_controller.loadSavedPlaylists(), _refreshDiscovery()]);
+    await Future.wait([
+      _controller.loadSavedPlaylists(),
+      _refreshRadioDashboard(),
+    ]);
     _controller.kickBackfill();
   }
 
-  Future<void> _refreshDiscovery() async {
-    final discoveryState = _discoveryKey.currentState;
-    if (discoveryState != null) {
-      await discoveryState.refresh();
-    } else {
-      final sections = await DiscoveryService.instance.loadAll(
-        forceRefresh: true,
-      );
-      final allSongs = sections.expand((s) => s.songs).toList();
-      _controller.fastLocateDiscoverySongs(allSongs);
-    }
+  Future<void> _refreshRadioDashboard() async {
+    await _radioService.refreshRecentStations();
+    // Refresh the dynamic Popular Radio row too, but never block the
+    // RefreshIndicator on a slow catalog.
+    unawaited(_loadDynamicRadios());
+    if (!mounted) return;
+    setState(_refreshRadioState);
   }
 
   Future<void> _showAddToPlaylistSheet(Song song) async {
@@ -1012,6 +1092,18 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
           ),
           const SizedBox(width: 6),
 
+          // Quick return to the Home dashboard from any active tab or search.
+          IconButton(
+            tooltip: 'Back to dashboard',
+            icon: Icon(
+              Icons.home_rounded,
+              size: 24,
+              color: AppTheme.textPrimaryOf(context),
+            ),
+            onPressed: _returnToDashboard,
+          ),
+          const SizedBox(width: 6),
+
           // Search Input Bar (always visible)
           Expanded(
             child: Container(
@@ -1117,7 +1209,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
     final direct = _controller.playlistById(playlistId);
     if (direct != null) return direct;
 
-    final radio = RadioDiscoveryService.instance
+    final radio = _radioService
         .getPopularRadios()
         .where((r) => r.id == playlistId || 'radio-${r.id}' == playlistId)
         .firstOrNull;
@@ -1136,24 +1228,570 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
     return null;
   }
 
+  static const List<String> _dashboardCategories = [
+    'All',
+    'Music',
+    'Podcasts',
+    'Audiobooks',
+  ];
+
+  String? _loadingArtist;
+
   Widget _buildHomeFeed(bool isMobile) {
+    if (_controller.searchQuery.isNotEmpty) {
+      return _buildSearchResultsWithRadio(isMobile);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_controller.searchQuery.isEmpty) ...[
-          DiscoverySections(key: _discoveryKey, controller: _controller),
-          const SizedBox(height: 32),
-        ],
+        _buildCategoryChips(),
+        const SizedBox(height: 14),
+        _buildQuickFilterPills(),
+        const SizedBox(height: 26),
+        ..._buildCategoryContent(isMobile),
+      ],
+    );
+  }
 
-        // Search Results
-        if (_controller.searchQuery.isNotEmpty) ...[
-          _buildSectionHeader(
-            'Search Results',
-            '${_controller.filteredSongs.length} tracks available',
+  void _returnToDashboard() {
+    if (!mounted) return;
+    setState(() {
+      _selectedPlaylistId = null;
+      _showDesktopLyrics = false;
+    });
+    _searchTextController.clear();
+    _controller.setSearchQuery('');
+    _controller.setNavIndex(0);
+    if (_pageScrollController.hasClients) {
+      _pageScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  List<Widget> _buildCategoryContent(bool isMobile) {
+    if (_selectedCategory == 'Podcasts' || _selectedCategory == 'Audiobooks') {
+      return [_buildCategoryEmptyState(_selectedCategory)];
+    }
+    return [
+      if (_recentStations.isNotEmpty) ...[
+        _buildRecentsSection(isMobile),
+        const SizedBox(height: 28),
+      ],
+      _buildPopularRadioSection(isMobile),
+      const SizedBox(height: 28),
+      if (_recommendedStations.isNotEmpty) ...[
+        _buildRecommendedStationsSection(isMobile),
+        const SizedBox(height: 28),
+      ],
+      if (_topMixes.isNotEmpty) ...[
+        _buildTopMixesSection(isMobile),
+        const SizedBox(height: 28),
+      ],
+      if (_moreLikeStations.isNotEmpty) _buildMoreLikeSection(isMobile),
+    ];
+  }
+
+  void _selectCategory(String category) {
+    if (_selectedCategory == category) return;
+    setState(() => _selectedCategory = category);
+    unawaited(
+      LocalDatabase.instance
+          .setSetting('dashboard_category', category)
+          .catchError((_) {}),
+    );
+  }
+
+  Widget _buildCategoryChips() {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _dashboardCategories.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final category = _dashboardCategories[index];
+          final selected = category == _selectedCategory;
+          return ChoiceChip(
+            label: Text(category),
+            selected: selected,
+            showCheckmark: false,
+            labelStyle: TextStyle(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected
+                  ? Colors.black
+                  : AppTheme.textSecondaryOf(context),
+            ),
+            selectedColor: AppTheme.accentGreen,
+            backgroundColor: AppTheme.cardSurfaceOf(context),
+            side: BorderSide(
+              color: selected
+                  ? AppTheme.accentGreen
+                  : AppTheme.borderOf(context),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            onSelected: (_) => _selectCategory(category),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildQuickFilterPills() {
+    final artists = _radioService.getQuickFilterArtists();
+    if (artists.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: artists.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final artist = artists[index];
+          final loading = _loadingArtist == artist;
+          return ActionChip(
+            avatar: loading
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : CircleAvatar(
+                    backgroundColor: AppTheme.primaryOf(context),
+                    child: Text(
+                      artist.substring(0, 1).toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+            label: Text(artist),
+            labelStyle: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondaryOf(context),
+            ),
+            backgroundColor: AppTheme.cardSurfaceOf(context),
+            side: BorderSide(color: AppTheme.borderOf(context)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            onPressed: loading ? null : () => _openArtistRadio(artist),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _openArtistRadio(String artist) async {
+    if (_loadingArtist != null) return;
+    setState(() => _loadingArtist = artist);
+    RadioStation? station;
+    try {
+      station = await _radioService.searchArtistRadio(artist);
+    } catch (_) {
+      station = null;
+    }
+    if (!mounted) return;
+    setState(() => _loadingArtist = null);
+    if (station == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not build a station for "$artist".')),
+      );
+      return;
+    }
+    _openStation(station);
+  }
+
+  /// Opens the station detail/queue screen. This is the touch equivalent of
+  /// the desktop hover "open" action.
+  void _openStation(RadioStation station) {
+    unawaited(_radioService.recordStationPlayed(station));
+    setState(() {
+      if (station.artistName.trim().isNotEmpty) {
+        _moreLikeArtist = station.artistName.trim();
+        _moreLikeStations = _radioService.getMoreLikeStations(_moreLikeArtist);
+      }
+      _recentStations = _radioService.getRecentStations();
+    });
+    Navigator.of(context).push(
+      PlaylistScreen.route(
+        playlist: station.toPlaylist(),
+        songs: station.songs,
+        controller: _controller,
+      ),
+    );
+  }
+
+  void _playStation(RadioStation station) {
+    final songs = RadioDiscoveryService.dedupeSongs(station.songs);
+    if (songs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This station has no playable tracks yet.')),
+      );
+      return;
+    }
+    _controller.playSongList(songs, startIndex: 0);
+    unawaited(_radioService.recordStationPlayed(station));
+    setState(() {
+      if (station.artistName.trim().isNotEmpty) {
+        _moreLikeArtist = station.artistName.trim();
+        _moreLikeStations = _radioService.getMoreLikeStations(_moreLikeArtist);
+      }
+      _recentStations = _radioService.getRecentStations();
+    });
+  }
+
+  Future<void> _showStationActions(RadioStation station) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppTheme.surfaceOf(context),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      station.title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimaryOf(sheetContext),
+                      ),
+                    ),
+                  ),
+                  const _GeneratedBadge(),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.play_arrow_rounded),
+              title: const Text('Play station'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _playStation(station);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.radio_rounded),
+              title: const Text('Open station'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _openStation(station);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.library_add_rounded),
+              title: const Text('Add to library'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _fastImportRadio(station);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionEmpty(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardSurfaceOf(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderOf(context)),
+      ),
+      child: Text(
+        message,
+        style: TextStyle(fontSize: 13, color: AppTheme.textMutedOf(context)),
+      ),
+    );
+  }
+
+  Widget _buildRecentsSection(bool isMobile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Recents', 'Pick up where you left off'),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 76,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _recentStations.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final station = _recentStations[index];
+              return _RecentStationCard(
+                station: station,
+                onTap: () => _openStation(station),
+                onPlay: () => _playStation(station),
+              );
+            },
           ),
-          const SizedBox(height: 16),
+        ),
+      ],
+    );
+  }
 
-          // Interactive Track Table
+  Widget _buildPopularRadioSection(bool isMobile) {
+    final stations = _dynamicPopularRadios.isNotEmpty
+        ? _dynamicPopularRadios
+        : _radioService.getPopularStations();
+    return _buildStationRail(
+      title: 'Popular Radio',
+      subtitle: 'Non-stop music based on your favorite songs and artists.',
+      stations: stations,
+      isMobile: isMobile,
+      loading: _isLoadingDynamicRadios,
+      emptyLabel: 'Popular radio is unavailable right now. Pull to refresh.',
+    );
+  }
+
+  Widget _buildRecommendedStationsSection(bool isMobile) {
+    return _buildStationRail(
+      title: 'Recommended Stations',
+      subtitle: 'Catalog-based stations inspired by your listening',
+      stations: _recommendedStations,
+      isMobile: isMobile,
+      emptyLabel: 'No recommendations yet ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â play a few tracks first.',
+    );
+  }
+
+  Widget _buildMoreLikeSection(bool isMobile) {
+    return _buildStationRail(
+      title: 'More like $_moreLikeArtist',
+      subtitle: 'Similar artists and stations you may like',
+      stations: _moreLikeStations,
+      isMobile: isMobile,
+      emptyLabel: 'No similar stations found.',
+    );
+  }
+
+  Widget _buildStationRail({
+    required String title,
+    required String subtitle,
+    required List<RadioStation> stations,
+    required bool isMobile,
+    required String emptyLabel,
+    bool loading = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(title, subtitle),
+        const SizedBox(height: 12),
+        if (loading && stations.isEmpty)
+          _buildStationSkeletonRow()
+        else if (stations.isEmpty)
+          _buildSectionEmpty(emptyLabel)
+        else
+          SizedBox(
+            height: 250,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: stations.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 16),
+              itemBuilder: (context, index) {
+                final station = stations[index];
+                return _PopularRadioCard(
+                  station: station,
+                  onTap: () => _openStation(station),
+                  onPlay: () => _playStation(station),
+                  onFastImport: () => _fastImportRadio(station),
+                  onMore: () => _showStationActions(station),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildStationSkeletonRow() {
+    return SizedBox(
+      height: 250,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: 3,
+        separatorBuilder: (_, _) => const SizedBox(width: 16),
+        itemBuilder: (context, index) => Container(
+          width: 176,
+          decoration: BoxDecoration(
+            color: AppTheme.cardSurfaceOf(context),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppTheme.borderOf(context)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopMixesSection(bool isMobile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+          'Your Top Mixes',
+          'Curated mixes refreshed as you listen',
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 252,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _topMixes.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 16),
+            itemBuilder: (context, index) {
+              final mix = _topMixes[index];
+              return _DailyMixCard(
+                mix: mix,
+                showPlayAlways: isMobile,
+                onTap: () => _openMix(mix),
+                onPlay: () => _playMix(mix),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openMix(DailyMix mix) {
+    Navigator.of(context).push(
+      PlaylistScreen.route(
+        playlist: mix.toPlaylist(),
+        songs: mix.songs,
+        controller: _controller,
+      ),
+    );
+  }
+
+  void _playMix(DailyMix mix) {
+    final songs = RadioDiscoveryService.dedupeSongs(mix.songs);
+    if (songs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This mix has no playable tracks yet.')),
+      );
+      return;
+    }
+    _controller.playSongList(songs, startIndex: 0);
+  }
+
+  Widget _buildCategoryEmptyState(String category) {
+    final isPodcast = category == 'Podcasts';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+      decoration: BoxDecoration(
+        color: AppTheme.cardSurfaceOf(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderOf(context)),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            isPodcast ? Icons.podcasts_rounded : Icons.auto_stories_rounded,
+            size: 44,
+            color: AppTheme.textMutedOf(context),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '$category are coming soon',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimaryOf(context),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isPodcast
+                ? 'Podcast data sources are not supported yet. Music radio and mixes are still available.'
+                : 'Audiobook data sources are not supported yet. Music radio and mixes are still available.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: AppTheme.textMutedOf(context),
+            ),
+          ),
+          const SizedBox(height: 18),
+          FilledButton.tonal(
+            onPressed: () => _selectCategory('Music'),
+            child: const Text('Browse music'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Library tracks plus the generated station's catalog tracks.
+  List<Song> _searchSongs(RadioStation? station) {
+    final songs = <Song>[..._controller.filteredSongs];
+    if (station != null) songs.addAll(station.songs);
+    return RadioDiscoveryService.dedupeSongs(songs);
+  }
+
+  Widget _buildSearchResultsWithRadio(bool isMobile) {
+    final query = _controller.searchQuery.trim();
+    final station = _stationSearchResult;
+    final tracks = _searchSongs(station);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_isSearchingStation)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Finding radio for "$query"...',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.textMutedOf(context),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else if (station != null) ...[
+          _buildSearchRadioCard(station, isMobile),
+          const SizedBox(height: 24),
+        ],
+        _buildSectionHeader(
+          'Tracks',
+          tracks.isEmpty ? 'No matching tracks' : '${tracks.length} results',
+        ),
+        const SizedBox(height: 12),
+        if (tracks.isEmpty && !_isSearchingStation && station == null)
+          _buildSearchEmptyState(query)
+        else if (tracks.isNotEmpty)
           Container(
             decoration: BoxDecoration(
               color: AppTheme.cardSurfaceOf(context),
@@ -1161,15 +1799,160 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
               border: Border.all(color: AppTheme.borderOf(context), width: 1),
             ),
             child: TrackListView(
-              songs: _controller.filteredSongs,
+              songs: tracks,
               controller: _controller,
               onSongTap: _playSongWithLyrics,
               onAddToPlaylist: _showAddToPlaylistSheet,
               onDelete: (song) => _confirmDeleteSong(song),
             ),
           ),
-        ],
       ],
+    );
+  }
+
+  Widget _buildSearchRadioCard(RadioStation station, bool isMobile) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isMobile ? 14 : 18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            station.backgroundColor.withValues(alpha: 0.9),
+            station.backgroundColor.withValues(alpha: 0.55),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.graphic_eq_rounded,
+                  color: Colors.white,
+                  size: 30,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      station.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      station.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.3,
+                        color: Colors.black.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilledButton.icon(
+                onPressed: () => _playStation(station),
+                icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                label: const Text('Play radio'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _openStation(station),
+                icon: const Icon(Icons.radio_rounded, size: 18),
+                label: const Text('View station'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.black,
+                  side: BorderSide(color: Colors.black.withValues(alpha: 0.5)),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Add station to library',
+                onPressed: () => _fastImportRadio(station),
+                icon: const Icon(
+                  Icons.library_add_rounded,
+                  color: Colors.black,
+                ),
+              ),
+              const _GeneratedBadge(darkText: true),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchEmptyState(String query) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      decoration: BoxDecoration(
+        color: AppTheme.cardSurfaceOf(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderOf(context)),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.search_off_rounded,
+            size: 40,
+            color: AppTheme.textMutedOf(context),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'No results for "$query"',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimaryOf(context),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Try another artist, song, or station name.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: AppTheme.textMutedOf(context),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1197,9 +1980,9 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
   Widget _buildExploreTab() {
     final popularRadios = _dynamicPopularRadios.isNotEmpty
         ? _dynamicPopularRadios
-        : RadioDiscoveryService.instance.getPopularRadios();
-    final opmRadios = RadioDiscoveryService.instance.getOpmRadios();
-    final globalRadios = RadioDiscoveryService.instance.getGlobalRadios();
+        : _radioService.getPopularRadios();
+    final opmRadios = _radioService.getOpmRadios();
+    final globalRadios = _radioService.getGlobalRadios();
 
     if (_isLoadingDynamicRadios && _dynamicPopularRadios.isEmpty) {
       return ExploreSkeleton(reduceAnimations: _controller.reduceAnimations);
@@ -1910,11 +2693,15 @@ class _PopularRadioCard extends StatefulWidget {
   final VoidCallback onPlay;
   final VoidCallback? onFastImport;
 
+  /// Overflow menu action (bottom sheet on touch, menu on desktop).
+  final VoidCallback? onMore;
+
   const _PopularRadioCard({
     required this.station,
     required this.onTap,
     required this.onPlay,
     this.onFastImport,
+    this.onMore,
   });
 
   @override
@@ -2063,6 +2850,21 @@ class _PopularRadioCardState extends State<_PopularRadioCard> {
                                   letterSpacing: 1.2,
                                 ),
                               ),
+                              if (widget.onMore != null)
+                                SizedBox(
+                                  width: 26,
+                                  height: 26,
+                                  child: IconButton(
+                                    tooltip: 'More options',
+                                    padding: EdgeInsets.zero,
+                                    iconSize: 18,
+                                    icon: const Icon(
+                                      Icons.more_horiz_rounded,
+                                      color: Colors.black87,
+                                    ),
+                                    onPressed: widget.onMore,
+                                  ),
+                                ),
                             ],
                           ),
 
@@ -2341,10 +3143,14 @@ class _DailyMixCard extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onPlay;
 
+  /// Touch devices have no hover, so the play button stays visible.
+  final bool showPlayAlways;
+
   const _DailyMixCard({
     required this.mix,
     required this.onTap,
     required this.onPlay,
+    this.showPlayAlways = false,
   });
 
   @override
@@ -2490,10 +3296,10 @@ class _DailyMixCardState extends State<_DailyMixCard> {
               ),
 
               // Green hover play button
-              if (_isHovered)
+              if (_isHovered || widget.showPlayAlways)
                 Positioned(
                   right: 18,
-                  bottom: 74,
+                  top: 18,
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
@@ -2636,7 +3442,7 @@ class _RecentReleaseCardState extends State<_RecentReleaseCard> {
               if (_isHovered)
                 Positioned(
                   right: 18,
-                  bottom: 74,
+                  top: 18,
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
@@ -2668,6 +3474,150 @@ class _RecentReleaseCardState extends State<_RecentReleaseCard> {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small "generated station" badge. Generated stations are Spotify-inspired
+/// catalog stations, not official Spotify radio.
+class _GeneratedBadge extends StatelessWidget {
+  const _GeneratedBadge({this.darkText = false});
+
+  final bool darkText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Generated station ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â not an official Spotify station',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: (darkText ? Colors.white : Colors.black).withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: (darkText ? Colors.black : Colors.white).withValues(alpha: 0.3),
+          ),
+        ),
+        child: Text(
+          'GENERATED',
+          style: TextStyle(
+            fontSize: 8,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.6,
+            color: darkText ? Colors.black87 : Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact station card used by the Home Recents row.
+class _RecentStationCard extends StatelessWidget {
+  const _RecentStationCard({
+    required this.station,
+    required this.onTap,
+    required this.onPlay,
+  });
+
+  final RadioStation station;
+  final VoidCallback onTap;
+  final VoidCallback onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final artworkUrl = station.avatarUrls.isNotEmpty
+        ? station.avatarUrls.first
+        : (station.heroImageUrl.isNotEmpty ? station.heroImageUrl : '');
+    return SizedBox(
+      width: 232,
+      height: 68,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.cardSurfaceOf(context),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.borderOf(context)),
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: station.gradientColors.length >= 2
+                            ? station.gradientColors
+                            : [station.backgroundColor, Colors.black],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: artworkUrl.isEmpty
+                        ? const Icon(
+                            Icons.graphic_eq_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          )
+                        : Image.network(
+                            artworkUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const Icon(
+                              Icons.graphic_eq_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        station.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimaryOf(context),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        station.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.textMutedOf(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Play station',
+                  onPressed: onPlay,
+                  icon: const Icon(Icons.play_circle_fill_rounded),
+                  color: AppTheme.accentGreen,
+                  iconSize: 28,
+                ),
+              ],
+            ),
           ),
         ),
       ),

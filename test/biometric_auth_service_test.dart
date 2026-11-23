@@ -12,6 +12,8 @@ class FakeLocalAuthentication extends Fake implements LocalAuthentication {
     this.availableBiometrics = const [BiometricType.fingerprint],
     this.authResult = true,
     this.authException,
+    this.authenticateException,
+    this.busyRetriesRemaining = 0,
   });
 
   bool canCheck;
@@ -19,6 +21,9 @@ class FakeLocalAuthentication extends Fake implements LocalAuthentication {
   List<BiometricType> availableBiometrics;
   bool authResult;
   Exception? authException;
+  LocalAuthException? authenticateException;
+  int busyRetriesRemaining = 0;
+  int authenticateCalls = 0;
 
   String? lastLocalizedReason;
   bool? lastBiometricOnly;
@@ -44,9 +49,17 @@ class FakeLocalAuthentication extends Fake implements LocalAuthentication {
     bool sensitiveTransaction = true,
     bool persistAcrossBackgrounding = false,
   }) async {
+    authenticateCalls++;
     lastLocalizedReason = localizedReason;
     lastBiometricOnly = biometricOnly;
     lastPersistAcrossBackgrounding = persistAcrossBackgrounding;
+    if (busyRetriesRemaining > 0) {
+      busyRetriesRemaining--;
+      throw const LocalAuthException(
+        code: LocalAuthExceptionCode.biometricHardwareTemporarilyUnavailable,
+      );
+    }
+    if (authenticateException != null) throw authenticateException!;
     if (authException != null) throw authException!;
     return authResult;
   }
@@ -134,6 +147,43 @@ void main() {
 
       final success = await service.authenticateForUnlock();
       expect(success, isFalse);
+    });
+
+    test('detailed prompt reports cancellation with an actionable message', () async {
+      final fakeAuth = FakeLocalAuthentication(
+        authenticateException: const LocalAuthException(
+          code: LocalAuthExceptionCode.userCanceled,
+        ),
+      );
+      final service = BiometricAuthService(localAuth: fakeAuth);
+
+      final outcome = await service.authenticateForUnlockDetailed();
+      expect(outcome.succeeded, isFalse);
+      expect(outcome.failure, BiometricAuthFailure.canceled);
+      expect(outcome.userMessage, contains('cancelled'));
+    });
+
+    test('busy biometric hardware is retried once', () async {
+      final fakeAuth = FakeLocalAuthentication(authResult: true)
+        ..busyRetriesRemaining = 1;
+      final service = BiometricAuthService(localAuth: fakeAuth);
+
+      final outcome = await service.authenticateForUnlockDetailed();
+      expect(outcome.succeeded, isTrue);
+      expect(fakeAuth.authenticateCalls, 2);
+    });
+
+    test('missing enrollment produces Windows Hello guidance', () async {
+      final fakeAuth = FakeLocalAuthentication(
+        authenticateException: const LocalAuthException(
+          code: LocalAuthExceptionCode.noBiometricsEnrolled,
+        ),
+      );
+      final service = BiometricAuthService(localAuth: fakeAuth);
+
+      final outcome = await service.authenticateForUnlockDetailed();
+      expect(outcome.failure, BiometricAuthFailure.notEnrolled);
+      expect(outcome.userMessage, contains('Windows Hello'));
     });
 
     test('enableBiometricUnlock and isBiometricUnlockEnabled manage per-account configuration', () async {

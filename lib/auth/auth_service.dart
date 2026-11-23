@@ -973,12 +973,24 @@ class AuthService {
     }
   }
 
-  Future<void> signOut() async {
+  /// Signs the current user out.
+  ///
+  /// Returns `true` when the persisted session row was cleared. A read-only or
+  /// otherwise unwritable database must never trap the user in the signed-in
+  /// state: the in-memory account and Firebase session are cleared regardless,
+  /// and the failure is logged so it can be diagnosed later.
+  Future<bool> signOut() async {
     // Keep the biometric configuration on purpose: after signing out, the
     // sign-in screen offers fingerprint login for the remembered account.
     // It is cleared only when the user turns the setting off or forgets the
     // account.
-    await LocalDatabase.instance.clearActiveSession();
+    var localSessionCleared = true;
+    try {
+      await LocalDatabase.instance.clearActiveSession();
+    } catch (error) {
+      localSessionCleared = false;
+      debugPrint('[AuthService] signOut: local session cleanup failed: $error');
+    }
     try {
       // Reset to the default so a stale "do not persist" flag from a
       // previous sign-in can't affect the next one.
@@ -996,6 +1008,7 @@ class AuthService {
     } catch (e) {
       debugPrint('[AuthService] signOut: $e');
     }
+    return localSessionCleared;
   }
 
   /// Re-reads the role from the employees table

@@ -6,43 +6,115 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Lyrics & Progress Synchronization Tests', () {
-    test('lyricsLineIndexForProgress handles plain lyrics with advancing position', () {
-      final lyrics = [
-        'Line 1 of song',
-        'Line 2 of song',
-        'Line 3 of song',
-        'Line 4 of song',
-      ];
-      final total = const Duration(minutes: 2); // 120 seconds
+    test(
+      'lyricsLineIndexForProgress handles plain lyrics with advancing position',
+      () {
+        final lyrics = [
+          'Line 1 of song',
+          'Line 2 of song',
+          'Line 3 of song',
+          'Line 4 of song',
+        ];
+        final total = const Duration(minutes: 2); // 120 seconds
 
-      expect(Song.lyricsLineIndexForProgress(lyrics, Duration.zero, total), 0);
-      expect(Song.lyricsLineIndexForProgress(lyrics, const Duration(seconds: 35), total), 1);
-      expect(Song.lyricsLineIndexForProgress(lyrics, const Duration(seconds: 65), total), 2);
-      expect(Song.lyricsLineIndexForProgress(lyrics, const Duration(seconds: 95), total), 3);
-      expect(Song.lyricsLineIndexForProgress(lyrics, const Duration(seconds: 120), total), 3);
-    });
+        expect(
+          Song.lyricsLineIndexForProgress(lyrics, Duration.zero, total),
+          0,
+        );
+        expect(
+          Song.lyricsLineIndexForProgress(
+            lyrics,
+            const Duration(seconds: 35),
+            total,
+          ),
+          1,
+        );
+        expect(
+          Song.lyricsLineIndexForProgress(
+            lyrics,
+            const Duration(seconds: 65),
+            total,
+          ),
+          2,
+        );
+        expect(
+          Song.lyricsLineIndexForProgress(
+            lyrics,
+            const Duration(seconds: 95),
+            total,
+          ),
+          3,
+        );
+        expect(
+          Song.lyricsLineIndexForProgress(
+            lyrics,
+            const Duration(seconds: 120),
+            total,
+          ),
+          3,
+        );
+      },
+    );
 
-    test('lyricsLineIndexForProgress falls back to sane duration when total <= Duration.zero', () {
-      final lyrics = ['First line', 'Second line', 'Third line'];
-      // Should not divide by zero or get stuck at 0 forever
-      final indexAt40s = Song.lyricsLineIndexForProgress(lyrics, const Duration(seconds: 70), Duration.zero);
-      expect(indexAt40s, greaterThanOrEqualTo(1));
-    });
+    test(
+      'lyricsLineIndexForProgress falls back to sane duration when total <= Duration.zero',
+      () {
+        final lyrics = ['First line', 'Second line', 'Third line'];
+        // Should not divide by zero or get stuck at 0 forever
+        final indexAt40s = Song.lyricsLineIndexForProgress(
+          lyrics,
+          const Duration(seconds: 70),
+          Duration.zero,
+        );
+        expect(indexAt40s, greaterThanOrEqualTo(1));
+      },
+    );
 
-    test('lyricsLineIndexForProgress parses synced timestamped lyrics accurately', () {
-      final lyrics = [
-        '[00:00.00] Intro line',
-        '[00:15.00] Verse 1',
-        '[00:45.00] Chorus',
-        '[01:30.00] Outro',
-      ];
-      final total = const Duration(minutes: 2);
+    test(
+      'lyricsLineIndexForProgress parses synced timestamped lyrics accurately',
+      () {
+        final lyrics = [
+          '[00:00.00] Intro line',
+          '[00:15.00] Verse 1',
+          '[00:45.00] Chorus',
+          '[01:30.00] Outro',
+        ];
+        final total = const Duration(minutes: 2);
 
-      expect(Song.lyricsLineIndexForProgress(lyrics, const Duration(seconds: 5), total), 0);
-      expect(Song.lyricsLineIndexForProgress(lyrics, const Duration(seconds: 16), total), 1);
-      expect(Song.lyricsLineIndexForProgress(lyrics, const Duration(seconds: 50), total), 2);
-      expect(Song.lyricsLineIndexForProgress(lyrics, const Duration(seconds: 100), total), 3);
-    });
+        expect(
+          Song.lyricsLineIndexForProgress(
+            lyrics,
+            const Duration(seconds: 5),
+            total,
+          ),
+          0,
+        );
+        expect(
+          Song.lyricsLineIndexForProgress(
+            lyrics,
+            const Duration(seconds: 16),
+            total,
+          ),
+          1,
+        );
+        expect(
+          Song.lyricsLineIndexForProgress(
+            lyrics,
+            const Duration(seconds: 50),
+            total,
+          ),
+          2,
+        );
+        expect(
+          Song.lyricsLineIndexForProgress(
+            lyrics,
+            const Duration(seconds: 100),
+            total,
+          ),
+          3,
+        );
+      },
+    );
 
     test('positionForLyricsLine inverts line index back to seek duration', () {
       final lyrics = [
@@ -53,8 +125,14 @@ void main() {
       final total = const Duration(minutes: 2);
 
       expect(Song.positionForLyricsLine(lyrics, 0, total), Duration.zero);
-      expect(Song.positionForLyricsLine(lyrics, 1, total), const Duration(seconds: 30));
-      expect(Song.positionForLyricsLine(lyrics, 2, total), const Duration(seconds: 60));
+      expect(
+        Song.positionForLyricsLine(lyrics, 1, total),
+        const Duration(seconds: 30),
+      );
+      expect(
+        Song.positionForLyricsLine(lyrics, 2, total),
+        const Duration(seconds: 60),
+      );
     });
   });
 
@@ -94,78 +172,99 @@ void main() {
       expect(controller.isPlaying, isTrue);
     });
 
-    test('offline asset fallback is NOT used for imported tracks (uses local audio cache instead), but available for sample tracks', () {
-      final importedSong = Song(
-        id: 'spotify-test-expired',
-        title: 'Just the Way You Are',
-        artist: 'Bruno Mars',
-        album: 'Doo-Wops',
-        duration: const Duration(minutes: 3),
-        genre: 'Pop',
-        imageUrl: '',
-        gradientColors: const [],
-        plays: '',
-        lyrics: const [],
-        audioUrl: 'https://rr1---sn-googlevideo.com/videoplayback?expire=123',
-      );
+    test(
+      'offline asset fallback is NOT used for imported tracks (uses local audio cache instead), but available for sample tracks',
+      () {
+        final importedSong = Song(
+          id: 'spotify-test-expired',
+          title: 'Just the Way You Are',
+          artist: 'Bruno Mars',
+          album: 'Doo-Wops',
+          duration: const Duration(minutes: 3),
+          genre: 'Pop',
+          imageUrl: '',
+          gradientColors: const [],
+          plays: '',
+          lyrics: const [],
+          audioUrl: 'https://rr1---sn-googlevideo.com/videoplayback?expire=123',
+        );
 
-      // Imported tracks must never default to bundled assets — they use local audio cache
-      final importedFallback = controller.getOfflineAssetFallbackForTesting(importedSong);
-      expect(importedFallback, isEmpty);
+        // Imported tracks must never default to bundled assets — they use local audio cache
+        final importedFallback = controller.getOfflineAssetFallbackForTesting(
+          importedSong,
+        );
+        expect(importedFallback, isEmpty);
 
-      // Sample songs can resolve bundled assets
-      final sampleSong = Song(
-        id: 'sample-test-bruno',
-        title: 'Just the Way You Are',
-        artist: 'Bruno Mars',
-        album: 'Doo-Wops',
-        duration: const Duration(minutes: 3),
-        genre: 'Pop',
-        imageUrl: '',
-        gradientColors: const [],
-        plays: '',
-        lyrics: const [],
-      );
-      final sampleFallback = controller.getOfflineAssetFallbackForTesting(sampleSong);
-      expect(sampleFallback, isNotEmpty);
-      expect(sampleFallback.endsWith('.m4a'), isTrue);
+        // Sample songs can resolve bundled assets
+        final sampleSong = Song(
+          id: 'sample-test-bruno',
+          title: 'Just the Way You Are',
+          artist: 'Bruno Mars',
+          album: 'Doo-Wops',
+          duration: const Duration(minutes: 3),
+          genre: 'Pop',
+          imageUrl: '',
+          gradientColors: const [],
+          plays: '',
+          lyrics: const [],
+        );
+        final sampleFallback = controller.getOfflineAssetFallbackForTesting(
+          sampleSong,
+        );
+        expect(sampleFallback, isNotEmpty);
+        expect(sampleFallback.endsWith('.m4a'), isTrue);
 
-      // Verify that an unrelated song by the same artist does NOT falsely play a different song
-      final nonMatchingSong = Song(
-        id: 'sample-test-unrelated',
-        title: 'Grenade',
-        artist: 'Bruno Mars',
-        album: 'Doo-Wops',
-        duration: const Duration(minutes: 3),
-        genre: 'Pop',
-        imageUrl: '',
-        gradientColors: const [],
-        plays: '',
-        lyrics: const [],
-      );
-      expect(controller.getOfflineAssetFallbackForTesting(nonMatchingSong), isEmpty);
+        // Verify that an unrelated song by the same artist does NOT falsely play a different song
+        final nonMatchingSong = Song(
+          id: 'sample-test-unrelated',
+          title: 'Grenade',
+          artist: 'Bruno Mars',
+          album: 'Doo-Wops',
+          duration: const Duration(minutes: 3),
+          genre: 'Pop',
+          imageUrl: '',
+          gradientColors: const [],
+          plays: '',
+          lyrics: const [],
+        );
+        expect(
+          controller.getOfflineAssetFallbackForTesting(nonMatchingSong),
+          isEmpty,
+        );
 
-      // Imported tracks never get invented placeholder lyrics.
-      final offlineLyrics = controller.ensureOfflineLyricsForTesting(importedSong);
-      expect(offlineLyrics.any((l) => l.contains('Playing in Offline Mode')), isFalse);
-    });
+        // Imported tracks never get invented placeholder lyrics.
+        final offlineLyrics = controller.ensureOfflineLyricsForTesting(
+          importedSong,
+        );
+        expect(
+          offlineLyrics.any((l) => l.contains('Playing in Offline Mode')),
+          isFalse,
+        );
+      },
+    );
 
-    test('displayDurationFor matches song duration when audio stream duration is not yet available', () {
-      final testSong = Song(
-        id: 'test-song-duration',
-        title: 'Test Song',
-        artist: 'Artist',
-        album: 'Album',
-        duration: const Duration(seconds: 215),
-        genre: 'Pop',
-        imageUrl: '',
-        gradientColors: const [],
-        plays: '',
-        lyrics: const [],
-      );
+    test(
+      'displayDurationFor matches song duration when audio stream duration is not yet available',
+      () {
+        final testSong = Song(
+          id: 'test-song-duration',
+          title: 'Test Song',
+          artist: 'Artist',
+          album: 'Album',
+          duration: const Duration(seconds: 215),
+          genre: 'Pop',
+          imageUrl: '',
+          gradientColors: const [],
+          plays: '',
+          lyrics: const [],
+        );
 
-      expect(controller.displayDurationFor(testSong), const Duration(seconds: 215));
-    });
+        expect(
+          controller.displayDurationFor(testSong),
+          const Duration(seconds: 215),
+        );
+      },
+    );
   });
 
   group('Skip locating/preview tracks into full tracks', () {
@@ -189,13 +288,15 @@ void main() {
     test('needsFullTrack flags silent and preview imports only', () {
       expect(MusicPlayerController.needsFullTrack(t('spotify-1')), isTrue);
       expect(
-        MusicPlayerController.needsFullTrack(t('spotify-2',
-            audioUrl: 'http://x/y.mp3', isPreview: true)),
+        MusicPlayerController.needsFullTrack(
+          t('spotify-2', audioUrl: 'http://x/y.mp3', isPreview: true),
+        ),
         isTrue,
       );
       expect(
         MusicPlayerController.needsFullTrack(
-            t('spotify-3', audioUrl: 'http://x/y.mp3')),
+          t('spotify-3', audioUrl: 'http://x/y.mp3'),
+        ),
         isFalse,
       );
       expect(MusicPlayerController.needsFullTrack(t('local-1')), isFalse);
@@ -212,10 +313,7 @@ void main() {
     });
 
     test('nextFullTrackIndex wraps when allowed', () {
-      final q = [
-        t('spotify-1', audioUrl: 'http://x/y.mp3'),
-        t('spotify-2'),
-      ];
+      final q = [t('spotify-1', audioUrl: 'http://x/y.mp3'), t('spotify-2')];
       expect(MusicPlayerController.nextFullTrackIndex(q, 1, true), 0);
       expect(MusicPlayerController.nextFullTrackIndex(q, 1, false), isNull);
       expect(MusicPlayerController.nextFullTrackIndex([], 0, true), isNull);
@@ -241,23 +339,50 @@ void main() {
       expect(controller.isSongDownloading('test-song-id'), isFalse);
     });
 
-    test('isPlaylistFullyDownloaded reports false when songs are not cached', () {
-      final songs = [
-        Song(
-          id: 'song-test-1',
-          title: 'Song 1',
-          artist: 'Artist 1',
-          album: 'Album 1',
-          duration: const Duration(minutes: 2),
-          genre: 'Pop',
-          imageUrl: '',
-          gradientColors: const [],
-          plays: '',
-          lyrics: const [],
-        ),
-      ];
-      expect(controller.isPlaylistFullyDownloaded(songs), isFalse);
-      expect(controller.isPlaylistDownloading(songs), isFalse);
+    test('automatic playback caching is always enabled', () {
+      expect(controller.autoCachePlayedSongs, isTrue);
     });
+
+    test('streaming-cache files never count as downloaded songs', () {
+      final song = Song(
+        id: 'streaming-cache-test',
+        title: 'Streaming Cache Test',
+        artist: 'Artist',
+        album: 'Album',
+        duration: const Duration(minutes: 3),
+        genre: 'Pop',
+        imageUrl: '',
+        gradientColors: const [],
+        plays: '',
+        lyrics: const [],
+        audioUrl:
+            r'C:\Users\test\AppData\Local\Temp\streaming_cache\streaming-cache-test.m4a',
+      );
+      controller.addSong(song);
+
+      expect(controller.isSongDownloaded(song.id), isFalse);
+    });
+
+    test(
+      'isPlaylistFullyDownloaded reports false when songs are not cached',
+      () {
+        final songs = [
+          Song(
+            id: 'song-test-1',
+            title: 'Song 1',
+            artist: 'Artist 1',
+            album: 'Album 1',
+            duration: const Duration(minutes: 2),
+            genre: 'Pop',
+            imageUrl: '',
+            gradientColors: const [],
+            plays: '',
+            lyrics: const [],
+          ),
+        ];
+        expect(controller.isPlaylistFullyDownloaded(songs), isFalse);
+        expect(controller.isPlaylistDownloading(songs), isFalse);
+      },
+    );
   });
 }
