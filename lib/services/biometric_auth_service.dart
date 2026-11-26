@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import '../data/local_database.dart';
 import 'audio_capabilities.dart';
+import 'web_biometric_auth.dart';
 
 /// Why a device-biometric prompt did not complete.
 enum BiometricAuthFailure {
@@ -76,21 +77,25 @@ class BiometricAuthOutcome {
 /// It does NOT authenticate directly with Firebase, does NOT store or handle
 /// user passwords, and does NOT hold biometric templates.
 class BiometricAuthService {
-  BiometricAuthService({LocalAuthentication? localAuth})
-    : _localAuth = localAuth ?? LocalAuthentication();
+  BiometricAuthService({
+    LocalAuthentication? localAuth,
+    WebBiometricAuth? webBiometrics,
+  }) : _localAuth = localAuth ?? LocalAuthentication(),
+       _webBiometrics = webBiometrics ?? const WebBiometricAuth();
 
   static BiometricAuthService instance = BiometricAuthService();
 
   final LocalAuthentication _localAuth;
+  final WebBiometricAuth _webBiometrics;
 
   static const String keyBiometricUnlockEnabled = 'biometric_unlock_enabled';
   static const String keyBiometricAccountId = 'biometric_account_id';
 
   /// Whether the current platform supports local biometric/device authentication.
-  /// Supported: Android, iOS, macOS, Windows.
-  /// Unsupported: Web, Linux.
+  /// Supported: Android, iOS, macOS, Windows, and Web (via WebAuthn).
+  /// Unsupported: Linux.
   bool get isPlatformSupported {
-    if (kIsWeb) return false;
+    if (kIsWeb) return true;
     return defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS ||
@@ -98,15 +103,31 @@ class BiometricAuthService {
   }
 
   /// Checks whether at least one biometric authentication method (fingerprint,
-  /// Face ID, Touch ID, Windows Hello) is enrolled on the device.
+  /// Face ID, Touch ID, Windows Hello, or browser WebAuthn) is enrolled on
+  /// the device.
   ///
   /// When [strict] is true, platform errors propagate instead of being
   /// reported as "not enrolled", so security-critical callers can fail closed.
   Future<bool> isBiometricEnrolled({bool strict = false}) async {
     if (!isPlatformSupported) return false;
+    if (kIsWeb) {
+      try {
+        return await _webBiometrics.isPlatformAuthenticatorAvailable();
+      } catch (_) {
+        if (strict) rethrow;
+        return false;
+      }
+    }
     try {
       final available = await _localAuth.getAvailableBiometrics();
-      return available.isNotEmpty;
+      if (available.isNotEmpty) return true;
+      // On Windows, `getAvailableBiometrics()` can return empty when Windows
+      // Hello is configured with a PIN or certain fingerprint drivers, while
+      // `isDeviceSupported()` accurately reports Windows Hello availability.
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        return await _localAuth.isDeviceSupported();
+      }
+      return false;
     } catch (_) {
       if (strict) rethrow;
       return false;
@@ -150,10 +171,17 @@ class BiometricAuthService {
   /// return `deviceBusy` briefly after the lock screen or another prompt.
   Future<BiometricAuthOutcome> authenticateForUnlockDetailed({
     String? customReason,
+    String? accountEmail,
   }) async {
     if (!isPlatformSupported) {
       return const BiometricAuthOutcome.failed(
         BiometricAuthFailure.unsupported,
+      );
+    }
+    if (kIsWeb) {
+      return _webBiometrics.authenticate(
+        reason: customReason ?? 'Sign in to Pulse Studio',
+        accountEmail: accountEmail,
       );
     }
     final isWindows = defaultTargetPlatform == TargetPlatform.windows;

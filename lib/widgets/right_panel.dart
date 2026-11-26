@@ -758,30 +758,44 @@ class _RightActivityPanelState extends State<RightActivityPanel>
                                         currentSong.lyrics.isNotEmpty) ...[
                                       Builder(
                                         builder: (context) {
+                                          final lyrics = currentSong.lyrics;
                                           final total = widget.controller
                                               .displayDurationFor(currentSong);
-                                          final active =
-                                              Song.lyricsLineIndexForProgress(
-                                                currentSong.lyrics,
-                                                widget
-                                                    .controller
-                                                    .currentPosition,
-                                                total,
-                                              );
-                                          final start = (active - 1)
-                                              .clamp(
-                                                0,
-                                                currentSong.lyrics.length - 1,
-                                              )
+                                          final hasSyncedLyrics =
+                                              Song.hasSyncedLyrics(lyrics);
+                                          // Untimed lyrics have no reliable
+                                          // cursor, so show the opening lines
+                                          // without a fake highlight.
+                                          final active = hasSyncedLyrics
+                                              ? Song.lyricsLineIndexForProgress(
+                                                  lyrics,
+                                                  widget
+                                                      .controller
+                                                      .currentPosition,
+                                                  total,
+                                                  leadOffset: widget.controller
+                                                      .lyricsLeadOffsetFor(
+                                                        currentSong,
+                                                      ),
+                                                )
+                                              : -1;
+                                          final start = hasSyncedLyrics
+                                              ? (active - 1)
+                                                    .clamp(
+                                                      0,
+                                                      lyrics.length - 1,
+                                                    )
+                                                    .toInt()
+                                              : 0;
+                                          final end = (hasSyncedLyrics
+                                                  ? active + 4
+                                                  : 5)
+                                              .clamp(0, lyrics.length)
                                               .toInt();
-                                          final end = (active + 4)
-                                              .clamp(
-                                                0,
-                                                currentSong.lyrics.length,
-                                              )
-                                              .toInt();
-                                          final window = currentSong.lyrics
-                                              .sublist(start, end);
+                                          final window = lyrics.sublist(
+                                            start,
+                                            end,
+                                          );
                                           var offset = start;
                                           return Column(
                                             crossAxisAlignment:

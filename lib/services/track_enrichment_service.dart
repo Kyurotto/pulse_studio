@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/song_model.dart';
+
 /// Free, keyless enrichment for Spotify-imported metadata.
 ///
 /// Spotify's public embed page only gives us title/artist/album/duration —
@@ -3095,7 +3097,7 @@ class TrackEnrichmentService {
     return raw
         .split('\n')
         .map((l) => l.trim())
-        .where((l) => l.isNotEmpty)
+        .where((l) => l.isNotEmpty && !Song.isInstrumentalOrCueLine(l))
         .toList();
   }
 
@@ -3104,7 +3106,9 @@ class TrackEnrichmentService {
     for (final line in synced.split('\n')) {
       final text = line.trim();
       final content = text.replaceAll(RegExp(r'^\s*\[.*?\]'), '').trim();
-      if (content.isNotEmpty) out.add(text);
+      if (content.isNotEmpty && !Song.isInstrumentalOrCueLine(text)) {
+        out.add(text);
+      }
     }
     return out;
   }

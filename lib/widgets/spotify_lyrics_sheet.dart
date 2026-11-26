@@ -3,6 +3,7 @@ import '../models/song_model.dart';
 import '../theme/app_theme.dart';
 import '../controllers/music_player_controller.dart';
 import '../services/audio_capabilities.dart';
+import 'lyrics_sync_dialog.dart';
 import 'song_artwork_widget.dart';
 
 class SpotifyLyricsSheet extends StatefulWidget {
@@ -52,8 +53,10 @@ class _SpotifyLyricsSheetState extends State<SpotifyLyricsSheet> {
   /// song so a tap does not fight the playback progress cursor.
   bool _userPinnedLine = false;
 
-  /// Approximate row height (line + padding + margin) for auto-scroll.
-  static const _lineExtent = 58.0;
+  /// Attached to whichever row is active so auto-scroll can follow the real
+  /// laid-out row height instead of assuming a fixed line height (wrapped
+  /// lines made the old fixed-extent scroll drift).
+  final GlobalKey _activeLineKey = GlobalKey();
 
   @override
   void initState() {
@@ -118,10 +121,16 @@ class _SpotifyLyricsSheetState extends State<SpotifyLyricsSheet> {
     await _maybeFetchLyrics(song);
   }
 
-  /// Sync the active line to playback progress (evenly spaced plain lines).
+  /// Sync the active line to playback progress.
+  ///
+  /// Only timestamped (LRC) lyrics are highlighted. Plain lyrics have no
+  /// timing information, so spreading them evenly across the track produced a
+  /// highlight that visibly drifted; they are now shown untracked instead.
   /// Returns true when the highlight changed and a rebuild/scroll is needed.
   bool _syncHighlightToPlayback(Song song) {
-    if (song.lyrics.isEmpty) return false;
+    if (song.lyrics.isEmpty || !Song.hasSyncedLyrics(song.lyrics)) {
+      return false;
+    }
     // User tapped a line: keep their pin until they tap again or the
     // track changes (both clear _userPinnedLine).
     if (_userPinnedLine) return false;
@@ -130,26 +139,61 @@ class _SpotifyLyricsSheetState extends State<SpotifyLyricsSheet> {
       song.lyrics,
       widget.controller.currentPosition,
       total,
+      leadOffset: widget.controller.lyricsLeadOffsetFor(song),
     );
     if (_highlightedLineIndex == auto) return false;
     _highlightedLineIndex = auto;
     return true;
   }
 
+  /// Rough row height used only to jump to rows that are still outside the
+  /// builder's cache (a long seek). The measured row takes over afterwards.
+  static const double _estimatedLineExtent = 58.0;
+
+  /// Scrolls the active row into view using its real measured height, so
+  /// wrapped lyric lines stay centred instead of drifting.
   void _scrollToLine(int index) {
+    final lineContext = _activeLineKey.currentContext;
+    if (lineContext != null) {
+      Scrollable.ensureVisible(
+        lineContext,
+        alignment: 0.35,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutQuad,
+      );
+      return;
+    }
+    // The target row is not built yet (long seek). Jump to an estimated
+    // position first, then refine once the row exists.
     if (!_scrollController.hasClients) return;
-    final target = (index * _lineExtent - 120).clamp(
-      0.0,
-      _scrollController.position.maxScrollExtent,
-    );
-    _scrollController.animateTo(
-      target,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
+    final position = _scrollController.position;
+    final estimate =
+        (index * _estimatedLineExtent - position.viewportDimension * 0.35)
+            .clamp(0.0, position.maxScrollExtent);
+    _scrollController
+        .animateTo(
+          estimate,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutQuad,
+        )
+        .then((_) => _refineScroll());
+  }
+
+  void _refineScroll() {
+    if (!mounted) return;
+    final refined = _activeLineKey.currentContext;
+    if (refined == null) return;
+    Scrollable.ensureVisible(
+      refined,
+      alignment: 0.35,
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOutQuad,
     );
   }
 
-  void _onLineTapped(Song song, int index) {
+  void _onLineTapped(List<String> lyrics, int index) {
+    if (index < 0 || index >= lyrics.length) return;
+    final song = widget.controller.currentSong ?? widget.song;
     setState(() {
       if (_highlightedLineIndex == index && _userPinnedLine) {
         // Second tap on the same line: release the pin and resume tracking.
@@ -160,12 +204,20 @@ class _SpotifyLyricsSheetState extends State<SpotifyLyricsSheet> {
         _highlightedLineIndex = index;
       }
     });
-    // Seek so the audio and the highlighted line stay in agreement.
+    // Seek so the audio and the highlighted line stay in agreement. The
+    // tracker leads by [lyricsLeadOffsetFor], so seek that much earlier to
+    // land exactly on the line when playback reaches it.
     final total = widget.controller.displayDurationFor(song);
+    final target =
+        Song.positionForLyricsLine(lyrics, index, total) -
+        widget.controller.lyricsLeadOffsetFor(song);
     widget.controller.seekTo(
-      Song.positionForLyricsLine(song.lyrics, index, total),
+      target < Duration.zero ? Duration.zero : target,
     );
-    _scrollToLine(index);
+    // The key only moves to the tapped row after the rebuild.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollToLine(index);
+    });
   }
 
   @override
@@ -211,12 +263,16 @@ class _SpotifyLyricsSheetState extends State<SpotifyLyricsSheet> {
         // doing that mid-build can trigger the parentDataDirty assertion.
         // Instead, read what the line *should* be and, if it differs from the
         // current highlight, schedule a post-frame setState + scroll.
-        if (!_userPinnedLine && currentSong.lyrics.isNotEmpty) {
+        final hasSyncedLyrics = Song.hasSyncedLyrics(currentSong.lyrics);
+        if (!_userPinnedLine &&
+            hasSyncedLyrics &&
+            currentSong.lyrics.isNotEmpty) {
           final total = widget.controller.displayDurationFor(currentSong);
           final expected = Song.lyricsLineIndexForProgress(
             currentSong.lyrics,
             widget.controller.currentPosition,
             total,
+            leadOffset: widget.controller.lyricsLeadOffsetFor(currentSong),
           );
           if (_highlightedLineIndex != expected) {
             final target = expected;
@@ -225,9 +281,21 @@ class _SpotifyLyricsSheetState extends State<SpotifyLyricsSheet> {
               setState(() {
                 _highlightedLineIndex = target;
               });
-              if (!_userPinnedLine) _scrollToLine(target);
+              // Scroll after the keyed row is laid out in its new position.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && !_userPinnedLine) _scrollToLine(target);
+              });
             });
           }
+        } else if (!hasSyncedLyrics && _highlightedLineIndex != null) {
+          // Untimed lyrics: never fake a moving highlight.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _highlightedLineIndex = null;
+              _userPinnedLine = false;
+            });
+          });
         }
 
         final isPlaying = widget.controller.isPlaying;
@@ -538,7 +606,24 @@ class _SpotifyLyricsSheetState extends State<SpotifyLyricsSheet> {
                           isActive: true,
                           onTap: () => setState(() => _showLyricsView = false),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 4),
+
+                        // Per-song lyrics calibration
+                        IconButton(
+                          icon: const Icon(
+                            Icons.tune_rounded,
+                            size: 20,
+                            color: Colors.white70,
+                          ),
+                          tooltip: 'Lyrics sync',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => LyricsSyncDialog.show(
+                            context,
+                            song: currentSong,
+                            controller: widget.controller,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
 
                         // Save Button
                         _buildActionButton(
@@ -655,8 +740,10 @@ class _SpotifyLyricsSheetState extends State<SpotifyLyricsSheet> {
                               final isSelected = _highlightedLineIndex == index;
 
                               return InkWell(
+                                key: isSelected ? _activeLineKey : null,
                                 borderRadius: BorderRadius.circular(12),
-                                onTap: () => _onLineTapped(currentSong, index),
+                                onTap: () =>
+                                    _onLineTapped(currentSong.lyrics, index),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 10,

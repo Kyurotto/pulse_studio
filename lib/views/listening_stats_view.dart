@@ -183,28 +183,28 @@ class _ListeningStatsViewState extends State<ListeningStatsView> {
                     )
                   : ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(20),
                       children: [
                         _buildSummary(),
-                        const SizedBox(height: 26),
+                        const SizedBox(height: 20),
                         if (_stats.topSongs.isNotEmpty) ...[
                           const _SectionHeader(
                             icon: Icons.trending_up_rounded,
                             title: 'Top Songs',
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           _buildTopSongs(),
-                          const SizedBox(height: 26),
+                          const SizedBox(height: 20),
                         ],
                         if (_stats.topArtists.isNotEmpty) ...[
                           const _SectionHeader(
                             icon: Icons.mic_none_rounded,
                             title: 'Top Artists',
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           _buildTopArtists(),
                         ],
-                        const SizedBox(height: 30),
+                        const SizedBox(height: 24),
                       ],
                     ),
             ),
@@ -219,7 +219,7 @@ class _ListeningStatsViewState extends State<ListeningStatsView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionHeader(icon: Icons.bar_chart_rounded, title: 'Overview'),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, constraints) {
             final columns = constraints.maxWidth >= 520 ? 4 : 2;
@@ -255,29 +255,29 @@ class _ListeningStatsViewState extends State<ListeningStatsView> {
             return Wrap(spacing: spacing, runSpacing: spacing, children: tiles);
           },
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: AppTheme.surfaceOf(context),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppTheme.borderOf(context)),
           ),
           child: Row(
             children: [
               const Icon(
                 Icons.check_circle_outline_rounded,
-                size: 17,
+                size: 16,
                 color: AppTheme.accentGreen,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   '$completedPercent% of plays finished · average '
                   '${_formatDuration(_stats.averageListenedSeconds)} per play',
                   style: TextStyle(
                     fontSize: 12,
-                    height: 1.4,
+                    height: 1.35,
                     color: AppTheme.textSecondaryOf(context),
                   ),
                 ),
@@ -291,9 +291,10 @@ class _ListeningStatsViewState extends State<ListeningStatsView> {
 
   Widget _buildTopSongs() {
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppTheme.surfaceOf(context),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.borderOf(context)),
       ),
       child: Column(
@@ -315,9 +316,10 @@ class _ListeningStatsViewState extends State<ListeningStatsView> {
 
   Widget _buildTopArtists() {
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppTheme.surfaceOf(context),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.borderOf(context)),
       ),
       child: Column(
@@ -325,21 +327,24 @@ class _ListeningStatsViewState extends State<ListeningStatsView> {
           for (var i = 0; i < _stats.topArtists.length; i++) ...[
             if (i > 0) Divider(height: 1, color: AppTheme.borderOf(context)),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Row(
                 children: [
-                  Text(
-                    '${i + 1}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textMutedOf(context),
+                  SizedBox(
+                    width: 18,
+                    child: Text(
+                      '${i + 1}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textMutedOf(context),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 6),
                   Container(
-                    width: 38,
-                    height: 38,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppTheme.cardSurfaceOf(context),
@@ -348,29 +353,30 @@ class _ListeningStatsViewState extends State<ListeningStatsView> {
                       child: Text(
                         _initials(_stats.topArtists[i].title),
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.textPrimaryOf(context),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       _stats.topArtists[i].title,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.textPrimaryOf(context),
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     '${_stats.topArtists[i].plays} plays',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       color: AppTheme.textSecondaryOf(context),
                     ),
                   ),
@@ -422,12 +428,12 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(left: 2),
       child: Row(
         children: [
-          Icon(icon, size: 17, color: AppTheme.primaryOf(context)),
-          const SizedBox(width: 8),
+          Icon(icon, size: 16, color: AppTheme.primaryOf(context)),
+          const SizedBox(width: 7),
           Text(
             title,
             style: TextStyle(
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.2,
               color: AppTheme.textPrimaryOf(context),
@@ -459,7 +465,7 @@ class _StatTile extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surfaceOf(context),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppTheme.borderOf(context)),
       ),
       child: Column(
@@ -500,48 +506,52 @@ class _TopSongRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Row(
             children: [
               SizedBox(
-                width: 20,
+                width: 18,
                 child: Text(
                   '$rank',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textMutedOf(context),
                   ),
                 ),
               ),
+              const SizedBox(width: 6),
               SongArtworkWidget(
                 imageUrl: item.imageUrl,
                 title: item.title,
                 artist: item.subtitle,
-                size: 42,
-                borderRadius: 8,
+                size: 34,
+                borderRadius: 6,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       item.title,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.textPrimaryOf(context),
                       ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (item.subtitle.isNotEmpty)
                       Text(
                         item.subtitle,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           color: AppTheme.textSecondaryOf(context),
                         ),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                   ],
@@ -551,7 +561,7 @@ class _TopSongRow extends StatelessWidget {
               Text(
                 '${item.plays} plays',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   color: AppTheme.textSecondaryOf(context),
                 ),
               ),

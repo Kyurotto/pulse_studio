@@ -381,13 +381,6 @@ class _AuthViewState extends State<AuthView> {
         selected = preferredEmail.trim().toLowerCase();
       } else if (oneShotEmail.isNotEmpty) {
         selected = oneShotEmail;
-      } else if (accounts.isNotEmpty) {
-        // getRememberedAccounts() returns the most recently used account
-        // first. Selecting it keeps the fingerprint button visible after
-        // signing out, even when more than one account is saved.
-        selected = (accounts.first['email'] as String? ?? '')
-            .trim()
-            .toLowerCase();
       }
       if (selected.isNotEmpty) {
         await _selectSavedAccount(selected);
@@ -398,56 +391,51 @@ class _AuthViewState extends State<AuthView> {
     }
   }
 
-  /// Fills the form with a remembered account and its securely stored
-  /// password. Never stores or logs the password anywhere else.
+  /// Fills the email field with a remembered account without ever exposing
+  /// its saved password in the text field (preventing shoulder-surfing or
+  /// revealing the password via the eye icon).
   Future<void> _selectSavedAccount(String email) async {
     final cleanEmail = email.trim().toLowerCase();
     if (cleanEmail.isEmpty) return;
 
     _closeSavedAccountsMenu();
 
-    String? savedPassword;
-    try {
-      savedPassword = await _credentials.readPassword(cleanEmail);
-    } catch (_) {}
-
     if (!mounted) return;
-    final hasSavedPassword = savedPassword != null && savedPassword.isNotEmpty;
     setState(() {
       _isRegistering = false;
       _selectedAccountEmail = cleanEmail;
-      if (hasSavedPassword) {
-        _savedPasswordEmails = {..._savedPasswordEmails, cleanEmail};
-      }
       _emailController.text = cleanEmail;
       _emailController.selection = TextSelection.collapsed(
         offset: cleanEmail.length,
       );
-      _passwordController.text = savedPassword ?? '';
-      _passwordController.selection = TextSelection.collapsed(
-        offset: _passwordController.text.length,
-      );
+      _passwordController.clear();
     });
 
-    if (hasSavedPassword) {
-      // Clears any stale "invalid email/password" validation error.
-      _formKey.currentState?.validate();
-    }
     FocusManager.instance.primaryFocus?.unfocus();
   }
 
   /// Handles a tap on a saved account in the autofill dropdown.
   ///
-  /// The account always fills both fields with its encrypted saved password.
-  /// When fingerprint login is set up for it, the device biometric prompt opens
-  /// immediately and a successful check signs in with that same saved
-  /// password — no retyping needed.
+  /// Fills only the email field (never exposing the saved password in the UI).
+  /// When fingerprint / Windows Hello / browser WebAuthn is available, the
+  /// biometric prompt opens immediately and a successful check signs in using
+  /// the securely stored credential — no retyping needed.
   Future<void> _useSavedAccount(String email) async {
     if (_isBusy) return;
     final cleanEmail = email.trim().toLowerCase();
-    final canUseFingerprint = _canUseFingerprintFor(cleanEmail);
     await _selectSavedAccount(cleanEmail);
-    if (!mounted || !canUseFingerprint) return;
+    if (!mounted) return;
+
+    final hasSavedPassword = _savedPasswordEmails.contains(cleanEmail) ||
+        (await _credentials.readPassword(cleanEmail))?.isNotEmpty == true;
+    final canUseFingerprint = _canUseFingerprintFor(cleanEmail) ||
+        ((hasSavedPassword ||
+                await AuthService.instance.canSignInLocallyWithBiometrics(
+                  cleanEmail,
+                )) &&
+            _biometrics.isPlatformSupported &&
+            await _biometrics.isBiometricEnrolled());
+    if (!canUseFingerprint) return;
     await _signInWithFingerprint(email: cleanEmail);
   }
 
@@ -617,7 +605,8 @@ class _AuthViewState extends State<AuthView> {
     try {
       final local = await LocalDatabase.instance.getUserByEmail(cleanEmail);
       final accountId = (local?['id'] as String?) ?? '';
-      final password = await _credentials.readPassword(cleanEmail);
+      final password = (await _credentials.readPassword(cleanEmail)) ??
+          (_passwordController.text.isNotEmpty ? _passwordController.text : null);
       final hasSavedPassword = password != null && password.isNotEmpty;
       final canRestoreLocally = await AuthService.instance
           .canSignInLocallyWithBiometrics(cleanEmail);
@@ -642,6 +631,7 @@ class _AuthViewState extends State<AuthView> {
 
       final outcome = await _biometrics.authenticateForUnlockDetailed(
         customReason: 'Sign in to Pulse Studio',
+        accountEmail: cleanEmail,
       );
       if (!outcome.succeeded) {
         _showError(outcome.userMessage);
@@ -1083,16 +1073,12 @@ class _AuthViewState extends State<AuthView> {
                                 });
                               }
                             },
-                            // Tells Chrome/Edge/Safari this is the
-                            // username/email of the credential. The browser
-                            // saves + autofills email AND password together.
+                            // Only hint during registration so browsers do not
+                            // auto-fill saved credentials on app reopen.
                             autofillHints: _isRegistering
                                 ? const [AutofillHints.email]
-                                : const [
-                                    AutofillHints.username,
-                                    AutofillHints.email,
-                                  ],
-                            enableSuggestions: true,
+                                : null,
+                            enableSuggestions: _isRegistering,
                             autocorrect: false,
                             decoration: InputDecoration(
                               labelText: 'Email address',
@@ -1135,13 +1121,12 @@ class _AuthViewState extends State<AuthView> {
                         focusNode: _passwordFocusNode,
                         autovalidateMode: AutovalidateMode.onUserInteraction,
                         obscureText: _obscurePassword,
-                        // password = existing credential (browser autofills the
-                        // saved password automatically, just like the email);
-                        // newPassword = new credential (browser offers to save).
+                        // Only hint during registration so browsers do not
+                        // auto-fill saved passwords on app reopen.
                         autofillHints: _isRegistering
                             ? const [AutofillHints.newPassword]
-                            : const [AutofillHints.password],
-                        enableSuggestions: !_isRegistering,
+                            : null,
+                        enableSuggestions: false,
                         autocorrect: false,
                         textInputAction: _isRegistering
                             ? TextInputAction.next
@@ -1169,19 +1154,6 @@ class _AuthViewState extends State<AuthView> {
                             ? null
                             : 'Use at least 6 characters.',
                       ),
-                      if (!_isRegistering &&
-                          _selectedAccountEmail != null &&
-                          _passwordController.text.isNotEmpty)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 6, left: 4),
-                          child: Text(
-                            'Saved password filled — tap the eye icon to view it.',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ),
                       if (_isRegistering) ...[
                         const SizedBox(height: 14),
                         TextFormField(

@@ -138,19 +138,19 @@ class _RecentsViewState extends State<RecentsView> {
                     )
                   : ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
                       itemCount: _entries.length + 1,
                       itemBuilder: (context, index) {
                         if (index == 0) {
                           return Padding(
-                            padding: const EdgeInsets.only(left: 2, bottom: 10),
+                            padding: const EdgeInsets.only(left: 2, bottom: 8),
                             child: Text(
                               '${_entries.length} recently played '
                               '${_entries.length == 1 ? 'song' : 'songs'}',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
-                                letterSpacing: 0.6,
+                                letterSpacing: 0.5,
                                 color: AppTheme.textMutedOf(context),
                               ),
                             ),
@@ -168,13 +168,13 @@ class _RecentsViewState extends State<RecentsView> {
                               Padding(
                                 padding: EdgeInsets.only(
                                   left: 2,
-                                  top: previous == null ? 0 : 16,
-                                  bottom: 8,
+                                  top: previous == null ? 0 : 12,
+                                  bottom: 6,
                                 ),
                                 child: Text(
                                   _dayLabel(entry.startedAt),
                                   style: TextStyle(
-                                    fontSize: 11,
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 1.0,
                                     color: AppTheme.textSecondaryOf(context),
@@ -187,7 +187,7 @@ class _RecentsViewState extends State<RecentsView> {
                                   ? null
                                   : () => _play(entry),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 5),
                           ],
                         );
                       },
@@ -234,16 +234,20 @@ class _RecentTile extends StatelessWidget {
     final listened = entry.listenedSeconds > 0
         ? ' · ${_shortDuration(entry.listenedSeconds)}'
         : '';
+    final subtitle = entry.artist.isNotEmpty
+        ? '${entry.artist} · $time$listened'
+        : '$time$listened';
+
     return Material(
       color: AppTheme.surfaceOf(context),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppTheme.borderOf(context)),
           ),
           child: Row(
@@ -252,39 +256,34 @@ class _RecentTile extends StatelessWidget {
                 imageUrl: entry.imageUrl,
                 title: entry.title,
                 artist: entry.artist,
-                size: 48,
-                borderRadius: 10,
+                size: 36,
+                borderRadius: 7,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       entry.title,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.textPrimaryOf(context),
                       ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     Text(
-                      entry.artist,
+                      subtitle,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         color: AppTheme.textSecondaryOf(context),
                       ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '$time$listened',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        color: AppTheme.textMutedOf(context),
-                      ),
                     ),
                   ],
                 ),
@@ -294,16 +293,16 @@ class _RecentTile extends StatelessWidget {
                   padding: EdgeInsets.only(left: 6),
                   child: Icon(
                     Icons.check_circle_rounded,
-                    size: 16,
+                    size: 14,
                     color: AppTheme.accentGreen,
                   ),
                 ),
               if (onTap != null)
                 Padding(
-                  padding: const EdgeInsets.only(left: 6),
+                  padding: const EdgeInsets.only(left: 4),
                   child: Icon(
                     Icons.play_arrow_rounded,
-                    size: 22,
+                    size: 19,
                     color: AppTheme.textSecondaryOf(context),
                   ),
                 ),
