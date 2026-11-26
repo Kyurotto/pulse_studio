@@ -209,8 +209,19 @@ void main() {
         );
         expect(await service.isBiometricUnlockEnabled('user_desktop'), isTrue);
 
+        final servicePinOnly = BiometricAuthService(
+          localAuth: FakeLocalAuthentication(
+            availableBiometrics: [],
+            isSupported: true,
+          ),
+        );
+        expect(await servicePinOnly.isBiometricUnlockEnabled('user_desktop'), isTrue);
+
         final serviceNoBio = BiometricAuthService(
-          localAuth: FakeLocalAuthentication(availableBiometrics: []),
+          localAuth: FakeLocalAuthentication(
+            availableBiometrics: [],
+            isSupported: false,
+          ),
         );
         expect(await serviceNoBio.isBiometricUnlockEnabled('user_desktop'), isFalse);
       } finally {

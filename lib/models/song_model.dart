@@ -13,7 +13,18 @@ class Song {
   String imageUrl;
   final List<Color> gradientColors;
   final String plays;
-  List<String> lyrics;
+
+  /// Sung lyric lines only.
+  ///
+  /// Instrumental breaks, drum/guitar/piano solos, section markers such as
+  /// `[Chorus]`, and musical-symbol cues are stripped centrally on assignment
+  /// so every view (mobile sheet, desktop view, right panel) shares the exact
+  /// same list. Keeping one normalized list also guarantees that a lyric line
+  /// index computed from playback progress points at the line being rendered.
+  List<String> _lyrics;
+  List<String> get lyrics => _lyrics;
+  set lyrics(List<String> value) => _lyrics = cleanSungLyrics(value);
+
   String audioUrl;
   final bool isFeatured;
   bool isLiked;
@@ -39,7 +50,7 @@ class Song {
     required this.imageUrl,
     required this.gradientColors,
     required this.plays,
-    required this.lyrics,
+    required List<String> lyrics,
     this.audioUrl = '',
     this.isFeatured = false,
     this.isLiked = false,
@@ -48,7 +59,8 @@ class Song {
     this.youtubeVideoId = '',
     this.isEnrichingLyrics = false,
     bool? isExplicit,
-  }) : isExplicit = isExplicit ?? looksExplicit(title, album);
+  }) : _lyrics = cleanSungLyrics(lyrics),
+       isExplicit = isExplicit ?? looksExplicit(title, album);
 
   /// Heuristic fallback for sources that do not publish a content rating
   /// (notably YouTube). Catalog ratings (iTunes `trackExplicitness` and
@@ -94,9 +106,52 @@ class Song {
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
+  // Compiled once. These run for every lyric line on every playback tick
+  // (~10x/sec while the lyrics view is open), and rebuilding a RegExp per call
+  // was measurable jank on phones.
+  static final RegExp _lrcTimestampPattern = RegExp(
+    r'^\[(\d+):(\d+)(?:[.:](\d+))?\]',
+  );
+  static final RegExp _lrcAltTimestampPattern = RegExp(r'^\[(\d+):(\d+\.?\d*)\]');
+  static final RegExp _lrcBracketPattern = RegExp(r'^\s*\[.*?\]');
+
+  /// Bare section headers that appear without brackets in unsynced lyric
+  /// dumps, e.g. `CHORUS`, `Verse 2`, `PRE-CHORUS`, `BRIDGE`.
+  static final RegExp _bareSectionMarker = RegExp(
+    r'^(?:intro|outro|verse(?:\s*\d+)?|pre[- ]?chorus|chorus|hook|refrain|bridge|instrumental|interlude|breakdown|skit|spoken|ad[- ]?lib)(?:\s*[:\-–]\s*.*)?$',
+    caseSensitive: false,
+  );
+
+  /// Instrument annotations such as `Drums: ...`, `Guitar - ...`, `Bass:`.
+  static final RegExp _instrumentLabel = RegExp(
+    r'^(?:drums?|guitars?|bass|piano|keys?|synth(?:esizer)?|strings|violin|sax(?:ophone)?|trumpet|brass|organ|percussion|808s?|beat)\s*[:\-–]\s*.*$',
+    caseSensitive: false,
+  );
+
+  /// Repeat counters such as `(x2)`, `[2x]`, `x3`, `repeat chorus`.
+  static final RegExp _repeatMarker = RegExp(
+    r'^[\[(]?\s*(?:x\s*\d+|\d+\s*x|repeat(?:\s+(?:chorus|verse|hook))?)\s*[\])]?$',
+    caseSensitive: false,
+  );
+
+  /// Pure musical symbols, notes, or punctuation (e.g. ♫, ♪, 🎵, ---, ***).
+  static final RegExp _musicalSymbols = RegExp(r'[\s♫♪🎵🎶\-_*#~.]+');
+
+  /// Bracketed structural marker such as `[Chorus]`, `(Verse 2)`, `[Bridge: X]`.
+  static final RegExp _bracketedSectionMarker = RegExp(
+    r'^[\[(]\s*(?:intro|outro|verse|pre[- ]?chorus|chorus|hook|refrain|bridge|instrumental|interlude|solo|break|skit|spoken|ad[- ]?lib)\b[^\])]*[\])]$',
+    caseSensitive: false,
+  );
+
+  /// Bracketed instrument/cue description such as `(Guitar solo)` or `[Music]`.
+  static final RegExp _bracketedCue = RegExp(
+    r'^[(\[\{/*~]\s*(?:drum|drums|guitar|piano|bass|violin|saxophone|brass|synth|organ|keyboard|instrumental|music|solo|interlude|intro|outro|bridge|beat|drop|rhythm|melody|groove|applause|cheering|laughter|sound\s*effect).*?[)\]\}/*~]$',
+    caseSensitive: false,
+  );
+
   static Duration? parseLyricTimestamp(String line) {
     final trimmed = line.trim();
-    final match = RegExp(r'^\[(\d+):(\d+)(?:[.:](\d+))?\]').firstMatch(trimmed);
+    final match = _lrcTimestampPattern.firstMatch(trimmed);
     if (match != null) {
       final min = int.parse(match.group(1)!);
       final sec = int.parse(match.group(2)!);
@@ -113,7 +168,7 @@ class Song {
       }
       return Duration(milliseconds: min * 60000 + sec * 1000 + millis);
     }
-    final alt = RegExp(r'^\[(\d+):(\d+\.?\d*)\]').firstMatch(trimmed);
+    final alt = _lrcAltTimestampPattern.firstMatch(trimmed);
     if (alt != null) {
       final min = int.parse(alt.group(1)!);
       final sec = double.parse(alt.group(2)!);
@@ -123,32 +178,111 @@ class Song {
   }
 
   static String stripTimestamp(String line) {
-    return line.replaceAll(RegExp(r'^\s*\[.*?\]'), '').trim();
+    return line.replaceAll(_lrcBracketPattern, '').trim();
   }
+
+  /// Checks whether a lyric line represents instrumental sections, drum solos,
+  /// sound/cue markers, or musical symbols rather than sung lyrics.
+  static bool isInstrumentalOrCueLine(String rawLine) {
+    final clean = stripTimestamp(rawLine).trim();
+    if (clean.isEmpty) return true;
+
+    // Filter pure musical symbols, notes, or punctuation (e.g. ♫, ♪, 🎵, 🎶, ---, ***)
+    final textWithoutSymbols = clean.replaceAll(_musicalSymbols, '').trim();
+    if (textWithoutSymbols.isEmpty) return true;
+
+    final lower = clean.toLowerCase();
+
+    // Section headers such as [Chorus], [Verse 2], or [Bridge: Artist] are
+    // structural markers, not sung words.
+    if (_bracketedSectionMarker.hasMatch(clean)) return true;
+    if (_bareSectionMarker.hasMatch(clean)) return true;
+    if (_repeatMarker.hasMatch(clean)) return true;
+    if (_instrumentLabel.hasMatch(clean)) return true;
+
+    // Check if the line is enclosed in brackets/parentheses and describes an instrument or non-vocal cue
+    if (_bracketedCue.hasMatch(lower)) return true;
+
+    // Check direct instrumental keywords when they make up the line
+    final cueKeywords = const [
+      'instrumental',
+      'drum solo',
+      'drums solo',
+      'guitar solo',
+      'piano solo',
+      'bass solo',
+      'sax solo',
+      'saxophone solo',
+      'violin solo',
+      'synth solo',
+      'guitar intro',
+      'drum intro',
+      'piano intro',
+      'instrumental break',
+      'instrumental melody',
+      'instrumental groove',
+      'instrumental groove & rhythm',
+      'dynamic melody & rhythm',
+      'harmonic bridge',
+      'dynamic bridge',
+      'beat drop',
+      'music break',
+    ];
+    for (final kw in cueKeywords) {
+      if (lower == kw || lower == '($kw)' || lower == '[$kw]') {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// Filters out all non-vocal, drum, and instrumental cue lines from lyrics.
+  static List<String> cleanSungLyrics(List<String> rawLyrics) {
+    if (rawLyrics.isEmpty) return const [];
+    return rawLyrics.where((line) => !isInstrumentalOrCueLine(line)).toList();
+  }
+
+  /// True when at least one line carries an LRC timestamp, i.e. the lyrics can
+  /// actually be synced. Plain (untimed) lyrics cannot be aligned reliably, so
+  /// the UI shows them without a fake moving highlight.
+  static bool hasSyncedLyrics(List<String> lyrics) =>
+      lyrics.any((line) => parseLyricTimestamp(line) != null);
+
+  /// Latency compensation so the highlighted line transitions right when the
+  /// vocal starts instead of trailing behind audio buffer latency.
+  ///
+  /// This is only the automatic baseline; each song can add a manual
+  /// calibration offset on top of it (persisted per track).
+  static const Duration defaultLyricsLeadOffset = Duration(milliseconds: 250);
 
   /// Which lyric line should be active for this playback position.
   ///
-  /// Uses synced timestamps if available. Otherwise, plain (untimed) lyric 
-  /// lines are spread evenly across the track.
+  /// Uses synced timestamps if available with lead-offset compensation for accurate
+  /// vocal alignment. Otherwise, plain (untimed) lyric lines are spread evenly across the track.
   static int lyricsLineIndexForProgress(
     List<String> lyrics,
     Duration position,
-    Duration total,
-  ) {
+    Duration total, {
+    Duration leadOffset = defaultLyricsLeadOffset,
+  }) {
     if (lyrics.isEmpty) return 0;
     final effectiveTotal =
         total > Duration.zero ? total : const Duration(minutes: 3);
 
-    final hasTimestamped = lyrics.any((l) => parseLyricTimestamp(l) != null);
+    final hasTimestamped = hasSyncedLyrics(lyrics);
     if (hasTimestamped) {
+      final effectivePos = position + leadOffset;
       int lastIndex = -1;
       for (int i = 0; i < lyrics.length; i++) {
         final time = parseLyricTimestamp(lyrics[i]);
         if (time != null) {
-          if (position >= time) {
+          // Scan the whole list instead of breaking on the first future
+          // timestamp: LRC files occasionally contain out-of-order or
+          // repeated timestamps, and breaking there pinned the highlight to
+          // a line that had already been sung.
+          if (effectivePos >= time) {
             lastIndex = i;
-          } else {
-            break;
           }
         }
       }

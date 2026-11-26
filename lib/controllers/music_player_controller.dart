@@ -168,9 +168,9 @@ class MusicPlayerController extends ChangeNotifier {
   PlaybackRepeatMode _repeatMode = PlaybackRepeatMode.all;
   Timer? _playbackTimer;
 
-  /// Throttle position-stream notifyListeners so UI rebuilds at most ~3x/sec.
+  /// Responsive position-stream throttle so lyrics tracking and slider update smoothly (~16x/sec).
   DateTime _lastPositionNotify = DateTime(0);
-  static const _positionNotifyInterval = Duration(milliseconds: 300);
+  static const _positionNotifyInterval = Duration(milliseconds: 60);
 
   // Real audio player. The Android equalizer and loudness effects are attached
   // to the same audio session so setting changes modify the actual output.
@@ -308,6 +308,13 @@ class MusicPlayerController extends ChangeNotifier {
   /// slider/lyrics) and fall back to a local file instead of hanging forever.
   DateTime? _lastPositionUpdate;
   Timer? _stallWatchdog;
+
+  /// Anchor for bridging gaps between native position ticks. The cursor is
+  /// advanced by real wall-clock elapsed time (base + elapsed) instead of a
+  /// fixed +500 ms per timer tick, which accumulated drift and made the lyrics
+  /// highlight trail the vocal on engines with sparse position streams.
+  Duration? _interpolationBase;
+  DateTime? _interpolationStartedAt;
 
   String _searchQuery = '';
   String _selectedGenre = 'All';
@@ -513,6 +520,50 @@ class MusicPlayerController extends ChangeNotifier {
   static const String crossfadeSettingKey = 'crossfade';
   static const String dataSaverModeSettingKey = 'data_saver_mode';
   static const String reduceAnimationsSettingKey = 'reduce_animations';
+
+  /// Per-song manual lyrics calibration, persisted as
+  /// `lyrics_offset_ms:<songId>` so a track keeps its calibration across
+  /// launches and across Windows / Android / web.
+  static const String lyricsOffsetSettingPrefix = 'lyrics_offset_ms:';
+  static const Duration lyricsOffsetLimit = Duration(seconds: 5);
+  final Map<String, int> _lyricsOffsetsMs = <String, int>{};
+
+  /// Manual calibration the user applied to [song] (0 when untouched).
+  int lyricsOffsetMsFor(Song song) => _lyricsOffsetsMs[song.id] ?? 0;
+
+  /// Total lead used by the lyrics tracker: the automatic buffer-latency
+  /// compensation plus this song's manual calibration.
+  Duration lyricsLeadOffsetFor(Song song) =>
+      Song.defaultLyricsLeadOffset +
+      Duration(milliseconds: lyricsOffsetMsFor(song));
+
+  /// Nudges the lyric highlight for [song]. Positive values highlight earlier
+  /// (lyrics feel ahead), negative values highlight later (lyrics feel behind).
+  Future<void> setLyricsOffset(Song song, Duration offset) async {
+    final limit = lyricsOffsetLimit.inMilliseconds;
+    final clamped = offset.inMilliseconds.clamp(-limit, limit);
+    final key = '$lyricsOffsetSettingPrefix${song.id}';
+    if (clamped == 0) {
+      _lyricsOffsetsMs.remove(song.id);
+      await LocalDatabase.instance.removeSetting(key);
+    } else {
+      _lyricsOffsetsMs[song.id] = clamped;
+      await LocalDatabase.instance.saveSetting(key, '$clamped');
+    }
+    notifyListeners();
+  }
+
+  void _loadLyricsOffsets(Map<String, String> settings) {
+    _lyricsOffsetsMs.clear();
+    settings.forEach((key, value) {
+      if (!key.startsWith(lyricsOffsetSettingPrefix)) return;
+      final id = key.substring(lyricsOffsetSettingPrefix.length);
+      final ms = int.tryParse(value);
+      if (id.isNotEmpty && ms != null) {
+        _lyricsOffsetsMs[id] = ms;
+      }
+    });
+  }
 
   /// Data Saver caps every freshly resolved stream at 96 kbps.
   static const int dataSaverBitrateKbps = 96;
@@ -1206,6 +1257,12 @@ class MusicPlayerController extends ChangeNotifier {
         if (_audioPlayerHasSource && _isPlaying) {
           _currentPosition = pos;
           _lastPositionUpdate = DateTime.now();
+          // Re-anchor the interpolation clock to this real tick. just_audio
+          // only emits a position every ~200ms on Android (media_kit on
+          // desktop emits every ~40ms), so the heartbeat has to bridge the
+          // gap from here instead of sampling a stale value.
+          _interpolationBase = pos;
+          _interpolationStartedAt = _lastPositionUpdate;
           // A real position means this is genuine audio, not a placeholder.
           // Clear any stale fallback flag so future upgrades work normally.
           final song = currentSong;
@@ -1978,6 +2035,7 @@ class MusicPlayerController extends ChangeNotifier {
       _allowExplicit = allSettings[allowExplicitSettingKey] != 'false';
       _visualizerEnabled = allSettings[visualizerSettingKey] != 'false';
       _loadPlaybackSettings(allSettings);
+      _loadLyricsOffsets(allSettings);
       _playlists.removeWhere((p) {
         if (allSettings['deleted_playlist_${p.id}'] == 'true') return true;
         final cleanId = p.id.replaceAll(RegExp(r'-[356]$'), '');
@@ -5724,12 +5782,9 @@ class MusicPlayerController extends ChangeNotifier {
       if (song.album.isNotEmpty) '[00:10.00] ${song.album}',
       '[00:16.00] ♫ Playing in Offline Mode ♫',
       '[00:26.00] ♫ High-fidelity audio playback active ♫',
-      '[00:40.00] (Instrumental Groove & Rhythm)',
       '[01:00.00] ♫ Lyrics tracker moving in real-time ♫',
       '[01:25.00] ♫ Enjoying music without internet connection ♫',
-      '[01:50.00] (Instrumental Melody)',
       '[02:15.00] ♫ Seamless offline listening experience ♫',
-      if (durationSeconds > 150) '[02:35.00] (Dynamic Bridge)',
       if (durationSeconds > 180) '[03:00.00] ♫ Pulse Studio ♫',
     ];
     song.lyrics = lines;
@@ -7527,12 +7582,9 @@ class MusicPlayerController extends ChangeNotifier {
             '[00:05.00] ${song.artist}',
             if (song.album.isNotEmpty) '[00:10.00] ${song.album}',
             '[00:16.00] ♫ High-fidelity audio playback active ♫',
-            '[00:26.00] (Instrumental Groove & Rhythm)',
             '[00:40.00] ♫ Lyrics tracker moving in real-time ♫',
             '[01:00.00] ♫ ${song.title} by ${song.artist} ♫',
-            '[01:25.00] (Dynamic Melody & Rhythm)',
             '[01:50.00] ♫ Seamless listening experience ♫',
-            if (durationSeconds > 150) '[02:15.00] (Harmonic Bridge)',
             if (durationSeconds > 180) '[02:40.00] ♫ Pulse Studio ♫',
           ];
           _offlineFakeLyricsIds.add(song.id);
@@ -7552,12 +7604,9 @@ class MusicPlayerController extends ChangeNotifier {
           '[00:05.00] ${song.artist}',
           if (song.album.isNotEmpty) '[00:10.00] ${song.album}',
           '[00:16.00] ♫ High-fidelity audio playback active ♫',
-          '[00:26.00] (Instrumental Groove & Rhythm)',
           '[00:40.00] ♫ Lyrics tracker moving in real-time ♫',
           '[01:00.00] ♫ ${song.title} by ${song.artist} ♫',
-          '[01:25.00] (Dynamic Melody & Rhythm)',
           '[01:50.00] ♫ Seamless listening experience ♫',
-          if (durationSeconds > 150) '[02:15.00] (Harmonic Bridge)',
           if (durationSeconds > 180) '[02:40.00] ♫ Pulse Studio ♫',
         ];
         _offlineFakeLyricsIds.add(song.id);
@@ -7939,6 +7988,8 @@ class MusicPlayerController extends ChangeNotifier {
       }
       _finishListeningHistory();
       _playbackTimer?.cancel();
+      _interpolationBase = null;
+      _interpolationStartedAt = null;
       _cancelStallWatchdog();
       _cancelAutomixFade();
       notifyListeners();
@@ -8325,6 +8376,8 @@ class MusicPlayerController extends ChangeNotifier {
       _currentPosition = position;
     }
     _lastPositionUpdate = DateTime.now();
+    _interpolationBase = null;
+    _interpolationStartedAt = null;
     if (_audioPlayerHasSource) {
       try {
         // ignore: discarded_futures
@@ -9660,7 +9713,17 @@ class MusicPlayerController extends ChangeNotifier {
   /// source surfaces honestly instead of masquerading as playback.
   void _startTimer() {
     _playbackTimer?.cancel();
-    _playbackTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+    // Every timer start is a fresh interpolation session. Keeping an anchor
+    // from before a pause would make the cursor (and the lyric highlight)
+    // jump forward by the whole paused span on the first tick after resume.
+    _interpolationBase = null;
+    _interpolationStartedAt = null;
+    // 100ms heartbeat (it used to be 500ms). This is what keeps the lyric
+    // clock current between native position ticks: just_audio only emits a
+    // position every ~200ms on Android, and sampling that stale value is what
+    // made the highlight trail the vocal on phones. Desktop media_kit emits
+    // every ~40ms, which is why the same code looked correct on Windows.
+    _playbackTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (!_isPlaying) {
         timer.cancel();
         return;
@@ -9674,58 +9737,59 @@ class MusicPlayerController extends ChangeNotifier {
         return;
       }
 
-      // If native player's position stream emitted a fresh update within the last 1200ms,
-      // native audio is actively driving the position.
       final lastUpdate = _lastPositionUpdate;
+
+      // Never fake progress for a source that never produced audio. Wait for
+      // real ticks (or the stall watchdog) instead of inventing them.
+      if (!_audioPlayerHasSource || lastUpdate == null) {
+        return;
+      }
+
+      // Only bridge the gap between ticks while the native player is truly
+      // playing. During a buffering stall or a lost audio focus it is not,
+      // and interpolating then made the slider and lyrics keep moving over
+      // silence. Instead make sure the stall watchdog is armed so the track
+      // recovers rather than looking alive.
+      var nativeReady = true;
+      var nativeLoading = false;
+      try {
+        final ps = _audioPlayer.playerState;
+        nativeReady = ps.playing && ps.processingState == ProcessingState.ready;
+        nativeLoading =
+            ps.processingState == ProcessingState.buffering ||
+            ps.processingState == ProcessingState.loading;
+      } catch (_) {}
+      if (!nativeReady) {
+        // Stuck loading/buffering: arm recovery. Ready-but-paused means the
+        // system paused us (audio focus); the interruption listener resumes
+        // it, so it must not be treated as a dead stream.
+        if (nativeLoading && _stallWatchdog?.isActive != true) {
+          _startStallWatchdog();
+        }
+        return;
+      }
+
+      final now = DateTime.now();
       final isNativeAdvancing =
-          lastUpdate != null &&
-          DateTime.now().difference(lastUpdate) <
-              const Duration(milliseconds: 1200);
+          now.difference(lastUpdate) < const Duration(milliseconds: 1200);
 
-      if (!isNativeAdvancing) {
-        // Never fake progress for a source that never produced audio. Wait for
-        // real ticks (or the stall watchdog) instead of inventing them.
-        if (!_audioPlayerHasSource || lastUpdate == null) {
-          return;
-        }
-
-        // Only bridge the gap between ticks while the native player is truly
-        // playing. During a buffering stall or a lost audio focus it is not,
-        // and interpolating then made the slider and lyrics keep moving over
-        // silence. Instead make sure the stall watchdog is armed so the track
-        // recovers rather than looking alive.
-        var nativeReady = true;
-        var nativeLoading = false;
-        try {
-          final ps = _audioPlayer.playerState;
-          nativeReady =
-              ps.playing && ps.processingState == ProcessingState.ready;
-          nativeLoading =
-              ps.processingState == ProcessingState.buffering ||
-              ps.processingState == ProcessingState.loading;
-        } catch (_) {}
-        if (!nativeReady) {
-          // Stuck loading/buffering: arm recovery. Ready-but-paused means the
-          // system paused us (audio focus); the interruption listener resumes
-          // it, so it must not be treated as a dead stream.
-          if (nativeLoading && _stallWatchdog?.isActive != true) {
-            _startStallWatchdog();
-          }
-          return;
-        }
-
-        // Native stream is temporarily between position ticks.
-        // Smoothly interpolate currentPosition while bounded by actual duration.
-        if (_currentPosition < currentDuration) {
-          _currentPosition += const Duration(milliseconds: 500);
-          if (_currentPosition > currentDuration) {
-            _currentPosition = currentDuration;
-          }
+      // Advance the cursor by the wall-clock time actually elapsed since the
+      // last real tick. This runs on every heartbeat, not only after the
+      // native stream goes quiet, so repeated timer fires cannot accumulate
+      // drift and the lyric highlight stays locked to the vocal.
+      if (_currentPosition < currentDuration) {
+        _interpolationBase ??= _currentPosition;
+        _interpolationStartedAt ??= lastUpdate;
+        final elapsed = now.difference(_interpolationStartedAt!);
+        var target = _interpolationBase! + elapsed;
+        if (target > currentDuration) target = currentDuration;
+        if (target > _currentPosition) _currentPosition = target;
+        if (_positionNotifier.value != _currentPosition) {
           _positionNotifier.value = _currentPosition;
-        } else {
-          timer.cancel();
-          _onSongComplete();
         }
+      } else if (!isNativeAdvancing) {
+        timer.cancel();
+        _onSongComplete();
       }
     });
   }

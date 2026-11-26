@@ -165,22 +165,21 @@ void main() {
       await tester.pumpWidget(buildAuthView());
       await pumpUntil(
         tester,
-        () => emailFieldText(tester) == email,
-        description: 'remembered account autofill',
+        () => find.byIcon(Icons.arrow_drop_down_rounded).evaluate().isNotEmpty,
+        description: 'saved accounts dropdown icon ready',
       );
       await settlePlatformWork(tester);
 
-      // Saved accounts are not listed on the login screen. The floating
-      // autofill popup only appears when the email field is tapped.
+      // Saved accounts are not pre-filled on the login screen at startup so
+      // neither the email nor the password is leaked when reopening the app.
       expect(find.text('Saved accounts'), findsNothing);
-      expect(find.text(email), findsWidgets);
       expect(find.text('Sign in with fingerprint'), findsNothing);
 
       final fields = tester
           .widgetList<TextFormField>(find.byType(TextFormField))
           .toList();
-      expect(fields[0].controller?.text, email);
-      expect(fields[1].controller?.text, password);
+      expect(fields[0].controller?.text, isEmpty);
+      expect(fields[1].controller?.text, isEmpty);
 
       await tester.tap(find.text('Email address'), warnIfMissed: false);
       await tester.pumpAndSettle();
@@ -190,9 +189,9 @@ void main() {
       // The account advertises that fingerprint is ready for it.
       expect(find.byIcon(Icons.fingerprint_rounded), findsOneWidget);
 
-      // One tap on the saved account fills both fields, opens the device
-      // biometric prompt, and signs in with the stored password once the
-      // fingerprint is verified — no extra button tap needed.
+      // One tap on the saved account fills the email (never exposing the
+      // password in the field), opens the device biometric prompt, and signs
+      // in with the stored password once verified.
       await tester.tap(find.text('••••••••'));
       await pumpUntil(
         tester,
@@ -203,7 +202,7 @@ void main() {
 
       expect(find.text('Saved accounts'), findsNothing);
       expect(fields[0].controller?.text, email);
-      expect(fields[1].controller?.text, password);
+      expect(fields[1].controller?.text, isEmpty);
       expect(fakeLocalAuth.lastLocalizedReason, contains('Pulse Studio'));
       expect(AuthService.instance.currentUser, isA<LocalUser>());
       expect((AuthService.instance.currentUser as LocalUser).id, '2');
@@ -224,13 +223,14 @@ void main() {
     // Turn fingerprint off so this test isolates the dropdown's autofill
     // behavior. Automatic fingerprint sign-in is covered by the first test.
     fakeLocalAuth.availableBiometrics = [];
+    fakeLocalAuth.isSupported = false;
     await tester.runAsync(() => biometrics.disableBiometricUnlock());
 
     await tester.pumpWidget(buildAuthView());
     await pumpUntil(
       tester,
-      () => emailFieldText(tester) == email,
-      description: 'remembered account autofill',
+      () => find.byIcon(Icons.arrow_drop_down_rounded).evaluate().isNotEmpty,
+      description: 'saved accounts dropdown icon ready',
     );
     await settlePlatformWork(tester);
 
@@ -253,10 +253,9 @@ void main() {
         .widgetList<TextFormField>(find.byType(TextFormField))
         .toList();
     expect(updated[0].controller?.text, email);
-    expect(updated[1].controller?.text, password);
+    expect(updated[1].controller?.text, isEmpty);
     expect(find.text('Saved accounts'), findsNothing);
-    // No biometric prompt without fingerprint setup; the password was still
-    // carried from encrypted storage into the form.
+    // No biometric prompt without fingerprint setup; password stays hidden.
     expect(fakeLocalAuth.lastLocalizedReason, isNull);
     expect(find.text('Sign in with fingerprint'), findsNothing);
   });
@@ -319,17 +318,18 @@ void main() {
       );
       expect(fingerprintEnabled, isTrue);
 
-      // Signing out must keep the fingerprint configuration so the login
-      // screen can offer it immediately.
+      // Signing out must keep the fingerprint configuration, while keeping
+      // the login fields blank on reopen.
       await tester.runAsync(() => AuthService.instance.signOut());
       await tester.pumpWidget(buildAuthView());
       await pumpUntil(
         tester,
-        () => emailFieldText(tester) == email,
-        description: 'autofill after sign-out',
+        () => find.byIcon(Icons.arrow_drop_down_rounded).evaluate().isNotEmpty,
+        description: 'saved accounts dropdown after sign-out',
       );
       await settlePlatformWork(tester);
 
+      expect(emailFieldText(tester), isEmpty);
       expect(find.text('Saved accounts'), findsNothing);
       expect(find.text('Sign in with fingerprint'), findsNothing);
 
@@ -356,19 +356,20 @@ void main() {
       // test. The fallback for password-less accounts with biometrics is
       // covered by the next test.
       fakeLocalAuth.availableBiometrics = [];
+      fakeLocalAuth.isSupported = false;
 
       await tester.pumpWidget(buildAuthView());
       await pumpUntil(
         tester,
-        () => emailFieldText(tester) == email,
-        description: 'saved account email autofill',
+        () => find.byIcon(Icons.arrow_drop_down_rounded).evaluate().isNotEmpty,
+        description: 'saved accounts dropdown icon ready',
       );
       await settlePlatformWork(tester);
 
       final fields = tester
           .widgetList<TextFormField>(find.byType(TextFormField))
           .toList();
-      expect(fields[0].controller?.text, email);
+      expect(fields[0].controller?.text, isEmpty);
       expect(fields[1].controller?.text, isEmpty);
       expect(find.text('Use at least 6 characters.'), findsNothing);
       // No saved password and no enrolled biometrics means there is nothing
@@ -409,11 +410,12 @@ void main() {
       await tester.pumpWidget(buildAuthView());
       await pumpUntil(
         tester,
-        () => emailFieldText(tester) == email,
-        description: 'autofill for a password-less saved account',
+        () => find.byIcon(Icons.arrow_drop_down_rounded).evaluate().isNotEmpty,
+        description: 'saved accounts dropdown icon ready',
       );
       await settlePlatformWork(tester);
 
+      expect(emailFieldText(tester), isEmpty);
       expect(find.text('Sign in with fingerprint'), findsNothing);
       await tester.tap(find.text('Email address'), warnIfMissed: false);
       await tester.pumpAndSettle();
@@ -455,11 +457,14 @@ void main() {
       await tester.pumpWidget(buildAuthView());
       await pumpUntil(
         tester,
-        () => emailFieldText(tester) == email,
-        description: 'saved account email autofill',
+        () => find.byIcon(Icons.arrow_drop_down_rounded).evaluate().isNotEmpty,
+        description: 'saved accounts dropdown icon ready',
       );
       await settlePlatformWork(tester);
 
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), email);
+      await tester.enterText(fields.at(1), password);
       await tester.tap(find.byType(Checkbox));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ElevatedButton, 'Sign in'));
@@ -499,8 +504,8 @@ void main() {
       await tester.pumpWidget(buildAuthView());
       await pumpUntil(
         tester,
-        () => emailFieldText(tester) == email,
-        description: 'saved account email autofill',
+        () => find.byIcon(Icons.arrow_drop_down_rounded).evaluate().isNotEmpty,
+        description: 'saved accounts dropdown icon ready',
       );
       await settlePlatformWork(tester);
 

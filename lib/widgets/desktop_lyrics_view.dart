@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import '../models/song_model.dart';
 import '../theme/app_theme.dart';
 import '../controllers/music_player_controller.dart';
+import 'lyrics_sync_dialog.dart';
 import 'song_artwork_widget.dart';
 
 class DesktopLyricsView extends StatefulWidget {
@@ -23,7 +24,10 @@ class _DesktopLyricsViewState extends State<DesktopLyricsView> {
   int? _highlightedLineIndex;
   int? _lastSyncedIndex;
   bool _userPinned = false;
-  static const double _lineExtent = 56.0;
+
+  /// Keyed to the active row so auto-scroll follows the real laid-out height
+  /// instead of assuming every lyric line is exactly 56px tall.
+  final GlobalKey _activeLineKey = GlobalKey();
 
   @override
   void initState() {
@@ -54,30 +58,65 @@ class _DesktopLyricsViewState extends State<DesktopLyricsView> {
     super.dispose();
   }
 
-  void _onLineTapped(Song song, int index) {
-    final line = song.lyrics[index];
-    final ts = Song.parseLyricTimestamp(line);
-    if (ts != null) {
-      widget.controller.seekTo(ts);
-    }
+  void _onLineTapped(List<String> lyrics, int index) {
+    if (index < 0 || index >= lyrics.length) return;
+    final song = widget.controller.currentSong;
+    if (song == null) return;
+    final total = widget.controller.displayDurationFor(song);
+    // Seek earlier by the tracker's lead so the tapped line becomes active
+    // exactly when playback reaches it.
+    final target =
+        Song.positionForLyricsLine(lyrics, index, total) -
+        widget.controller.lyricsLeadOffsetFor(song);
+    widget.controller.seekTo(target < Duration.zero ? Duration.zero : target);
     setState(() {
       _userPinned = true;
       _highlightedLineIndex = index;
     });
   }
 
+  /// Rough row height used only to reach rows outside the builder's cache
+  /// (a long seek). The measured row takes over afterwards.
+  static const double _estimatedLineExtent = 64.0;
+
   void _autoScrollTo(int activeIndex) {
-    if (_userPinned || !_scrollController.hasClients) return;
+    if (_userPinned) return;
     if (_lastSyncedIndex == activeIndex) return;
     _lastSyncedIndex = activeIndex;
 
-    final targetOffset = ((activeIndex * _lineExtent) - 180.0)
-        .clamp(0.0, _scrollController.position.maxScrollExtent);
+    final lineContext = _activeLineKey.currentContext;
+    if (lineContext != null) {
+      Scrollable.ensureVisible(
+        lineContext,
+        alignment: 0.35,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutQuad,
+      );
+      return;
+    }
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final estimate =
+        (activeIndex * _estimatedLineExtent - position.viewportDimension * 0.35)
+            .clamp(0.0, position.maxScrollExtent);
+    _scrollController
+        .animateTo(
+          estimate,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutQuad,
+        )
+        .then((_) => _refineScroll());
+  }
 
-    _scrollController.animateTo(
-      targetOffset,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
+  void _refineScroll() {
+    if (!mounted) return;
+    final refined = _activeLineKey.currentContext;
+    if (refined == null) return;
+    Scrollable.ensureVisible(
+      refined,
+      alignment: 0.35,
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOutQuad,
     );
   }
 
@@ -218,6 +257,21 @@ class _DesktopLyricsViewState extends State<DesktopLyricsView> {
                   ),
                 ),
 
+                // Per-song lyrics calibration
+                IconButton(
+                  icon: const Icon(
+                    Icons.tune_rounded,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
+                  tooltip: 'Lyrics sync',
+                  onPressed: () => LyricsSyncDialog.show(
+                    context,
+                    song: currentSong,
+                    controller: widget.controller,
+                  ),
+                ),
+
                 // Like Button
                 IconButton(
                   icon: Icon(
@@ -246,21 +300,31 @@ class _DesktopLyricsViewState extends State<DesktopLyricsView> {
             child: ValueListenableBuilder<Duration>(
               valueListenable: widget.controller.positionListenable,
               builder: (context, position, _) {
+                final lyrics = currentSong.lyrics;
                 final totalDur = widget.controller.displayDurationFor(currentSong);
-                final activeIndex = _userPinned && _highlightedLineIndex != null
-                    ? _highlightedLineIndex!
-                    : Song.lyricsLineIndexForProgress(
-                        currentSong.lyrics,
-                        position,
-                        totalDur,
-                      );
+                final hasSyncedLyrics = Song.hasSyncedLyrics(lyrics);
+                // Untimed lyrics get no highlight: an evenly-spread fake
+                // cursor always drifts out of sync with the vocal.
+                final int? activeIndex = !hasSyncedLyrics
+                    ? null
+                    : (_userPinned && _highlightedLineIndex != null
+                          ? _highlightedLineIndex
+                          : Song.lyricsLineIndexForProgress(
+                              lyrics,
+                              position,
+                              totalDur,
+                              leadOffset: widget.controller
+                                  .lyricsLeadOffsetFor(currentSong),
+                            ));
 
                 // Auto-scroll when activeIndex changes
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) _autoScrollTo(activeIndex);
-                });
+                if (activeIndex != null) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _autoScrollTo(activeIndex);
+                  });
+                }
 
-                if (currentSong.lyrics.isEmpty) {
+                if (lyrics.isEmpty) {
                   return Center(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -329,15 +393,16 @@ class _DesktopLyricsViewState extends State<DesktopLyricsView> {
                       horizontal: 48,
                       vertical: 36,
                     ),
-                    itemCount: currentSong.lyrics.length,
+                    itemCount: lyrics.length,
                     itemBuilder: (context, index) {
-                      final rawLine = currentSong.lyrics[index];
+                      final rawLine = lyrics[index];
                       final displayLine = Song.stripTimestamp(rawLine);
                       final isActive = index == activeIndex;
 
                       return InkWell(
+                        key: isActive ? _activeLineKey : null,
                         borderRadius: BorderRadius.circular(16),
-                        onTap: () => _onLineTapped(currentSong, index),
+                        onTap: () => _onLineTapped(lyrics, index),
                         hoverColor: Colors.white.withValues(alpha: 0.08),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 240),
