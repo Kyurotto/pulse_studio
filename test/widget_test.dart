@@ -35,7 +35,7 @@ void main() {
 
     // Verify mobile bottom navigation bar is present
     expect(find.byIcon(Icons.home_rounded), findsWidgets);
-    expect(find.byIcon(Icons.explore_rounded), findsWidgets);
+    expect(find.byIcon(Icons.explore_rounded), findsNothing);
     expect(find.byIcon(Icons.library_music_rounded), findsWidgets);
   });
 

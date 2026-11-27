@@ -147,10 +147,10 @@ void main() {
       expect(find.text('FULL TRACK'), findsOneWidget);
       expect(find.text('LOCATING'), findsOneWidget);
 
-      // Verify Bottom Navigation items: Home, Samples, Explore, Library
+      // Verify Bottom Navigation items: Home and Library
       expect(find.text('Home'), findsOneWidget);
-      expect(find.text('Samples'), findsOneWidget);
-      expect(find.text('Explore'), findsOneWidget);
+      expect(find.text('Samples'), findsNothing);
+      expect(find.text('Explore'), findsNothing);
       expect(find.text('Library'), findsOneWidget);
 
       controller.dispose();

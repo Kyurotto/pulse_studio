@@ -68,6 +68,29 @@ class BottomPlayerBar extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (controller.dataSaverMode)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.data_saver_on_rounded,
+                  size: 13,
+                  color: AppTheme.primaryOf(context),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  'Data Saver Mode',
+                  style: TextStyle(
+                    color: AppTheme.primaryOf(context),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         LinearProgressIndicator(
           value: progress,
           backgroundColor: Colors.white10,

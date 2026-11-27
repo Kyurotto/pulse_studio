@@ -909,7 +909,7 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
                     ),
                   ),
 
-                // Bottom Navigation Layer (Home with logo, Explore with logo, Library with logo)
+                // Bottom Navigation Layer (Home and Library)
                 if (isPhone)
                   ListenableBuilder(
                     listenable: _controller,
@@ -944,34 +944,56 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
       ),
       child: SafeArea(
         top: false,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildBottomNavItem(
-                icon: Icons.home_rounded,
-                label: 'Home\u200B',
-                isSelected: currentIdx == 0,
-                onTap: () => _controller.setNavIndex(0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_controller.dataSaverMode)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.data_saver_on_rounded,
+                      size: 14,
+                      color: AppTheme.primaryOf(context),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Data Saver Mode',
+                      style: TextStyle(
+                        color: AppTheme.primaryOf(context),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              _buildBottomNavItem(
-                icon: Icons.explore_rounded,
-                label: 'Explore\u200B',
-                isSelected: currentIdx == 1,
-                onTap: () => _controller.setNavIndex(1),
+            SizedBox(
+              height: 60,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildBottomNavItem(
+                    icon: Icons.home_rounded,
+                    label: 'Home\u200B',
+                    isSelected: currentIdx == 0,
+                    onTap: () => _controller.setNavIndex(0),
+                  ),
+                  _buildBottomNavItem(
+                    icon: Icons.library_music_rounded,
+                    label: 'Library\u200B',
+                    isSelected: currentIdx == 2,
+                    badge: _controller.libraryPlaylists.isNotEmpty
+                        ? '${_controller.libraryPlaylists.length}'
+                        : null,
+                    onTap: () => _controller.setNavIndex(2),
+                  ),
+                ],
               ),
-              _buildBottomNavItem(
-                icon: Icons.library_music_rounded,
-                label: 'Library\u200B',
-                isSelected: currentIdx == 2,
-                badge: _controller.libraryPlaylists.isNotEmpty
-                    ? '${_controller.libraryPlaylists.length}'
-                    : null,
-                onTap: () => _controller.setNavIndex(2),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1089,18 +1111,6 @@ class _MusicDashboardViewState extends State<MusicDashboardView> {
               color: AppTheme.textPrimaryOf(context),
             ),
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-          ),
-          const SizedBox(width: 6),
-
-          // Quick return to the Home dashboard from any active tab or search.
-          IconButton(
-            tooltip: 'Back to dashboard',
-            icon: Icon(
-              Icons.home_rounded,
-              size: 24,
-              color: AppTheme.textPrimaryOf(context),
-            ),
-            onPressed: _returnToDashboard,
           ),
           const SizedBox(width: 6),
 

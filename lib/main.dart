@@ -12,6 +12,7 @@ import 'data/local_database.dart';
 import 'services/audio_capabilities.dart';
 import 'services/display_rate_service.dart';
 import 'services/radio_discovery_service.dart';
+import 'services/system_media_session_service.dart';
 import 'theme/app_theme.dart';
 import 'views/auth_gate.dart';
 import 'views/music_dashboard_view.dart';
@@ -28,6 +29,9 @@ Future<void> main() async {
     } catch (e) {
       debugPrint('[MusicApp] media_kit initialization failed: $e');
     }
+    // Register the SMTC identity early so the Windows media flyout shows
+    // "Pulse Studio" (and its icon) instead of "Unknown Application".
+    await SystemMediaSessionService.instance.initialize();
   }
 
   // Configure the shared AudioSession BEFORE any AudioPlayer is constructed.

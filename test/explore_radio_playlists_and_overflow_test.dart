@@ -5,6 +5,7 @@ import 'package:music/models/song_model.dart';
 import 'package:music/services/radio_discovery_service.dart';
 import 'package:music/views/music_dashboard_view.dart';
 import 'package:music/views/playlist_screen.dart';
+import 'package:music/widgets/desktop_playlist_detail_view.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -184,6 +185,52 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(controller.playlists.any((p) => p.title == 'Flow G Radio'), isTrue);
+
+      controller.dispose();
+    });
+
+    testWidgets('desktop playlist metadata does not overflow in a narrow pane', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(520, 900));
+
+      final controller = MusicPlayerController();
+      final song = Song(
+        id: 'desktop-overflow-song',
+        title: 'Test song',
+        artist: 'Test artist',
+        album: 'Test album',
+        duration: const Duration(minutes: 3),
+        genre: 'Pop',
+        imageUrl: '',
+        gradientColors: const [Color(0xFF8BB7F0), Color(0xFF60A5FA)],
+        plays: '1',
+        lyrics: const [],
+        isPreview: false,
+      );
+      final playlist = MusicPlaylist(
+        id: 'desktop-overflow-playlist',
+        title: 'Hev Abi Radio',
+        subtitle: 'With Hev Abi, DEMI, Flow G & Hev Abi and more',
+        gradient: const [Color(0xFF8BB7F0), Color(0xFF60A5FA)],
+        songIds: [song.id],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: DesktopPlaylistDetailView(
+                playlist: playlist,
+                controller: controller,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(tester.takeException(), isNull);
 
       controller.dispose();
     });
