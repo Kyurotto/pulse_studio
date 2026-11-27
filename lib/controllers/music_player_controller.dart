@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:audio_session/audio_session.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -26,6 +27,7 @@ import '../services/playlist_persistence_service.dart';
 import '../services/radio_discovery_service.dart';
 import '../services/spotify_import_service.dart';
 import '../services/soundcloud_hls_downloader.dart';
+import '../services/system_media_session_service.dart';
 import '../services/track_enrichment_service.dart';
 import '../services/web_offline_audio.dart';
 import '../services/web_youtube_audio_resolver.dart';
@@ -1126,6 +1128,9 @@ class MusicPlayerController extends ChangeNotifier {
 
     _initAudioPlayer();
     _bindNotificationControls();
+    // Windows/Web only: publish the queue to the OS media hub (Windows 11
+    // Quick Settings, volume flyout, Crest, browser media controls).
+    unawaited(SystemMediaSessionService.instance.attach(this));
     primeStaticOfflineCache();
     unawaited(_equalizer.initialize());
     unawaited(_offlineCandidateDirs());
@@ -1139,12 +1144,16 @@ class MusicPlayerController extends ChangeNotifier {
     _startConnectivityWatcher();
     // Load previously imported playlists for the active user
     unawaited(
-      loadSavedPlaylists().catchError((e) {
-        debugPrint(
-          '[MusicPlayerController] Initial loadSavedPlaylists skipped: $e',
-        );
-      }),
+      loadSavedPlaylists()
+          .then((_) => _restorePlaybackState())
+          .catchError((e) {
+            debugPrint(
+              '[MusicPlayerController] Initial loadSavedPlaylists skipped: $e',
+            );
+            return _restorePlaybackState();
+          }),
     );
+    _initPlaybackLifecycleListener();
     // Pre-extract offline audio assets so they are ready on disk immediately
     unawaited(
       _preExtractBundledAssets().catchError((e) {
@@ -5320,6 +5329,35 @@ class MusicPlayerController extends ChangeNotifier {
     );
   }
 
+  /// Artwork reference for the OS media session (Windows SMTC / browser Media
+  /// Session API).
+  ///
+  /// Returns an `http(s)` URL, an absolute Windows path, or `null`. Browsers
+  /// can only load remote artwork, and bundled `asset:` images are skipped
+  /// because the OS cannot read the Flutter asset bundle by path.
+  Future<String?> systemMediaArtworkFor(Song song) async {
+    final raw = song.imageUrl.trim();
+    if (raw.isEmpty) return null;
+    final lower = raw.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return raw;
+    }
+    if (kIsWeb || lower.startsWith('asset')) return null;
+    if (lower.startsWith('file://')) {
+      final path = Uri.tryParse(raw)?.toFilePath();
+      if (path != null && path.isNotEmpty && File(path).existsSync()) {
+        return path;
+      }
+    } else if (File(raw).existsSync()) {
+      return raw;
+    }
+    final cachedArt = await _findCachedArtworkFile(song.id);
+    if (cachedArt != null && cachedArt.existsSync()) {
+      return cachedArt.path;
+    }
+    return null;
+  }
+
   static String _cleanAssetUri(String path) {
     final trimmed = path.trim();
     if (trimmed.isEmpty) return '';
@@ -7907,6 +7945,7 @@ class MusicPlayerController extends ChangeNotifier {
 
   void togglePlayPause() {
     if (currentSong == null) return;
+    _hasUserInitiatedPlayback = true;
     if (!_isPlaying && _isExplicitBlocked(currentSong)) {
       _notifyExplicitBlocked(currentSong!);
       return;
@@ -7943,12 +7982,14 @@ class MusicPlayerController extends ChangeNotifier {
       _playbackTimer?.cancel();
       _cancelStallWatchdog();
       _cancelAutomixFade();
+      unawaited(_savePlaybackState());
     }
     notifyListeners();
   }
 
   void play() {
     if (currentSong == null) return;
+    _hasUserInitiatedPlayback = true;
     if (_isExplicitBlocked(currentSong)) {
       _notifyExplicitBlocked(currentSong!);
       return;
@@ -7990,6 +8031,7 @@ class MusicPlayerController extends ChangeNotifier {
       _playbackTimer?.cancel();
       _interpolationBase = null;
       _interpolationStartedAt = null;
+      unawaited(_savePlaybackState());
       _cancelStallWatchdog();
       _cancelAutomixFade();
       notifyListeners();
@@ -9711,8 +9753,14 @@ class MusicPlayerController extends ChangeNotifier {
   /// full song duration while nothing was audible. Interpolation is now only
   /// allowed once real audio has actually produced a position, so a dead
   /// source surfaces honestly instead of masquerading as playback.
+  /// Counter that triggers a periodic save every ~5s during playback, so the
+  /// on-disk state stays reasonably fresh even if the process is killed without
+  /// the lifecycle callbacks firing (e.g. the user force-closes the window).
+  int _periodicSaveCounter = 0;
+
   void _startTimer() {
     _playbackTimer?.cancel();
+    _periodicSaveCounter = 0;
     // Every timer start is a fresh interpolation session. Keeping an anchor
     // from before a pause would make the cursor (and the lyric highlight)
     // jump forward by the whole paused span on the first tick after resume.
@@ -9786,6 +9834,13 @@ class MusicPlayerController extends ChangeNotifier {
         if (target > _currentPosition) _currentPosition = target;
         if (_positionNotifier.value != _currentPosition) {
           _positionNotifier.value = _currentPosition;
+        }
+        // Persist state every ~5s so a killed process never loses more than a
+        // few seconds of progress. The counter resets on every _startTimer().
+        _periodicSaveCounter++;
+        if (_periodicSaveCounter >= 50) {
+          _periodicSaveCounter = 0;
+          unawaited(_savePlaybackState());
         }
       } else if (!isNativeAdvancing) {
         timer.cancel();
@@ -9924,8 +9979,149 @@ class MusicPlayerController extends ChangeNotifier {
     }
   }
 
+  static const String _lastPlaybackStateKey = 'last_playback_state_v1';
+  bool _hasUserInitiatedPlayback = false;
+  bool _hasRestoredPlaybackState = false;
+  AppLifecycleListener? _lifecycleListener;
+
+  /// True once a previously saved track/queue has been restored on launch.
+  bool get hasRestoredPlaybackState => _hasRestoredPlaybackState;
+
+  void _initPlaybackLifecycleListener() {
+    try {
+      _lifecycleListener = AppLifecycleListener(
+        onPause: () => unawaited(_savePlaybackState()),
+        onHide: () => unawaited(_savePlaybackState()),
+        onDetach: () => unawaited(_savePlaybackState()),
+        onExitRequested: () async {
+          // Stop playback before persisting so reopening always starts paused.
+          pause();
+          await _savePlaybackState();
+          return ui.AppExitResponse.exit;
+        },
+      );
+    } catch (_) {
+      // WidgetsBinding may not be initialized in pure unit tests.
+    }
+  }
+
+  Map<String, dynamic> _songToPlaybackJson(Song song) => {
+    'id': song.id,
+    'title': song.title,
+    'artist': song.artist,
+    'album': song.album,
+    'durationMs': song.duration.inMilliseconds,
+    'genre': song.genre,
+    'imageUrl': song.imageUrl,
+    'plays': song.plays,
+    'audioUrl': song.audioUrl,
+    'isFeatured': song.isFeatured,
+    'isLiked': song.isLiked,
+    'isPreview': song.isPreview,
+    'isYouTubeAudio': song.isYouTubeAudio,
+    'youtubeVideoId': song.youtubeVideoId,
+    'isExplicit': song.isExplicit,
+  };
+
+  Song _songFromPlaybackJson(Map<String, dynamic> json) {
+    final id = json['id']?.toString() ?? '';
+    final existingIdx = _allSongs.indexWhere((s) => s.id == id);
+    if (existingIdx != -1) {
+      return _allSongs[existingIdx];
+    }
+    final title = json['title']?.toString() ?? '';
+    final artist = json['artist']?.toString() ?? '';
+    return Song(
+      id: id,
+      title: title,
+      artist: artist,
+      album: json['album']?.toString() ?? '',
+      duration: Duration(milliseconds: (json['durationMs'] as num?)?.toInt() ?? 0),
+      genre: json['genre']?.toString() ?? '',
+      imageUrl: json['imageUrl']?.toString() ?? '',
+      gradientColors: _gradientFor('$title$artist').colors,
+      plays: json['plays']?.toString() ?? '',
+      lyrics: const [],
+      audioUrl: json['audioUrl']?.toString() ?? '',
+      isFeatured: json['isFeatured'] == true,
+      isLiked: json['isLiked'] == true,
+      isPreview: json['isPreview'] == true,
+      isYouTubeAudio: json['isYouTubeAudio'] == true,
+      youtubeVideoId: json['youtubeVideoId']?.toString() ?? '',
+      isExplicit: json['isExplicit'] as bool?,
+    );
+  }
+
+  Future<void> _savePlaybackState() async {
+    if (_queue.isEmpty || _currentIndex < 0 || _currentIndex >= _queue.length) {
+      return;
+    }
+    try {
+      final payload = {
+        'currentIndex': _currentIndex,
+        'positionMs': _currentPosition.inMilliseconds,
+        'queue': _queue.take(200).map(_songToPlaybackJson).toList(),
+      };
+      await LocalDatabase.instance.saveSetting(
+        _lastPlaybackStateKey,
+        jsonEncode(payload),
+      );
+    } catch (e) {
+      debugPrint('[MusicPlayerController] _savePlaybackState skipped: $e');
+    }
+  }
+
+  Future<void> _restorePlaybackState() async {
+    if (_disposed || _hasUserInitiatedPlayback || _isPlaying) return;
+    try {
+      final raw = await LocalDatabase.instance.getSetting(_lastPlaybackStateKey);
+      if (raw == null || raw.isEmpty || _disposed || _hasUserInitiatedPlayback || _isPlaying) {
+        debugPrint('[MusicPlayerController] _restorePlaybackState: no saved state');
+        return;
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return;
+      final rawQueue = decoded['queue'];
+      if (rawQueue is! List || rawQueue.isEmpty) return;
+
+      final restoredQueue = <Song>[];
+      for (final item in rawQueue) {
+        if (item is Map<String, dynamic>) {
+          restoredQueue.add(_songFromPlaybackJson(item));
+        } else if (item is Map) {
+          restoredQueue.add(
+            _songFromPlaybackJson(Map<String, dynamic>.from(item)),
+          );
+        }
+      }
+      if (restoredQueue.isEmpty) return;
+
+      final savedIndex = (decoded['currentIndex'] as num?)?.toInt() ?? 0;
+      final savedPosMs = (decoded['positionMs'] as num?)?.toInt() ?? 0;
+
+      _queue = restoredQueue;
+      _currentIndex = savedIndex.clamp(0, _queue.length - 1);
+      _currentPosition = Duration(milliseconds: savedPosMs > 0 ? savedPosMs : 0);
+      _pendingHotSwapResumePosition = _currentPosition;
+      _isPlaying = false;
+      _hasRestoredPlaybackState = true;
+      _syncPositionNotifier();
+      debugPrint(
+        '[MusicPlayerController] Restored: "${_queue[_currentIndex].title}" by '
+        '${_queue[_currentIndex].artist} at '
+        '${_currentPosition.inSeconds}s (queue: ${_queue.length} tracks)',
+      );
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[MusicPlayerController] _restorePlaybackState skipped: $e');
+    }
+  }
+
   @override
   void dispose() {
+    // Some desktop close paths dispose the widget tree without delivering
+    // AppLifecycleListener.onExitRequested first.
+    pause();
     _disposed = true;
     _finishListeningHistory();
     for (final task in _downloadQueue) {
@@ -9950,6 +10146,8 @@ class MusicPlayerController extends ChangeNotifier {
     _stallWatchdog?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
+    _lifecycleListener?.dispose();
+    unawaited(_savePlaybackState());
     _playerStateSub?.cancel();
     _playbackEventSub?.cancel();
     _audioSessionSub?.cancel();
@@ -9958,6 +10156,8 @@ class MusicPlayerController extends ChangeNotifier {
     _enrichment.dispose();
     _webYouTubeResolver?.dispose();
     unawaited(_webAudioStore?.dispose() ?? Future<void>.value());
+    // Release the Windows SMTC / browser Media Session entry with the player.
+    SystemMediaSessionService.instance.detach();
     _positionNotifier.dispose();
     // Only unbind if the notification still points at this controller; a
     // newer instance may already have replaced these handlers.

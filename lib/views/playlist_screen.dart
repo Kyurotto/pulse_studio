@@ -24,7 +24,7 @@ import '../widgets/spotify_lyrics_sheet.dart';
 ///   4. ListView of songs with custom row layout (leading cover, title, subtitle with artist & duration & full track indicator, trailing popup menu icon)
 /// - Bottom Persistent widgets:
 ///   * Sticky mini-player bar above the bottom navigation
-///   * BottomNavigationBar with 4 items: Home, Samples, Explore, Library
+///   * BottomNavigationBar with Home and Library items
 class PlaylistScreen extends StatefulWidget {
   final MusicPlaylist? playlist;
   final String? title;
@@ -825,20 +825,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                       widget.controller.setNavIndex(0);
                       Navigator.of(context).pop();
                     } else if (idx == 1) {
-                      // Samples
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Samples feed preview active'),
-                          backgroundColor: Color(0xFF222222),
-                          duration: Duration(seconds: 1),
-                        ),
-                      );
-                    } else if (idx == 2) {
-                      // Explore
-                      widget.controller.setNavIndex(1);
-                      Navigator.of(context).pop();
-                    } else if (idx == 3) {
-                      // Library
                       widget.controller.setNavIndex(2);
                       Navigator.of(context).pop();
                     }
@@ -847,14 +833,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                     BottomNavigationBarItem(
                       icon: Icon(Icons.home_filled),
                       label: 'Home',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.play_circle_outline_rounded),
-                      label: 'Samples',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.explore_outlined),
-                      label: 'Explore',
                     ),
                     BottomNavigationBarItem(
                       icon: Icon(Icons.library_music_outlined),

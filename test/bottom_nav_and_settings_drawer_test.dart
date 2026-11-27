@@ -5,7 +5,7 @@ import 'package:music/widgets/sidebar_nav.dart';
 
 void main() {
   testWidgets(
-    'Bottom navigation layer renders Home, Explore, and Library with icons and labels on mobile',
+    'Bottom navigation layer renders Home and Library with icons and labels on mobile',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(360, 740);
       tester.view.devicePixelRatio = 1.0;
@@ -19,9 +19,6 @@ void main() {
       final homeFinder = find.byWidgetPredicate(
         (w) => w is Icon && w.icon == Icons.home_rounded && w.size == 22.0,
       );
-      final exploreFinder = find.byWidgetPredicate(
-        (w) => w is Icon && w.icon == Icons.explore_rounded && w.size == 22.0,
-      );
       final libraryFinder = find.byWidgetPredicate(
         (w) =>
             w is Icon &&
@@ -30,12 +27,11 @@ void main() {
       );
 
       expect(homeFinder, findsOneWidget);
-      expect(exploreFinder, findsOneWidget);
       expect(libraryFinder, findsOneWidget);
 
       // Verify bottom layer items labels exist
       expect(find.textContaining('Home'), findsWidgets);
-      expect(find.textContaining('Explore'), findsWidgets);
+      expect(find.textContaining('Explore'), findsNothing);
       expect(find.textContaining('Library'), findsWidgets);
 
       // Tap Library in bottom layer

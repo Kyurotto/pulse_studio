@@ -51,6 +51,10 @@ dependencies:
   cloud_firestore: ^6.10.0
   url_launcher: ^6.3.0
   connectivity_plus: ^7.3.0
+  # Windows SMTC + browser Media Session API. Publishes the current track to
+  # the Windows 11 Quick Settings media card, volume flyout, Crest and other
+  # SMTC readers, and to browser/OS media controls on web.
+  flutter_media_session: ^3.2.1
 
 
   crypto: ^3.0.7

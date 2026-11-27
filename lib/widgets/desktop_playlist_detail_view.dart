@@ -418,23 +418,31 @@ class _DesktopPlaylistDetailViewState extends State<DesktopPlaylistDetailView> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          'Made for $creator',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        Flexible(
+                          child: Text(
+                            'Made for $creator',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                         const Text(
                           ' • ',
                           style: TextStyle(color: Colors.white70),
                         ),
-                        Text(
-                          '${songs.length} ${songs.length == 1 ? 'song' : 'songs'}, ${_formatTotalRuntime(songs)}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.white70,
+                        Flexible(
+                          child: Text(
+                            '${songs.length} ${songs.length == 1 ? 'song' : 'songs'}, ${_formatTotalRuntime(songs)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.white70,
+                            ),
                           ),
                         ),
                       ],

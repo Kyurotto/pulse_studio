@@ -110,7 +110,7 @@ void main() {
   });
 
   group('Search Bar Visibility Scope Tests', () {
-    testWidgets('Search bar displays on Dashboard, but NOT on Explore or Library', (
+    testWidgets('Search bar displays on Dashboard, but NOT on Library', (
       WidgetTester tester,
     ) async {
       tester.view.physicalSize = const Size(1280, 800);
@@ -129,24 +129,7 @@ void main() {
         reason: 'Dashboard must display the search bar',
       );
 
-      // 2. Switch to Explore Tab (currentNavIndex == 1)
-      await tester.tap(find.text('Explore'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-
-      // Search bar MUST NOT be displayed on Explore
-      expect(
-        find.widgetWithText(TextField, 'Search songs, artists, albums...'),
-        findsNothing,
-        reason: 'Explore tab must NOT display the search bar',
-      );
-      expect(
-        find.byType(TextField),
-        findsNothing,
-        reason: 'Explore tab has no search bar at all',
-      );
-
-      // 3. Switch to Library Tab (currentNavIndex == 2)
+      // 2. Switch to Library Tab (currentNavIndex == 2)
       await tester.tap(find.text('Library'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
@@ -163,7 +146,7 @@ void main() {
         reason: 'Library tab has no search bar at all',
       );
 
-      // 4. Switch back to Home / Dashboard (currentNavIndex == 0)
+      // 3. Switch back to Home / Dashboard (currentNavIndex == 0)
       await tester.tap(find.text('Home'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
