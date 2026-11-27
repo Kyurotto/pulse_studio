@@ -216,9 +216,9 @@
     "semantic_hash": ""
   },
   "lib/views/auth_gate.dart": {
-    "mtime": 1795764073.8119094,
-    "seen": 1795764438.5537672,
-    "ast_hash": "4f746543398689538b6169681a24bb99",
+    "mtime": 1795765580.5060709,
+    "seen": 1795766547.7850573,
+    "ast_hash": "44a0d7aea2a9278dd800c978a2c9a53f",
     "semantic_hash": ""
   },
   "lib/views/discovery_playlist_page.dart": {
@@ -462,9 +462,9 @@
     "semantic_hash": "3c5c50588ce1c1e8430ea645e2db73fb"
   },
   "windows/flutter/generated_plugin_registrant.cc": {
-    "mtime": 1795764086.61469,
-    "seen": 1795764438.5844138,
-    "ast_hash": "fe74881a0add928bfe17b35a47f7fb24",
+    "mtime": 1795766486.9894156,
+    "seen": 1795766547.8555768,
+    "ast_hash": "c5102042669e2f93eabdb7046001c67c",
     "semantic_hash": ""
   },
   "windows/flutter/generated_plugin_registrant.h": {
@@ -474,16 +474,16 @@
     "semantic_hash": "0ea33875f9f8e118f9c2ded03e2e2835"
   },
   "windows/runner/flutter_window.cpp": {
-    "mtime": 1780222111.4641593,
-    "seen": 1792830995.6329336,
-    "ast_hash": "2f463f9b7da67a2d692a012f9ea85e0c",
-    "semantic_hash": "2f463f9b7da67a2d692a012f9ea85e0c"
+    "mtime": 1795766359.840803,
+    "seen": 1795766547.8559575,
+    "ast_hash": "99306c5696d021993b3a58d2ae34cfdd",
+    "semantic_hash": ""
   },
   "windows/runner/flutter_window.h": {
-    "mtime": 1780222111.474942,
-    "seen": 1792830995.6329358,
-    "ast_hash": "7defcc89d4a26d56e801241d624d48fb",
-    "semantic_hash": "7defcc89d4a26d56e801241d624d48fb"
+    "mtime": 1795766346.4075458,
+    "seen": 1795766547.855962,
+    "ast_hash": "56538d3c841af95a04331109e9683447",
+    "semantic_hash": ""
   },
   "windows/runner/main.cpp": {
     "mtime": 1792051395.8002124,
@@ -1440,9 +1440,9 @@
     "semantic_hash": ""
   },
   "web/index.html": {
-    "mtime": 1792051395.7925127,
-    "seen": 1792832447.1591058,
-    "ast_hash": "631b9d54e619f887f43a199f3b192ab9",
+    "mtime": 1795766366.806474,
+    "seen": 1795766547.917245,
+    "ast_hash": "13d6d971165a7401002eb0c72e15dde1",
     "semantic_hash": ""
   },
   "windows/CMakeLists.txt": {
@@ -1458,9 +1458,9 @@
     "semantic_hash": ""
   },
   "windows/runner/CMakeLists.txt": {
-    "mtime": 1780222111.4547358,
-    "seen": 1792832447.1591125,
-    "ast_hash": "028602ab9754bffe716659ada7590d29",
+    "mtime": 1795766365.0637815,
+    "seen": 1795766547.9180462,
+    "ast_hash": "dae6e1acdeb50dbbe2822d7d8361036d",
     "semantic_hash": ""
   },
   "android/app/src/main/res/mipmap-hdpi/ic_launcher.png": {
@@ -1992,9 +1992,9 @@
     "semantic_hash": ""
   },
   "test/auth_gate_saved_account_test.dart": {
-    "mtime": 1795764387.9658332,
-    "seen": 1795764438.5763764,
-    "ast_hash": "2a8e9160e8b68dfb1fac62d7f83632cd",
+    "mtime": 1795765342.9933214,
+    "seen": 1795766547.8351128,
+    "ast_hash": "76e1a530db0945e935686d0c7045a366",
     "semantic_hash": ""
   },
   "web/sqflite_sw.js": {
@@ -2985,6 +2985,30 @@
     "mtime": 1795763662.2642524,
     "seen": 1795764438.5830138,
     "ast_hash": "33a1cf12ee31e0f65aac9a092f6fb05b",
+    "semantic_hash": ""
+  },
+  "test/audio_session_keepalive_test.dart": {
+    "mtime": 1795766480.9145563,
+    "seen": 1795766547.8347783,
+    "ast_hash": "ec0cb6185c16d3256d4a2372fa07b016",
+    "semantic_hash": ""
+  },
+  "web/audio_session_keepalive.js": {
+    "mtime": 1795766343.288843,
+    "seen": 1795766547.854863,
+    "ast_hash": "3f17d03927219fd538eac966ccaff6ea",
+    "semantic_hash": ""
+  },
+  "windows/runner/audio_session_keepalive.cpp": {
+    "mtime": 1795766342.1173515,
+    "seen": 1795766547.855944,
+    "ast_hash": "4b23195e756c54b90b27dced1e1fcf2c",
+    "semantic_hash": ""
+  },
+  "windows/runner/audio_session_keepalive.h": {
+    "mtime": 1795766341.011739,
+    "seen": 1795766547.8559499,
+    "ast_hash": "2083a97f75026b75845e4322c193b6f4",
     "semantic_hash": ""
   }
 }

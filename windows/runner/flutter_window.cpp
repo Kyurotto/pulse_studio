@@ -14,6 +14,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
 
+  audio_session_keepalive_.Start();
+
   RECT frame = GetClientArea();
 
   // The size here must match the window dimensions to avoid unnecessary surface
@@ -40,6 +42,8 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  audio_session_keepalive_.Stop();
+
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
