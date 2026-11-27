@@ -875,6 +875,7 @@ class _AuthViewState extends State<AuthView> {
     final isSelected = _selectedAccountEmail == cleanEmail;
     final hasSavedPassword = _savedPasswordEmails.contains(cleanEmail);
     final canUseFingerprint = _canUseFingerprintFor(cleanEmail);
+    final showMaskedPassword = hasSavedPassword || canUseFingerprint;
     final primary = AppTheme.primaryOf(context);
     final textPrimary = AppTheme.textPrimaryOf(context);
     final textSecondary = AppTheme.textSecondaryOf(context);
@@ -924,10 +925,8 @@ class _AuthViewState extends State<AuthView> {
                       Row(
                         children: [
                           Icon(
-                            hasSavedPassword
+                            showMaskedPassword
                                 ? Icons.lock_outline_rounded
-                                : canUseFingerprint
-                                ? Icons.fingerprint_rounded
                                 : Icons.lock_open_rounded,
                             size: 11,
                             color: textMuted,
@@ -935,16 +934,14 @@ class _AuthViewState extends State<AuthView> {
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              hasSavedPassword
-                                  ? '••••••••'
-                                  : canUseFingerprint
-                                  ? 'Fingerprint sign-in ready'
+                              showMaskedPassword
+                                  ? '********'
                                   : 'Password not saved',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 11.5,
-                                letterSpacing: hasSavedPassword ? 1.6 : 0,
+                                letterSpacing: showMaskedPassword ? 1.6 : 0,
                                 color: textSecondary,
                               ),
                             ),
@@ -954,15 +951,6 @@ class _AuthViewState extends State<AuthView> {
                     ],
                   ),
                 ),
-                if (canUseFingerprint)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Icon(
-                      Icons.fingerprint_rounded,
-                      size: 20,
-                      color: primary,
-                    ),
-                  ),
                 if (isSelected)
                   Icon(Icons.check_circle_rounded, size: 20, color: primary)
                 else
@@ -1084,25 +1072,6 @@ class _AuthViewState extends State<AuthView> {
                               labelText: 'Email address',
                               hintText: 'name@example.com',
                               prefixIcon: const Icon(Icons.email_outlined, size: 20),
-                              suffixIcon: _hasSavedAccountsToShow
-                                  ? IconButton(
-                                      icon: Icon(
-                                        _savedAccountsMenu.isShowing
-                                            ? Icons.arrow_drop_up_rounded
-                                            : Icons.arrow_drop_down_rounded,
-                                        size: 24,
-                                        color: AppTheme.textSecondary,
-                                      ),
-                                      onPressed: () {
-                                        if (_savedAccountsMenu.isShowing) {
-                                          _closeSavedAccountsMenu();
-                                        } else {
-                                          _openSavedAccountsMenu();
-                                        }
-                                      },
-                                      tooltip: 'Saved accounts',
-                                    )
-                                  : null,
                             ),
                             validator: (value) {
                               final v = value?.trim() ?? '';
@@ -1262,15 +1231,6 @@ class _AuthViewState extends State<AuthView> {
                         onPressed: _isBusy ? null : _submit,
                         child: Text(
                           _isRegistering ? 'Create account' : 'Sign in',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Works offline — no Wi-Fi or data needed.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
                         ),
                       ),
                       if (_isBusy)
